@@ -10,6 +10,12 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-27 · muse-image-1.0 · issue · The Responses `image_generation` tool rejects `size: "1792x1024"` with 400 "unknown value" (also `16:9`, `1920x1080`), while `/v1/images/edits` accepts it. The error does not list allowed values; we found `1536x1024` by trial.
+- 2026-10-27 · muse-image-1.0 · good · Reference sheets as `input_image` kept two characters on model across 18 panels, at 15–25 s per image. It even faithfully carried a detail the reference sheet invented.
+- 2026-10-27 · muse-image-1.0 · idea · `/v1/images/edits` returns only `b64_json`, no response id, so its images cannot continue as a `previous_response_id` edit chain. Returning one would let us use it for native 16:9 panels.
+- 2026-10-27 · muse-image-1.0 · issue · "Make her raincoat red" recoloured the coat but left the hood yellow, and "make her larger" grew her by only 3%. Layout outside the subject stayed stable.
+- 2026-10-27 · sam-3.1 · good · `meta_sam_parser` worked first time: point prompt via `build_object_prompt`, stream parsing and mask decoding with no diagnostics, about 7.5 s per call. A single click gave a clean full-body mask.
+- 2026-10-27 · muse-spark-1.3-contributor · issue · An identical ~1k-token request sent twice reported `cached_tokens: 0`. The docs could state the minimum cacheable prefix length.
 - 2026-10-27 · Model API · good · GET /v1/models works with the key and lists all hosted models, including Contributor variants.
 - 2026-10-27 · muse-image-1.0 docs · issue · The images guide's mask parameter section is cut off mid-sentence; masked edits appear unsupported, which changed our SAM edit design.
 

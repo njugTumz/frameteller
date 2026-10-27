@@ -139,14 +139,14 @@ Not used: Muse Wonder Full (Muse Code subscription only), Muse Spark 1.1/1.2 (sa
 **Muse Image (`muse-image-1.0`)**
 - Output is **base64**, never a URL: `image_generation_call.result` on the Responses API, `b64_json` on the images endpoints. Default format webp. Persist every image to Blob Storage immediately.
 - Flat $0.01 per generated image regardless of `reasoning_strength` or tool use. Usage token counts are informational, not billed.
-- Panels use `size: "1792x1024"`. This sets the aspect ratio only; output resolution is fixed by the model.
+- `size` sets the aspect ratio only; output resolution is fixed by the model. **The Responses image tool rejects `1792x1024`** (HTTP 400 "unknown value"); panels use `size: "1536x1024"` (3:2, returns 1920×1280) and the animatic centre-crops to 16:9. `/v1/images/edits` does accept `1792x1024` (returns 2016×1152) but returns no response id, so its images cannot be edited multi-turn. Measured in the [Day 2 spikes](docs/spikes/2026-10-28-findings.md).
 - On the Responses API, the only allowed tool for image models is `image_generation`:
-  `tools=[{"type":"image_generation","enable_image_search":false,"enable_web_search":false,"enable_shell":false,"reasoning_strength":"low"|"high","size":"1792x1024"}]` (`low` for drafts, `high` for finals).
+  `tools=[{"type":"image_generation","enable_image_search":false,"enable_web_search":false,"enable_shell":false,"reasoning_strength":"low"|"high","size":"1536x1024"}]` (`low` for drafts, `high` for finals).
 - **`enable_image_search` must stay `false`** so renders never pull in real people's likenesses or copyrighted designs (hackathon rights rule).
 - Multi-turn edits chain with `previous_response_id`; send only the change.
 - Character consistency: pass character reference sheets as `input_image` parts inside a `{"role":"user","content":[...]}` message on Responses, or as `images[]` (1–10 items, each `image_url` or `file_id`) on `POST /v1/images/edits`.
 - **No seed parameter** (an unknown field returns HTTP 400). Consistency comes only from references.
-- **Masked edits are not supported: never send a `mask` parameter.** Targeted edit = whole-panel edit with a prompt naming the SAM-selected object. Move, swap and delete = we composite SAM cut-outs ourselves on the canvas.
+- **Masked edits are not supported: never send a `mask` parameter.** Appearance changes (colour, clothing, expression) = whole-panel edit with a prompt naming the SAM-selected object, chained with `previous_response_id`. Geometry (move, resize, swap, delete) = we transform and composite SAM cut-outs ourselves on the canvas; prompt-based resizing barely works (+3% in the spike). Edits keep the layout (≤ 0.6% structural change outside the object) but redraw fine texture, so they are not pixel-identical.
 
 **SAM (`sam-3.1`)**
 - Called via the Responses API, streaming. The text part holds **either** a short noun phrase **or** box/point prompts, never both.
@@ -155,9 +155,9 @@ Not used: Muse Wonder Full (Muse Code subscription only), Muse Spark 1.1/1.2 (sa
 
 ### Verify on day 1 (do not assume)
 - [x] ~~Does `/v1/images/edits` accept a mask?~~ **No.** Targeted edits are whole-panel prompt edits naming the SAM-selected object; move/swap/delete are canvas composites.
-- [x] ~~Panel aspect ratio~~ Set via `size: "1792x1024"`.
+- [x] ~~Panel aspect ratio~~ Responses tool: `size: "1536x1024"` (3:2); `1792x1024` is rejected there.
 - [x] ~~Realtime ASR audio format and session limits~~ PCM s16le mono, 24 kHz preferred, real-time pacing, 60-minute sessions, no resume.
-- [ ] How well do reference images hold a character across 6+ panels? Measure before building UI.
+- [x] ~~How well do reference images hold a character across 6+ panels?~~ Well, across 6 panels in all approaches; references also propagate their mistakes, so the cast is approved before panels are drawn. See the [Day 2 findings](docs/spikes/2026-10-28-findings.md).
 - [ ] Rate limits per model on our account.
 - [ ] Retention period for `previous_response_id` (how long a multi-turn edit chain stays resumable).
 

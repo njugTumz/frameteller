@@ -62,13 +62,13 @@ TODO: YouTube URL (public or unlisted).
 - **Muse Voice Transcribe 1.0** hears the story: realtime streaming ASR with turn detection and speaker labels, so two people can co-direct. Turn timestamps set each panel's duration in the animatic.
 - **Muse Spark 1.3** directs: structured output turns transcript turns into a validated shot list (scenes, shots, framing, characters, setting, action, dialogue) and maintains a character bible. It also routes voice commands ("make the cat bigger in shot 3") into edit operations via tool calls. The system prompt and character bible are a stable prefix for prompt caching.
 - **Muse Image 1.0** draws: a reference sheet per character first, then every panel generated from those references for consistency, and multi-turn edits for voice fixes.
-- **SAM 3.1** selects: clicking an object in a panel sends a point prompt, and SAM returns that object's cut-out. Moves, swaps and deletes composite the SAM cut-out on our canvas. Targeted changes ("make the cat bigger") are whole-panel Muse Image edits that name the selected object, chained with `previous_response_id` so the rest of the panel stays stable.
+- **SAM 3.1** selects: clicking an object in a panel sends a point prompt, and SAM returns that object's cut-out. Moves, resizes, swaps and deletes transform the SAM cut-out on our canvas. Appearance changes ("her coat is red now") are whole-panel Muse Image edits that name the selected object, chained with `previous_response_id`. In our tests the rest of the panel kept its layout (at most 0.6% structural change outside the selected object), though fine texture such as rain is redrawn.
 
-TODO: measure targeted-edit stability in the Day 2 spike, add stretch models (Glimmer, Wonder) if shipped.
+TODO: re-measure edit stability on the final pipeline, add stretch models (Glimmer, Wonder) if shipped.
 
 ## Why Meta's models are important
 
-**Draft:** Frameteller needs to hear, direct, draw and select, and Meta's models cover all four as one stack behind one API. Consistency and editability are only possible because they work together: Spark's character bible feeds Muse Image references, so characters stay the same across panels; SAM picks out the object you clicked so we can move, swap or delete it on the canvas, and Muse Image's multi-turn edits change just that named object while the rest of the panel stays stable; Voice Transcribe's turn timestamps drive the animatic timing.
+**Draft:** Frameteller needs to hear, direct, draw and select, and Meta's models cover all four as one stack behind one API. Consistency and editability are only possible because they work together: Spark's character bible feeds Muse Image references, so characters stay the same across panels; SAM picks out the object you clicked so we can move, swap or delete it on the canvas, and Muse Image's multi-turn edits change that named object's appearance while the rest of the panel keeps its layout; Voice Transcribe's turn timestamps drive the animatic timing.
 
 TODO: tighten after the demo is built.
 
