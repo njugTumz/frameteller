@@ -1,0 +1,8 @@
+# Day 2 spikes only. Not used by backend/ or frontend/.
+meta-sam-parser==0.1.0
+numpy==2.5.4
+openai==3.39.0
+pillow==13.0.0
+pydantic==2.14.1
+python-dotenv==1.2.4
+websockets==17.3

@@ -74,3 +74,6 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# --- Spikes (generated media, logs) ---
+spikes/out/

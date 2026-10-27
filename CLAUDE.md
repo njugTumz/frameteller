@@ -354,6 +354,7 @@ Keep `SUBMISSION.md` updated as we build; paste from it on Nov 4.
 - Keep changes small and focused; one concern per commit, Conventional Commit messages.
 - Write or update tests with every behaviour change; run lint, type-check and tests before declaring done.
 - Never add secrets, real API keys or personal data to code, tests, fixtures or logs.
+- **Never create, overwrite, move or delete `.env` or any `.env.*` file**, not even temporarily to test something. Never read them; scripts load secrets via settings or python-dotenv. If one seems missing, ask the user.
 - Never call Meta APIs from the frontend.
 - Ask before adding a new dependency or a new Azure resource.
 - Use the contributor model only with synthetic data.
