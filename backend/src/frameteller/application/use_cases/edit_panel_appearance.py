@@ -37,7 +37,7 @@ class EditPanelAppearance:
         revision = snapshot.panel(shot_id).revision + 1
         await self._budget.charge(project_id, costs.IMAGE, f"edit {shot_id} r{revision}")
         stored = await self._images.edit(
-            response_id, prompt, quality, store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}"
+            response_id, prompt, quality, store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}/image"
         )
 
         def apply(project: Project) -> Panel:

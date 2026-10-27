@@ -44,7 +44,7 @@ class GeneratePanel:
         try:
             stored = await self._images.generate(
                 ImageRequest(panel_prompt(shot, cast), quality, "panel", references),
-                store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}",
+                store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}/image",
             )
         except Exception:
             await self._repo.update(project_id, lambda p: p.panel(shot_id).mark_failed())
