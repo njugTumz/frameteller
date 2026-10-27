@@ -1,0 +1,221 @@
+"""MetaSparkDirectorAdapter: transcript turns -> shots with Spark structured output (ADR 0002)."""
+
+from __future__ import annotations
+
+import json
+from collections import Counter
+from collections.abc import Callable, Sequence
+from typing import Any, Literal
+
+from openai import AsyncOpenAI
+from pydantic import BaseModel, Field, ValidationError
+
+from frameteller.application.errors import InvalidModelOutputError
+from frameteller.application.ports import DirectedTurn, ShotDraft
+from frameteller.domain import Character, Framing, InvalidValueError, Project, TranscriptTurn
+from frameteller.infrastructure.config import Effort, Settings
+from frameteller.infrastructure.pricing import token_cost
+from frameteller.infrastructure.resilience import ModelCaller, RetryPolicy, Usage
+
+# Stable prefix part 1: identical bytes on every request so prompt caching can hit.
+SYSTEM_PROMPT = """You are the director's assistant in Frameteller, a tool that turns a spoken story into a storyboard.
+
+You receive the character bible, the shots so far, and transcript turns as JSON.
+Each turn has an id, start_ms, end_ms and text.
+
+Return:
+- new_characters: characters that appear in the turns but are not in the bible yet, including animals.
+  id is a short lowercase slug (e.g. "mira"). canonical_description is ONE stable visual description used
+  to draw the character in every panel: age, build, face, hair, clothing with colours and distinctive
+  features. Be concrete. Never mention framing or actions. Never contradict the transcript.
+- shots: one or more shots per turn, in story order.
+  framing is one of wide, medium, close_up, over_shoulder, insert. Honour explicit cues such as "wide shot"
+  or "close on". character_ids lists only characters visible in the shot, from the bible or new_characters.
+  setting is where and when, action is what we see, dialogue is the spoken words or "" if none.
+  source_turn_ids lists the turn ids the shot comes from.
+A turn with no story content (hesitation, a correction to the operator) may produce no shots.
+Keep the story original. Do not add real people, brands or copyrighted characters."""
+
+CHARACTERS_PROMPT = """You maintain the character bible for a storyboard.
+List every character in the transcript, including animals, that is not already in the bible.
+id is a short lowercase slug. canonical_description is one concrete, stable visual description:
+age, build, face, hair, clothing with colours and distinctive features."""
+
+
+class CharacterOut(BaseModel):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    name: str = Field(min_length=1)
+    canonical_description: str = Field(min_length=1)
+
+
+class ShotOut(BaseModel):
+    framing: Literal["wide", "medium", "close_up", "over_shoulder", "insert"]
+    character_ids: list[str]
+    setting: str
+    action: str
+    dialogue: str
+    source_turn_ids: list[str] = Field(min_length=1)
+
+
+class DirectorOutput(BaseModel):
+    new_characters: list[CharacterOut]
+    shots: list[ShotOut]
+
+
+class CharactersOutput(BaseModel):
+    characters: list[CharacterOut]
+
+
+class MetaSparkDirectorAdapter:
+    """DirectorPort on Chat Completions with Pydantic structured output and one validation retry."""
+
+    def __init__(self, client: AsyncOpenAI, caller: ModelCaller, settings: Settings) -> None:
+        self._client, self._caller, self._settings = client, caller, settings
+        self._policy = RetryPolicy(attempts=settings.retry_attempts, timeout_s=settings.text_timeout_s)
+
+    async def direct_turn(self, turn: TranscriptTurn, project: Project) -> DirectedTurn:
+        out = await self._direct(project, [turn], self._settings.director_effort_turn, "direct_turn")
+        return self._to_port(out, project, [turn])
+
+    async def direct_story(self, project: Project) -> DirectedTurn:
+        out = await self._direct(project, project.turns, self._settings.director_effort_story, "direct_story")
+        return self._to_port(out, project, project.turns)
+
+    async def extract_characters(self, turns: Sequence[TranscriptTurn], known: Sequence[Character]) -> list[Character]:
+        messages = [
+            {"role": "system", "content": CHARACTERS_PROMPT},
+            {"role": "system", "content": _bible_message(known)},
+            {"role": "user", "content": "Transcript turns:\n" + _turns_json(turns)},
+        ]
+        out = await self._parse(messages, CharactersOutput, self._settings.director_effort_story, "characters", None)
+        known_ids = {c.id for c in known}
+        return [_character(c) for c in out.characters if c.id not in known_ids]
+
+    async def _direct(
+        self, project: Project, turns: Sequence[TranscriptTurn], effort: Effort, operation: str
+    ) -> DirectorOutput:
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": _bible_message(list(project.bible.characters.values()))},
+            {
+                "role": "user",
+                "content": "Shots so far:\n"
+                + _shots_json(project)
+                + "\n\nDirect these transcript turns:\n"
+                + _turns_json(turns),
+            },
+        ]
+        allowed_turns = {t.id for t in turns}
+        known = set(project.bible.characters)
+
+        def check(out: DirectorOutput) -> list[str]:
+            errors = []
+            cast = known | {c.id for c in out.new_characters}
+            for n, s in enumerate(out.shots, start=1):
+                if unknown := set(s.character_ids) - cast:
+                    errors.append(f"shot {n}: character_ids {sorted(unknown)} are not in the bible or new_characters")
+                if bad := set(s.source_turn_ids) - allowed_turns:
+                    errors.append(f"shot {n}: source_turn_ids {sorted(bad)} are not among {sorted(allowed_turns)}")
+            return errors
+
+        return await self._parse(messages, DirectorOutput, effort, operation, check)
+
+    async def _parse[M: BaseModel](
+        self,
+        messages: list[dict[str, Any]],
+        schema: type[M],
+        effort: Effort,
+        operation: str,
+        check: Callable[[M], list[str]] | None,
+    ) -> M:
+        model = self._settings.director
+        for attempt in (1, 2):
+
+            async def call(msgs: list[dict[str, Any]] = messages) -> tuple[tuple[M | None, str], Usage]:
+                completion = await self._client.chat.completions.parse(
+                    model=model,
+                    messages=msgs,  # type: ignore[arg-type]
+                    response_format=schema,
+                    reasoning_effort=effort,
+                )
+                u = completion.usage
+                cached = u.prompt_tokens_details.cached_tokens if u and u.prompt_tokens_details else None
+                usage = Usage(
+                    token_cost(model, u.prompt_tokens if u else None, u.completion_tokens if u else None, cached),
+                    u.prompt_tokens if u else None,
+                    u.completion_tokens if u else None,
+                    cached,
+                )
+                message = completion.choices[0].message
+                return (message.parsed, message.content or ""), usage
+
+            try:
+                parsed, raw = await self._caller.call(model, operation, call, self._policy)
+                problem = "no structured output" if parsed is None else None
+            except ValidationError as e:  # the SDK validates the JSON against the schema
+                parsed, raw, problem = None, "", _short(e)
+            if parsed is not None and check is not None:
+                errors = check(parsed)
+                problem = "; ".join(errors) if errors else None
+            if problem is None and parsed is not None:
+                return parsed
+            if attempt == 2:
+                raise InvalidModelOutputError(model, problem or "invalid output")
+            messages = [
+                *messages,
+                {"role": "assistant", "content": raw or "(invalid)"},
+                {"role": "user", "content": f"That output failed validation: {problem}. Return a corrected answer."},
+            ]
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    def _to_port(self, out: DirectorOutput, project: Project, turns: Sequence[TranscriptTurn]) -> DirectedTurn:
+        """Durations come from the turn timings, never from the model (ADR 0002)."""
+        try:
+            characters = tuple(_character(c) for c in out.new_characters if c.id not in project.bible)
+        except InvalidValueError as e:
+            raise InvalidModelOutputError(self._settings.director, str(e)) from e
+        by_id = {t.id: t for t in turns}
+        shots_per_turn = Counter(tid for s in out.shots for tid in s.source_turn_ids)
+        drafts = []
+        for s in out.shots:
+            duration = sum(by_id[tid].duration_ms // shots_per_turn[tid] for tid in s.source_turn_ids)
+            drafts.append(
+                ShotDraft(
+                    framing=Framing(s.framing),
+                    character_ids=tuple(s.character_ids),
+                    setting=s.setting,
+                    action=s.action,
+                    dialogue=s.dialogue,
+                    source_turn_ids=tuple(s.source_turn_ids),
+                    duration_ms=max(1, duration),
+                )
+            )
+        return DirectedTurn(characters, tuple(drafts))
+
+
+def _character(c: CharacterOut) -> Character:
+    return Character(c.id, c.name, c.canonical_description)
+
+
+def _bible_message(characters: Sequence[Character]) -> str:
+    # Stable prefix part 2: sorted and compact, so it only changes when the cast changes.
+    rows = [{"id": c.id, "name": c.name, "canonical_description": c.canonical_description} for c in characters]
+    return "Character bible:\n" + json.dumps(sorted(rows, key=lambda r: r["id"]), ensure_ascii=False)
+
+
+def _turns_json(turns: Sequence[TranscriptTurn]) -> str:
+    return json.dumps(
+        [{"id": t.id, "start_ms": t.start_ms, "end_ms": t.end_ms, "text": t.text} for t in turns], ensure_ascii=False
+    )
+
+
+def _shots_json(project: Project) -> str:
+    rows = [
+        {"number": s.number, "framing": s.framing.value, "character_ids": list(s.character_ids), "action": s.action}
+        for s in project.shots
+    ]
+    return json.dumps(rows, ensure_ascii=False) if rows else "[]"
+
+
+def _short(e: ValidationError) -> str:
+    return "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors(include_input=False)[:5])

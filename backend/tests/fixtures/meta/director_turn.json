@@ -1,0 +1,9 @@
+[
+ {
+  "method": "POST",
+  "path": "/v1/chat/completions",
+  "status": 200,
+  "content_type": "application/json",
+  "body": "{\n \"id\": \"fixture1\",\n \"choices\": [\n  {\n   \"finish_reason\": \"stop\",\n   \"index\": 0,\n   \"message\": {\n    \"content\": \"{\\\"new_characters\\\": [], \\\"shots\\\": [{\\\"action\\\": \\\"Mira smiles and extends her hand forward as the small grey cat steps into the light toward her\\\", \\\"character_ids\\\": [\\\"mira\\\", \\\"cat\\\"], \\\"dialogue\\\": \\\"\\\", \\\"framing\\\": \\\"medium\\\", \\\"setting\\\": \\\"dim dark space at night in a pool of light\\\", \\\"source_turn_ids\\\": [\\\"t4\\\"]}]}\",\n    \"refusal\": null,\n    \"role\": \"assistant\"\n   },\n   \"logprobs\": null\n  }\n ],\n \"created\": 1793118658,\n \"model\": \"muse-spark-1.3-contributor\",\n \"object\": \"chat.completion\",\n \"usage\": {\n  \"completion_tokens\": 253,\n  \"prompt_tokens\": 714,\n  \"total_tokens\": 967,\n  \"completion_tokens_details\": {\n   \"reasoning_tokens\": 163\n  },\n  \"prompt_tokens_details\": {\n   \"cached_tokens\": 0\n  }\n }\n}"
+ }
+]
