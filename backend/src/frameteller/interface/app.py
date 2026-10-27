@@ -12,7 +12,7 @@ from frameteller.infrastructure.config import Settings
 from frameteller.interface import errors
 from frameteller.interface.container import Container, build_container
 from frameteller.interface.middleware import BodyLimitMiddleware, RateLimitMiddleware, RequestContextMiddleware
-from frameteller.interface.routes import health, media, projects
+from frameteller.interface.routes import health, media, projects, session
 
 DESCRIPTION = """Frameteller turns spoken stories into storyboards.
 
@@ -40,7 +40,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     if container is not None:
         app.state.container = container
     errors.install(app)
-    for router in (projects.router, media.router, health.router):
+    for router in (projects.router, media.router, health.router, session.router):
         app.include_router(router)
 
     config = settings or (container.settings if container else None)
