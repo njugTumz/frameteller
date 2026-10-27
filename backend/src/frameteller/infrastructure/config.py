@@ -53,8 +53,11 @@ class Settings(BaseSettings):
     breaker_cooldown_s: float = Field(default=30, gt=0)
 
     local_storage_dir: Path = Path(".data")
-    allowed_origins: str = ""
+    allowed_origins: str = ""  # comma-separated browser origins for CORS and WebSocket Origin checks
     log_level: str = "INFO"
+
+    rate_limit_per_minute: int = Field(default=120, ge=1)  # per client IP, all endpoints
+    rate_limit_costly_per_minute: int = Field(default=20, ge=1)  # endpoints that spend model credits
 
     @field_validator("sam_max_side", mode="before")
     @classmethod
@@ -68,6 +71,10 @@ class Settings(BaseSettings):
         if self.app_env != "local" and self.director_model.endswith("-contributor"):
             raise ValueError("contributor models are for synthetic local data only, not staging or production")
         return self
+
+    @property
+    def origins(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.allowed_origins.split(",") if o.strip()]
 
     @property
     def director(self) -> str:

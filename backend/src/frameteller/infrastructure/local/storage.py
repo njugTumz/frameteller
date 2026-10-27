@@ -33,6 +33,17 @@ class LocalFileMediaStorage:
     async def get(self, ref: MediaRef) -> bytes:
         return await asyncio.to_thread(safe_path(self._root, ref.key).read_bytes)
 
+    async def check_writable(self) -> None:
+        """Readiness probe: write and remove a small file. Raises if the disk is not writable."""
+
+        def probe() -> None:
+            self._root.mkdir(parents=True, exist_ok=True)
+            path = self._root / ".ready"
+            path.write_bytes(b"ok")
+            path.unlink()
+
+        await asyncio.to_thread(probe)
+
 
 def _write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
