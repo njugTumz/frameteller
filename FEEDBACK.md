@@ -10,6 +10,11 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-27 · muse-voice-transcribe-1.0 · issue · `POST /v1/asr/transcribe` returns 400 "You must specify the 'audioEncoding' field", but the docs' example omits it and the error does not list values. `WAV` works; `PCM_24KHZ` gives 400 "Malformed request".
+- 2026-10-27 · muse-voice-transcribe-1.0 · issue · In `DIARIZATION` mode the `speaker` event carries `label` and no `turnId`, unlike other turn events. Turns complete only on a speaker change or end of stream, so one narrator gets a single 42 s turn.
+- 2026-10-27 · muse-voice-transcribe-1.0 · issue · Endpointing varies between runs of the same file (4 turns once, 2 turns twice), and "Scene one" became "Sinuan" even with keywords set.
+- 2026-10-27 · muse-voice-transcribe-1.0 · good · `speechComplete` arrives in the same burst as `speechEnd`, about 0.8 s after the audio, and partials lag only ~280 ms. Realtime is fast enough to draw while someone talks.
+- 2026-10-27 · sam-3.1 · good · Segmenting a 768 px copy and scaling the mask up kept IoU at 0.994–0.996 against full size, and cut point selection from 7.9 s to 4.0 s.
 - 2026-10-27 · muse-voice-transcribe-1.0 · good · The realtime WebSocket worked first time from the documented protocol: a 48.5 s narration streamed at real time closed cleanly with code 1000 about 2 s after the audio ended, for $0.0024.
 - 2026-10-27 · muse-image-1.0 · good · Prompt caching applies to image requests: a panel request with two reference images reported 3,968 of 4,364 input tokens cached, and a chained edit 4,352. Worth stating in the image docs.
 - 2026-10-27 · sam-3.1 · good · Point selection on a 384×256 image took 2.5–2.9 s, against ~7.5 s at 1920×1280. A note on input size versus latency would help.

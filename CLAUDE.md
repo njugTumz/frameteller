@@ -130,11 +130,11 @@ Not used: Muse Wonder Full (Muse Code subscription only), Muse Spark 1.1/1.2 (sa
 - End input with `{"type":"endStream"}` and keep reading until close code 1000. Max session 60 minutes, no resume token.
 - Narration uses mode `ENDPOINTING`:
   - Partial `transcript` events use `partialMode: CUMULATIVE`: **replace** the previous partial, never append. Partials carry no `turnId`; they belong to the most recent `speechStart`.
-  - `speechComplete` per `turnId` carries the cleaned-up final text. Key all turn state on `turnId`; turns can overlap.
+  - `speechComplete` per `turnId` (an integer) carries the final text, in the same burst as `speechEnd`, ~0.8 s after the audio. Key all turn state on `turnId`; turns can overlap. Endpointing varies between runs: pauses between beats must be clear.
   - Panel timing comes from `audioProcessedMs` on `speechStart` and `speechEnd`. Timestamps are **turn-level, not word-level**; animatic timing is per turn.
   - Ignore unknown event types.
-- Co-direction uses mode `DIARIZATION`: adds `speaker` events with session-scoped labels (`A`, `B`), one per turn. Not tuned for low latency. **Mode is fixed per session**, so co-direction is chosen before recording starts.
-- Fallback: `POST /v1/asr/transcribe`, multipart with a `request` JSON part and an `audio` WAV part (mono, 16-bit PCM, 16 or 24 kHz; max 32 MB and 10 minutes). Returns `transcript` plus `turns[]` with `turnId`, `startMs`, `endMs`, `transcript`, `speaker`. Handle 429 with exponential backoff.
+- Co-direction uses mode `DIARIZATION`: adds `speaker` events `{"type":"speaker","label":"A","audioProcessedMs":…}` (session-scoped labels, **no `turnId`**: they belong to the open turn). A turn completes only on a speaker change or end of stream, so one narrator gets one long turn. **Mode is fixed per session**, so co-direction is chosen before recording starts.
+- Fallback: `POST /v1/asr/transcribe`, multipart with a `request` JSON part (must include `"audioEncoding": "WAV"`) and an `audio` WAV part (mono, 16-bit PCM, 16 or 24 kHz; max 32 MB and 10 minutes). Returns `transcript` plus `turns[]` with `turnId`, `startMs`, `endMs`, `transcript`, `speaker`. Handle 429 with exponential backoff.
 
 **Muse Image (`muse-image-1.0`)**
 - Output is **base64**, never a URL: `image_generation_call.result` on the Responses API, `b64_json` on the images endpoints. Default format webp. Persist every image to Blob Storage immediately.
