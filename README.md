@@ -33,15 +33,24 @@ The backend follows Clean Architecture: `domain` ← `application` ← `infrastr
 - Storage: Azure Blob Storage
 - CI/CD: GitHub Actions with staging and production environments
 
-See [docs/architecture.md](docs/architecture.md) (TODO) and the decision records in [docs/adr/](docs/adr/).
+See [docs/architecture.md](docs/architecture.md) and the decision records in [docs/adr/](docs/adr/).
 
 ## Local setup
 
-TODO: added once the backend and frontend are scaffolded.
+Backend (Python 3.12, pip 25.1 or newer):
 
 ```bash
-cp .env.example .env   # fill in values locally; never commit .env
+cd backend
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install --upgrade "pip>=25.1" && pip install --group dev
+
+ruff check src tests && ruff format --check src tests
+mypy
+PYTHONPATH=src lint-imports
+pytest --cov
 ```
+
+Create `.env` from `.env.example` and fill in values locally; never commit it. The frontend is not scaffolded yet.
 
 ## Built during the hackathon (Oct 26 – Nov 4, 2026)
 
@@ -49,6 +58,8 @@ Everything in this repository was built during the event. The commit history is 
 
 - [x] Project brief, marketing page with countdown and live build log
 - [x] Repository foundation: licence, config template, ADR 0001, marketing deploy workflow
+- [x] Day 2 spikes proving voice → shots, character consistency and click-to-select ([findings](docs/spikes/2026-10-28-findings.md))
+- [x] Backend domain and application layers with tests, import contracts and CI
 - [ ] TODO: list features as they ship
 
 ## License
