@@ -40,6 +40,7 @@ from frameteller.application.use_cases import (
     RunVoiceSession,
     SegmentObjectAtPoint,
 )
+from frameteller.infrastructure.azure import AzureBlobMediaStorage, BlobProjectRepository, BlobSpendLedger, blob_service
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.jobs import Handler, InProcessJobQueue, JobStatus
 from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
@@ -168,20 +169,30 @@ def wire(
 
 
 def build_container(settings: Settings) -> Container:
-    """Real adapters: Meta models, local files for storage, projects and spend (Azure Blob later)."""
-    root = settings.local_storage_dir
-    storage = LocalFileMediaStorage(root)
-    ledger = FileSpendLedger(root)
+    """Real adapters: Meta models, and local files or Azure Blob Storage (STORAGE_BACKEND) for persistence."""
+    repo: ProjectRepository
+    ledger: SpendLedger
+    if settings.storage_backend == "blob":
+        service = blob_service(settings)
+        blob_media = AzureBlobMediaStorage(service.get_container_client(settings.azure_media_container))
+        projects = service.get_container_client(settings.azure_projects_container)
+        storage: MediaStoragePort = blob_media
+        repo, ledger, check = BlobProjectRepository(projects), BlobSpendLedger(projects), blob_media.check_writable
+    else:
+        root = settings.local_storage_dir
+        local_media = LocalFileMediaStorage(root)
+        storage = local_media
+        repo, ledger, check = JsonFileProjectRepository(root), FileSpendLedger(root), local_media.check_writable
     caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s))
     client = meta_client(settings)
     return wire(
         settings,
-        repo=JsonFileProjectRepository(root),
+        repo=repo,
         storage=storage,
         director=MetaSparkDirectorAdapter(client, caller, settings),
         images=MetaImageAdapter(client, caller, storage, settings),
         segmentation=MetaSamAdapter(client, caller, storage, settings),
         speech=MetaVoiceTranscribeAdapter(caller, settings),
         ledger=ledger,
-        readiness={"storage": storage.check_writable},
+        readiness={"storage": check},
     )
