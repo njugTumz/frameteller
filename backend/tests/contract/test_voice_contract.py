@@ -1,7 +1,7 @@
-"""Voice adapter against a local server speaking the documented protocol.
+"""Voice adapter against a local server replaying event streams recorded from real sessions.
 
-The events are SYNTHESIZED (see tests/fixtures/meta/voice_realtime_synthesized.json), not recorded, because no
-narration recording exists yet. The live suite exercises the real service once one does.
+tests/fixtures/meta/voice_realtime.json holds the server events of one ENDPOINTING and one DIARIZATION session
+on spikes/fixtures/narration.wav, plus one file transcription (recorded by tests/fixtures/record_voice.py).
 """
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ from frameteller.application.ports import (
     TurnEnded,
     TurnStarted,
 )
-from frameteller.domain import TranscriptTurn
 from frameteller.infrastructure.config import Settings, load_settings
 from frameteller.infrastructure.meta.voice import BYTES_PER_MS, MetaVoiceTranscribeAdapter, paced_pcm
 from frameteller.infrastructure.resilience import ModelCaller
@@ -38,7 +37,7 @@ from tests.contract.conftest import FAKE_KEY
 from tests.fakes import InMemorySpendLedger
 from tests.fixtures import META
 
-SCRIPT = json.loads((META / "voice_realtime_synthesized.json").read_text())
+SCRIPT = json.loads((META / "voice_realtime.json").read_text())
 
 
 @dataclass
@@ -94,17 +93,20 @@ async def test_narration_session_streams_typed_events(
     }
     assert len(server.audio) == 5 * 4800
     assert server.ended
-    assert events == [
-        TurnStarted("1", 120),
-        PartialTranscript("Scene one"),
-        PartialTranscript("Scene one. Night, a rainy alley."),
-        TurnEnded("1", 2400),
-        TurnStarted("2", 2600),
-        TurnCompleted(TranscriptTurn("1", "Scene one. Night, a rainy alley.", 120, 2400)),
-        PartialTranscript("Close on the crate."),
-        TurnEnded("2", 4000),
-        TurnCompleted(TranscriptTurn("2", "Close on the crate.", 2600, 4000)),
+    # The real session merged the six spoken paragraphs into four turns (Day 2 findings).
+    turns = [e.turn for e in events if isinstance(e, TurnCompleted)]
+    assert [(t.id, t.start_ms, t.end_ms) for t in turns] == [
+        ("0", 5340, 15260),
+        ("1", 15420, 20860),
+        ("2", 21660, 39260),
+        ("3", 40300, 45580),
     ]
+    assert turns[1].text == "She hears a tiny sound under a wooden crate she kneels down and looks"
+    assert all(t.speaker is None for t in turns)
+    # Every turn arrives as start, partials, end, complete; audioProgress and the final empty partial are dropped.
+    assert [type(e) for e in events[:2]] == [TurnStarted, PartialTranscript]
+    assert sum(isinstance(e, TurnStarted) for e in events) == sum(isinstance(e, TurnEnded) for e in events) == 4
+    assert all(e.text for e in events if isinstance(e, PartialTranscript))
     [usage] = ledger.usage
     assert usage.operation == "stream"
     assert usage.ok
@@ -114,16 +116,13 @@ async def test_narration_session_streams_typed_events(
 async def test_co_direction_labels_speakers(settings: Settings, caller: ModelCaller) -> None:
     server = FakeAsr(SCRIPT["co_direction"])
 
-    events = await run(server, settings, caller, SpeechOptions(mode=SpeechMode.CO_DIRECTION))
+    events = await run(server, settings, caller, SpeechOptions(mode=SpeechMode.CO_DIRECTION, keywords=("Mira",)))
 
     assert server.handshake["mode"] == "DIARIZATION"
-    assert "keywords" not in server.handshake
-    assert [e for e in events if isinstance(e, SpeakerIdentified)] == [
-        SpeakerIdentified("1", "A"),
-        SpeakerIdentified("2", "B"),
-    ]
-    turns = [e.turn for e in events if isinstance(e, TurnCompleted)]
-    assert [(t.speaker, t.start_ms, t.end_ms) for t in turns] == [("A", 0, 1800), ("B", 2000, 3500)]
+    # A real speaker event has no turnId and arrives while its turn is open; one narrator means one long turn.
+    assert [e for e in events if isinstance(e, SpeakerIdentified)] == [SpeakerIdentified("0", "A")]
+    [turn] = [e.turn for e in events if isinstance(e, TurnCompleted)]
+    assert (turn.speaker, turn.start_ms, turn.end_ms) == ("A", 5500, 47660)
 
 
 async def test_abnormal_close_is_a_model_error(
@@ -192,16 +191,15 @@ async def test_file_fallback_posts_multipart_and_returns_turns(
 
     turns = await adapter.transcribe_file(wav(), SpeechOptions(keywords=("Mira",)))
 
-    assert turns == [
-        TranscriptTurn("1", "Scene one. Night, a rainy alley.", 120, 2400),
-        TranscriptTurn("2", "Close on the crate.", 2600, 4000),
-    ]
+    assert [(t.id, t.start_ms, t.end_ms) for t in turns] == [("0", 5340, 9180), ("1", 9740, 15260), ("2", 15740, 45580)]
+    assert turns[1].text.startswith("Mira a girl in a yellow raincoat")
     [req] = received
     assert req["path"] == "/v1/asr/transcribe"
     assert req["auth"] == f"Bearer {FAKE_KEY}"
     assert b'name="request"' in req["body"]
     assert b'name="audio"' in req["body"]
     assert b'"mode": "ENDPOINTING"' in req["body"]
+    assert b'"audioEncoding": "WAV"' in req["body"]
     assert b'"keywords": ["Mira"]' in req["body"]
     assert FAKE_KEY.encode() not in req["body"]  # auth only in the header for the file endpoint
     assert ledger.usage[0].cost_usd == pytest.approx(0.18 / 3600)
