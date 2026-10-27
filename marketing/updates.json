@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-27T16:38:25Z",
+  "updated_at": "2026-10-27T17:29:21Z",
   "items": [
+    {
+      "date": "2026-10-27",
+      "status": "shipped",
+      "title": "Talk to it, get shots back",
+      "body": "You can now narrate a scene to the backend and watch shots, character sheets and first panels come back while you are still talking."
+    },
     {
       "date": "2026-10-27",
       "status": "shipped",
