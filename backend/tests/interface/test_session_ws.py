@@ -194,3 +194,13 @@ async def test_direction_failure_is_reported_and_the_session_goes_on(
     assert [e for e in events if e["type"] == "error"] == [{"type": "error", "message": message, "fatal": False}]
     assert events[-1] == {"type": "session.ended", "turns": 1, "shots": 0}
     await ws.finish()
+
+
+async def test_closing_a_socket_the_client_already_left_does_not_raise() -> None:
+    from frameteller.interface.routes.session import _close
+
+    class Gone:
+        async def close(self, code: int) -> None:
+            raise OSError("client disconnected")
+
+    await _close(Gone(), 1000)  # type: ignore[arg-type]

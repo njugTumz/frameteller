@@ -94,10 +94,16 @@ async def _forward(ws: WebSocket, events: asyncio.Queue[ProjectEvent]) -> None:
         pass
 
 
+async def _close(ws: WebSocket, code: int) -> None:
+    """Close, unless the client already left (uvicorn then raises ClientDisconnected, an OSError)."""
+    with contextlib.suppress(Exception):
+        await ws.close(code)
+
+
 async def _refuse(ws: WebSocket, code: int, message: str) -> None:
     await ws.accept()
     await _send(ws, error_message(message, fatal=True))
-    await ws.close(code)
+    await _close(ws, code)
 
 
 def _origin_allowed(ws: WebSocket, allowed: list[str]) -> bool:
@@ -132,7 +138,7 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
         start = SessionStart.model_validate(await asyncio.wait_for(ws.receive_json(), START_TIMEOUT_S))
     except (TimeoutError, ValidationError, ValueError, KeyError):
         await _send(ws, error_message('Start with {"mode": "narrate" | "co_direct", "keywords": [...]}.', fatal=True))
-        await ws.close(CLOSE_BAD_REQUEST)
+        await _close(ws, CLOSE_BAD_REQUEST)
         return
     except WebSocketDisconnect:
         return
@@ -157,8 +163,7 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
             forward.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await forward
-    with contextlib.suppress(RuntimeError):
-        await ws.close(1000)
+    await _close(ws, 1000)
 
 
 async def _drain_until_closed(ws: WebSocket) -> None:
