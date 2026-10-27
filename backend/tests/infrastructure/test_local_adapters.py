@@ -1,0 +1,70 @@
+from pathlib import Path
+
+import pytest
+
+from frameteller.application.budget import LimitBudgetGuard
+from frameteller.application.errors import BudgetExceededError, ProjectNotFoundError
+from frameteller.application.ports import UsageRecord
+from frameteller.domain import CanvasTransform, MediaRef, ObjectMask, Size
+from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
+from tests.builders import bitmap, project
+from tests.fakes import FixedClock
+
+
+async def test_storage_round_trip(tmp_path: Path) -> None:
+    storage = LocalFileMediaStorage(tmp_path)
+    ref = await storage.put("projects/p1/panels/s1/r1", b"webp-bytes", "image/webp")
+    assert ref == MediaRef("projects/p1/panels/s1/r1")
+    assert await storage.get(ref) == b"webp-bytes"
+
+
+@pytest.mark.parametrize("key", ["../escape", "/etc/passwd", "a/../../b", "", " space"])
+async def test_storage_refuses_unsafe_keys(tmp_path: Path, key: str) -> None:
+    with pytest.raises(ValueError, match="unsafe"):
+        await LocalFileMediaStorage(tmp_path).put(key, b"x", "text/plain")
+
+
+async def test_repository_round_trips_a_full_project(tmp_path: Path) -> None:
+    p = project(shots=3)
+    panel = p.panel("s2")
+    panel.record_render(1, MediaRef("panels/s2/r1"), "resp_1", Size(1920, 1280))
+    panel.cache_mask(1, ObjectMask("character:mira", "Mira", bitmap(10, 20, 110, 220), MediaRef("m/mira.png"), "mira"))
+    panel.transform(CanvasTransform("character:mira", dx=4, dy=-2, scale=1.1))
+    p.reorder_shots(["s3", "s1", "s2"])
+
+    repo = JsonFileProjectRepository(tmp_path)
+    await repo.save(p)
+    loaded = await repo.get("p1")
+
+    assert loaded == p
+    assert loaded.bible.is_approved
+
+
+async def test_repository_unknown_project(tmp_path: Path) -> None:
+    with pytest.raises(ProjectNotFoundError):
+        await JsonFileProjectRepository(tmp_path).get("nope")
+
+
+async def test_repository_rejects_unknown_schema(tmp_path: Path) -> None:
+    (tmp_path / "projects").mkdir()
+    (tmp_path / "projects" / "p1.json").write_text('{"schema": 99}')
+    with pytest.raises(ValueError, match="schema"):
+        await JsonFileProjectRepository(tmp_path).get("p1")
+
+
+async def test_ledger_drives_the_budget_guard_and_survives_restarts(tmp_path: Path) -> None:
+    guard = LimitBudgetGuard(FileSpendLedger(tmp_path), FixedClock(), per_project_usd=0.02, per_day_usd=1)
+    await guard.charge("p1", 0.01, "panel")
+    await guard.charge("p1", 0.01, "panel")
+    restarted = LimitBudgetGuard(FileSpendLedger(tmp_path), FixedClock(), per_project_usd=0.02, per_day_usd=1)
+    with pytest.raises(BudgetExceededError):
+        await restarted.charge("p1", 0.01, "panel")
+    assert await FileSpendLedger(tmp_path).spent_on_day("2026-10-28") == pytest.approx(0.02)
+
+
+async def test_usage_records_do_not_count_toward_budgets(tmp_path: Path) -> None:
+    ledger = FileSpendLedger(tmp_path)
+    usage = UsageRecord("muse-image-1.0", "generate", 18000, 0.01, "p1", ok=True)
+    await ledger.record_usage(usage)
+    assert await ledger.spent_by_project("p1") == 0
+    assert await ledger.usage() == [usage]

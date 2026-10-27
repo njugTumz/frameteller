@@ -49,3 +49,7 @@ class InvalidModelOutputError(ModelError):
     """The model answered, but not in the shape we asked for, even after one retry."""
 
     user_message = "The director got confused by that line. Try saying it again."
+
+
+class ProjectNotFoundError(ApplicationError):
+    user_message = "We couldn't find that project."
