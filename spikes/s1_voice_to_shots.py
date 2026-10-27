@@ -4,7 +4,7 @@ With spikes/fixtures/narration.wav (mono 24 kHz s16le) it streams the audio to
 realtime ASR and also sends it to the file endpoint. Without it, it builds
 synthetic turns from story.txt at 150 words per minute.
 
-Usage: spikes/.venv/bin/python spikes/s1_voice_to_shots.py
+Usage: spikes/.venv/bin/python spikes/s1_voice_to_shots.py [--probe-effort]
 """
 
 from __future__ import annotations
@@ -258,6 +258,42 @@ def direct(turns: list[dict], label: str) -> tuple[Storyboard, dict]:
     raise AssertionError("unreachable")
 
 
+PROBE_CAP_USD = 0.05
+
+
+def probe_effort(turns: list[dict]) -> list[dict]:
+    """Director latency by reasoning_effort (Chat Completions), single turn vs whole story."""
+    oai = client()
+    cases = {"single_turn": [turns[3]], "whole_story": turns}
+    rows, probe_cost = [], 0.0
+    for effort in ("minimal", "low"):
+        for scope, ts in cases.items():
+            if probe_cost + 0.01 > PROBE_CAP_USD:
+                raise SystemExit(f"probe cap reached at ${probe_cost:.4f}")
+            reserve(0.01)
+            messages = [{"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": "Transcript turns:\n" + json.dumps(ts, ensure_ascii=False)}]
+            with timed() as t:
+                resp = oai.chat.completions.parse(model=TEXT_MODEL, messages=messages,
+                                                  response_format=Storyboard, reasoning_effort=effort)
+            u = resp.usage
+            i, o = (u.prompt_tokens, u.completion_tokens) if u else (None, None)
+            details = getattr(u, "completion_tokens_details", None)
+            reasoning = getattr(details, "reasoning_tokens", None) if details else None
+            cost = spark_cost(i, o, 0)
+            probe_cost += cost
+            log_cost(spike=SPIKE, model=TEXT_MODEL, latency_s=t.seconds, cost_usd=cost, input_tokens=i,
+                     output_tokens=o, note=f"effort probe {effort} {scope}")
+            sb = resp.choices[0].message.parsed
+            errors = ["no parsed output"] if sb is None else check_storyboard(sb, ts)
+            rows.append({"effort": effort, "scope": scope, "latency_s": round(t.seconds, 2),
+                         "output_tokens": o, "reasoning_tokens": reasoning,
+                         "shots": len(sb.shots) if sb else 0, "valid": not errors, "errors": errors})
+            print(json.dumps(rows[-1]), flush=True)
+    write_json(OUT / "s1_effort_probe.json", {"rows": rows, "cost_usd": round(probe_cost, 6)})
+    return rows
+
+
 def main() -> None:
     findings: dict = {}
     if WAV.exists():
@@ -311,4 +347,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--probe-effort" in sys.argv:
+        probe_effort(json.loads((OUT / "s1_turns.json").read_text())["turns"])
+    else:
+        main()
