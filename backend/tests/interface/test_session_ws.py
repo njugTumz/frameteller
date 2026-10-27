@@ -14,7 +14,7 @@ from frameteller.application.ports import (
 from frameteller.domain import Character, Framing, Project, TranscriptTurn
 from frameteller.interface.routes import session
 from tests.builders import project
-from tests.fakes import FakeDirector
+from tests.fakes import LISTEN, FakeDirector, ScriptedSpeech
 from tests.interface.conftest import Api, Fakes, WsClient
 
 OWL = Character("owl", "Owl", "a small brown owl with round spectacles")
@@ -204,3 +204,54 @@ async def test_closing_a_socket_the_client_already_left_does_not_raise() -> None
             raise OSError("client disconnected")
 
     await _close(Gone(), 1000)  # type: ignore[arg-type]
+
+
+async def test_beats_cut_shots_and_corrections_redirect_them(fakes: Fakes, make_api: Callable[..., Api]) -> None:
+    speech = ScriptedSpeech(
+        [
+            LISTEN,
+            TurnStarted("0", 0),
+            PartialTranscript("An owl lands"),
+            LISTEN,
+            PartialTranscript("An owl lands it hoots"),
+            TurnCompleted(TranscriptTurn("0", "An owl lands it hoots", 0, 160)),
+        ]
+    )
+    fakes.speech = speech
+    api = make_api()
+    scripted(api)
+    shot = ShotDraft(Framing.WIDE, ("owl",), "a rooftop", "the owl hoots", "", ("?",), 1)
+    api.fakes.director.turns |= {"b1": api.fakes.director.turns["0"], "b2": DirectedTurn((), (shot,))}
+
+    ws = WsClient(api.app, PATH)
+    assert await ws.connect()
+    await ws.send_json({"mode": "narrate"})
+    for message in (FRAME, {"type": "beat"}, {"type": "nonsense"}, FRAME, {"type": "end"}):
+        await speech.listening.wait()
+        if isinstance(message, bytes):
+            speech.listening.clear()
+            await ws.send_bytes(message)
+        else:
+            await ws.send_json(message)
+    events = await ws.until("session.ended")
+
+    turns = [e["turn"] for e in events if e["type"] == "turn.completed"]
+    assert [(t["text"], t["start_ms"], t["end_ms"]) for t in turns] == [("An owl lands", 0, 80), ("it hoots", 80, 160)]
+    shots = [e["shot"] for e in events if e["type"] == "shot.created"]
+    assert [s["number"] for s in shots] == [1, 2]
+    [notice] = [e for e in events if e["type"] == "error"]
+    assert "Unknown message" in notice["message"]
+    assert not notice["fatal"]
+
+    # After the narration, the socket stays open for corrections.
+    await ws.send_json({"type": "transcript.corrected", "turn_id": turns[1]["id"], "text": "It hoots twice."})
+    [replaced] = [e for e in await ws.until("shots.replaced") if e["type"] == "shots.replaced"]
+    assert replaced["turn"]["text"] == "It hoots twice."
+    assert replaced["removed_shot_ids"] == [shots[1]["id"]]
+    assert [s["number"] for s in replaced["shots"]] == [2]
+    assert replaced["shots"][0]["duration_ms"] == 80
+    await ws.send_json({"type": "transcript.corrected", "turn_id": "nope", "text": "x"})
+    error = await ws.receive()
+    assert error is not None
+    assert error["type"] == "error"
+    await ws.finish()

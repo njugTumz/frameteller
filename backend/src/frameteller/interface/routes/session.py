@@ -15,8 +15,19 @@ from pydantic import ValidationError
 
 from frameteller.application.errors import ApplicationError, ProjectNotFoundError
 from frameteller.application.events import ProjectEvent
+from frameteller.application.use_cases import ClientInput
+from frameteller.domain import DomainError
 from frameteller.infrastructure.observability import log_context
-from frameteller.interface.dto import SessionStart, error_message, event_message
+from frameteller.interface.dto import (
+    ClientBeat,
+    ClientCorrection,
+    ClientEnd,
+    ClientMessage,
+    SessionStart,
+    error_message,
+    event_message,
+)
+from frameteller.interface.errors import describe
 from frameteller.interface.routes.deps import PROJECT_ID, Deps
 
 router = APIRouter()
@@ -33,7 +44,10 @@ CLOSE_BAD_REQUEST, CLOSE_NOT_FOUND, CLOSE_BUSY = 4400, 4404, 4409
 
 
 class Audio:
-    """Validated PCM frames from the client until it sends {"type": "end"}, disconnects or hits 55 minutes."""
+    """Validated client input until it sends {"type": "end"}, disconnects or hits 55 minutes.
+
+    PCM frames, beats (timed at the end of the audio received so far) and transcript corrections, in order.
+    """
 
     def __init__(self, ws: WebSocket) -> None:
         self.ws = ws
@@ -41,7 +55,7 @@ class Audio:
         self.disconnected = False
         self.notices: list[str] = []
 
-    async def frames(self) -> AsyncIterator[bytes]:
+    async def frames(self) -> AsyncIterator[ClientInput]:
         while True:
             try:
                 message = await self.ws.receive()
@@ -65,8 +79,16 @@ class Audio:
                     return
                 self.received_ms += len(data) // BYTES_PER_MS
                 yield data
-            elif _is_end(message.get("text")):
-                return
+            elif (parsed := await self._parse(message.get("text"))) is not None:
+                if isinstance(parsed, ClientEnd):
+                    return
+                yield parsed.at(self.received_ms) if isinstance(parsed, ClientBeat) else parsed.as_command()
+
+    async def _parse(self, text: str | None) -> ClientEnd | ClientBeat | ClientCorrection | None:
+        parsed = _parse(text)
+        if parsed is None:
+            await self._notice('Unknown message: send {"type": "beat"}, {"type": "transcript.corrected", ...} or end.')
+        return parsed
 
     async def _notice(self, text: str) -> None:
         if text not in self.notices:  # say it once, not once per frame
@@ -74,11 +96,11 @@ class Audio:
             await _send(self.ws, error_message(text))
 
 
-def _is_end(text: str | None) -> bool:
+def _parse(text: str | None) -> ClientEnd | ClientBeat | ClientCorrection | None:
     try:
-        return bool(text) and json.loads(text or "").get("type") == "end"
-    except (ValueError, AttributeError):
-        return False
+        return ClientMessage.model_validate({"message": json.loads(text or "")}).message
+    except (ValueError, ValidationError):
+        return None
 
 
 async def _send(ws: WebSocket, message: dict[str, Any]) -> bool:
@@ -157,7 +179,7 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
                 await _send(ws, error_message(ApplicationError.user_message, fatal=True))
             c.sessions.release(project_id)  # a new narration may start; this socket keeps reporting jobs
             if not audio.disconnected:
-                await _drain_until_closed(ws)
+                await _drain_until_closed(ws, project_id, c)
         finally:
             await asyncio.sleep(0)  # let the forwarder flush events already queued
             forward.cancel()
@@ -166,9 +188,13 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
     await _close(ws, 1000)
 
 
-async def _drain_until_closed(ws: WebSocket) -> None:
-    """After the narration: keep the socket for job.updated / cast.proposed until the client leaves."""
+async def _drain_until_closed(ws: WebSocket, project_id: str, c: Deps) -> None:
+    """After the narration: keep the socket for job updates and transcript corrections until the client leaves."""
     with contextlib.suppress(TimeoutError, WebSocketDisconnect):
         async with asyncio.timeout(IDLE_AFTER_SESSION_S):
-            while (await ws.receive())["type"] != "websocket.disconnect":
-                pass
+            while (message := await ws.receive())["type"] != "websocket.disconnect":
+                if isinstance(parsed := _parse(message.get("text")), ClientCorrection):
+                    try:
+                        await c.correct_transcript.execute(project_id, parsed.turn_id, parsed.text)
+                    except (ApplicationError, DomainError) as e:
+                        await _send(ws, error_message(describe(e)[2]))
