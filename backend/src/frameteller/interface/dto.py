@@ -13,11 +13,13 @@ from frameteller.application.events import (
     SessionEnded,
     SessionFailed,
     ShotCreated,
+    ShotsReplaced,
     TranscriptUpdated,
     TurnFinished,
 )
 from frameteller.application.ports import Quality, SpeechMode, SpeechOptions
-from frameteller.application.use_cases import CastReview, JobTicket, Selection
+from frameteller.application.use_cases import Beat, CastReview, JobTicket, Selection, TranscriptCorrection
+from frameteller.application.use_cases.correct_transcript import MAX_TURN_CHARS
 from frameteller.domain import Box, Character, MediaRef, ObjectMask, Panel, Project, Shot, TranscriptTurn
 
 Id = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
@@ -74,6 +76,34 @@ class SessionStart(BaseModel):
         mode = SpeechMode.CO_DIRECTION if self.mode == "co_direct" else SpeechMode.NARRATION
         keywords = tuple(dict.fromkeys(k.strip()[:40] for k in self.keywords if k.strip()))
         return SpeechOptions(mode=mode, keywords=keywords)
+
+
+class ClientEnd(BaseModel):
+    type: Literal["end"]
+
+
+class ClientBeat(BaseModel):
+    """ "A new shot starts now" (ADR 0008). Its time is where the audio received so far ends."""
+
+    type: Literal["beat"]
+
+    def at(self, received_ms: int) -> Beat:
+        return Beat(received_ms)
+
+
+class ClientCorrection(BaseModel):
+    type: Literal["transcript.corrected"]
+    turn_id: str = Field(min_length=1, max_length=64)
+    text: str = Field(min_length=1, max_length=MAX_TURN_CHARS)
+
+    def as_command(self) -> TranscriptCorrection:
+        return TranscriptCorrection(self.turn_id, self.text)
+
+
+class ClientMessage(BaseModel):
+    """A JSON message from the client after the start message."""
+
+    message: ClientEnd | ClientBeat | ClientCorrection = Field(discriminator="type")
 
 
 # ---- responses ----
@@ -258,6 +288,13 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
             return {"type": "turn.completed", "turn": TurnOut.of(turn).model_dump()}
         case ShotCreated(shot):
             return {"type": "shot.created", "shot": ShotOut.of(shot).model_dump()}
+        case ShotsReplaced(turn, removed, shots):
+            return {
+                "type": "shots.replaced",
+                "turn": TurnOut.of(turn).model_dump(),
+                "removed_shot_ids": list(removed),
+                "shots": [ShotOut.of(s).model_dump() for s in shots],
+            }
         case CastProposed(characters):
             return {"type": "cast.proposed", "characters": [CharacterOut.of(c).model_dump() for c in characters]}
         case JobUpdated(kind, key, status, shot_id, revision, message):

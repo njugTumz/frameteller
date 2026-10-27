@@ -3,6 +3,7 @@
 from frameteller.application.use_cases.approve_cast import ApproveCast, CastReview
 from frameteller.application.use_cases.build_character_bible import BuildCharacterBible
 from frameteller.application.use_cases.cast_references import GenerateCastReferences
+from frameteller.application.use_cases.correct_transcript import CorrectTranscript
 from frameteller.application.use_cases.direct_turn import DirectedShots, DirectTurn
 from frameteller.application.use_cases.edit_panel_appearance import EditPanelAppearance
 from frameteller.application.use_cases.edit_panel_by_command import EditPanelByCommand
@@ -20,12 +21,15 @@ from frameteller.application.use_cases.requests import (
     RequestPanelRender,
 )
 from frameteller.application.use_cases.segment_object_at_point import SegmentObjectAtPoint, Selection
-from frameteller.application.use_cases.voice_session import RunVoiceSession
+from frameteller.application.use_cases.voice_session import Beat, ClientInput, RunVoiceSession, TranscriptCorrection
 
 __all__ = [
     "ApproveCast",
+    "Beat",
     "BuildCharacterBible",
     "CastReview",
+    "ClientInput",
+    "CorrectTranscript",
     "CreateProject",
     "DirectTurn",
     "DirectedShots",
@@ -47,5 +51,6 @@ __all__ = [
     "RunVoiceSession",
     "SegmentObjectAtPoint",
     "Selection",
+    "TranscriptCorrection",
     "character_mask_id",
 ]

@@ -25,6 +25,15 @@ class ShotCreated:
 
 
 @dataclass(frozen=True, slots=True)
+class ShotsReplaced:
+    """A corrected turn was re-directed: `shots` (renumbered) took the place of `removed_shot_ids`."""
+
+    turn: TranscriptTurn
+    removed_shot_ids: tuple[str, ...]
+    shots: tuple[Shot, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CastProposed:
     """New characters with freshly drawn reference sheets, waiting for approval (ADR 0004)."""
 
@@ -55,4 +64,13 @@ class SessionEnded:
     shots: int
 
 
-ProjectEvent = TranscriptUpdated | TurnFinished | ShotCreated | CastProposed | JobUpdated | SessionFailed | SessionEnded
+ProjectEvent = (
+    TranscriptUpdated
+    | TurnFinished
+    | ShotCreated
+    | ShotsReplaced
+    | CastProposed
+    | JobUpdated
+    | SessionFailed
+    | SessionEnded
+)

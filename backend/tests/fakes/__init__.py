@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 from collections import defaultdict
 from collections.abc import AsyncIterator, Callable, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any
 
 from frameteller.application.errors import ProjectNotFoundError
 from frameteller.application.events import ProjectEvent
@@ -61,10 +64,17 @@ class FakeDirector:
         self.turns = turns or {}
         self.characters = list(characters)
         self.calls: list[str] = []
+        self.texts: list[str] = []
 
     async def direct_turn(self, turn: TranscriptTurn, project: Project) -> DirectedTurn:
-        self.calls.append(turn.id)
-        return self.turns[turn.id]
+        """Scripted by turn id. Live sessions prefix ids with a session tag ("s1-0"), so "0" matches too."""
+        key = turn.id if turn.id in self.turns else turn.id.split("-", 1)[-1]
+        self.calls.append(key)
+        self.texts.append(turn.text)
+        directed = self.turns[key]
+        # Like the real adapter, cite the turn as stored.
+        shots = tuple(replace(d, source_turn_ids=(turn.id,)) for d in directed.shots)
+        return DirectedTurn(directed.new_characters, shots)
 
     async def direct_story(self, project: Project) -> DirectedTurn:
         self.calls.append("direct_story")
@@ -157,6 +167,44 @@ class FakeSpeechToText:
 
     async def transcribe_file(self, wav: bytes, options: SpeechOptions) -> list[TranscriptTurn]:
         return list(self.turns)
+
+
+LISTEN = object()  # in a ScriptedSpeech script: wait for the next audio chunk
+
+
+class ScriptedSpeech(FakeSpeechToText):
+    """Emits scripted events in step with the audio: each LISTEN step waits for the next chunk.
+
+    `listening` is set while the fake waits at a LISTEN, after every earlier event was handled, so a test client
+    can send a beat at an exact point in the transcript (see `paced`).
+    """
+
+    def __init__(self, script: Sequence[SpeechEvent | object]) -> None:
+        super().__init__()
+        self.script = list(script)
+        self.listening = asyncio.Event()
+
+    async def stream(self, audio: AsyncIterator[bytes], options: SpeechOptions) -> AsyncIterator[SpeechEvent]:
+        self.options = options
+        chunks = aiter(audio)
+        for step in self.script:
+            if step is LISTEN:
+                self.listening.set()
+                with contextlib.suppress(StopAsyncIteration):
+                    self.audio.extend(await anext(chunks))
+            else:
+                yield step  # type: ignore[misc]
+        self.listening.set()
+        async for chunk in chunks:
+            self.audio.extend(chunk)
+
+    async def paced(self, *items: Any) -> AsyncIterator[Any]:
+        """A client that sends each item once the transcript has caught up with the audio sent before it."""
+        for item in items:
+            await self.listening.wait()
+            if isinstance(item, bytes):
+                self.listening.clear()
+            yield item
 
 
 class InMemoryJobQueue:

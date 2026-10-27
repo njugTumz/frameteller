@@ -55,7 +55,7 @@ async def test_narration_becomes_partials_turns_shots_and_a_proposed_cast(api: A
     assert story == ["transcript.partial", "transcript.partial", "turn.completed", "shot.created", "cast.proposed"]
     by_type = {e["type"]: e for e in events}
     assert by_type["turn.completed"]["turn"] == {
-        "id": "0",
+        "id": "id1-0",  # the transcriber's turn 0, tagged with this session
         "text": "An owl lands on the roof.",
         "start_ms": 0,
         "end_ms": 3000,

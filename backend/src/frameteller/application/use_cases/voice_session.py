@@ -1,51 +1,161 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 from frameteller.application.errors import ApplicationError
 from frameteller.application.events import SessionEnded, SessionFailed, ShotCreated, TranscriptUpdated, TurnFinished
 from frameteller.application.ports import (
     EventPublisher,
+    IdGenerator,
     PartialTranscript,
     SpeechOptions,
     SpeechToTextPort,
     TurnCompleted,
+    TurnEnded,
 )
+from frameteller.application.use_cases.correct_transcript import CorrectTranscript
 from frameteller.application.use_cases.direct_turn import DirectTurn
 from frameteller.application.use_cases.requests import RequestCastReferences
 from frameteller.domain import DomainError, TranscriptTurn
 
 DIRECTION_FAILED = "The director couldn't place that line. Try saying it again."
+CORRECTION_FAILED = "We couldn't apply that correction. Check the turn and try again."
+AUDIO_BUFFER_FRAMES = 256  # about 20 s of 80 ms frames waiting for the transcriber
+
+
+@dataclass(frozen=True, slots=True)
+class Beat:
+    """The narrator marked "a new shot starts now", `at_ms` into the audio they have sent (ADR 0008)."""
+
+    at_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class TranscriptCorrection:
+    """The user fixed misheard words in a turn."""
+
+    turn_id: str
+    text: str
+
+
+ClientInput = bytes | Beat | TranscriptCorrection
+
+
+class _Heard:
+    """Every word heard so far this session, and where the last shot boundary fell (ADR 0008).
+
+    Partials are cumulative per transcriber turn, so the words of finished turns are kept and the current partial
+    is appended. A beat takes the words since the previous boundary. Beats are matched to the transcript by word
+    position, so later rewording inside a finished beat cannot move words into the next one.
+    """
+
+    def __init__(self) -> None:
+        self.done: list[str] = []
+        self.partial: list[str] = []
+        self.cursor = 0  # words before this index already belong to a directed turn
+        self.cut_ms = 0  # the audio position of the last boundary
+        self.speech_end_ms = 0
+
+    def hear_partial(self, text: str) -> None:
+        self.partial = text.split()
+
+    def finish_turn(self, text: str) -> None:
+        final = text.split()
+        # The final text normally matches the last partial; keep whichever has more words so positions hold.
+        self.done += final if len(final) >= len(self.partial) else self.partial
+        self.partial = []
+
+    def cut(self, at_ms: int) -> tuple[str, int, int]:
+        """Close the stretch since the last boundary: (its text, start ms, end ms)."""
+        words = self.done + self.partial
+        text = " ".join(words[self.cursor :])
+        self.cursor = max(self.cursor, len(words))
+        start, self.cut_ms = self.cut_ms, max(self.cut_ms, at_ms)
+        return text, start, max(at_ms, start)
+
+
+async def _drain(audio: asyncio.Queue[bytes | None]) -> None:
+    while await audio.get() is not None:
+        pass
 
 
 class RunVoiceSession:
-    """Live narration: transcribe, direct each finished turn into shots, and queue sheets for new characters.
+    """Live narration: transcribe, direct each finished stretch into shots, and queue sheets for new characters.
 
-    The transcript is never held up by direction: turns are directed one at a time, in order, beside the stream
-    (ADR 0002). A failed turn is reported and skipped; the session carries on.
+    Shots are cut by the narrator's beats when they send them, otherwise by the transcriber's turns (ADR 0008).
+    Once a beat has arrived, transcriber turns no longer create shots, so the same audio is never directed twice.
+    Direction runs one stretch at a time, in order, beside the stream (ADR 0002); a failure is reported and
+    skipped, and the session carries on.
     """
 
     def __init__(
         self,
         speech: SpeechToTextPort,
         direct: DirectTurn,
+        correct: CorrectTranscript,
         cast: RequestCastReferences,
         events: EventPublisher,
+        ids: IdGenerator,
     ) -> None:
-        self._speech, self._direct, self._cast, self._events = speech, direct, cast, events
+        self._speech, self._direct, self._correct = speech, direct, correct
+        self._cast, self._events, self._ids = cast, events, ids
 
-    async def execute(self, project_id: str, audio: AsyncIterator[bytes], options: SpeechOptions) -> SessionEnded:
-        turns: asyncio.Queue[TranscriptTurn | None] = asyncio.Queue()
-        counts = {"turns": 0, "shots": 0}
+    async def execute(
+        self, project_id: str, client: AsyncIterator[ClientInput], options: SpeechOptions
+    ) -> SessionEnded:
+        # Turn ids are per session; the tag keeps a second narration in the same project from reusing them.
+        tag = self._ids.new_id()[:8]
+        work: asyncio.Queue[TranscriptTurn | TranscriptCorrection | None] = asyncio.Queue()
+        audio: asyncio.Queue[bytes | None] = asyncio.Queue(AUDIO_BUFFER_FRAMES)
+        heard = _Heard()
+        counts = {"beats": 0, "turns": 0, "shots": 0}
+        beat_mode = False  # set by the first beat: from then on beats, not the transcriber, cut the shots
 
         async def publish_failure(message: str, *, fatal: bool = False) -> None:
             await self._events.publish(project_id, SessionFailed(message, fatal))
 
-        async def direct_turns() -> None:
-            while (turn := await turns.get()) is not None:
+        async def finish(turn: TranscriptTurn) -> None:
+            counts["turns"] += 1
+            await self._events.publish(project_id, TurnFinished(turn))
+            if turn.text.strip():
+                work.put_nowait(turn)
+
+        async def close_beat(at_ms: int) -> None:
+            text, start, end = heard.cut(at_ms)
+            if text:
+                counts["beats"] += 1
+                await finish(TranscriptTurn(f"{tag}-b{counts['beats']}", text, start, end))
+
+        async def read_client() -> None:
+            nonlocal beat_mode
+            try:
+                async for item in client:
+                    if isinstance(item, Beat):
+                        beat_mode = True
+                        await close_beat(item.at_ms)
+                    elif isinstance(item, TranscriptCorrection):
+                        work.put_nowait(item)
+                    else:
+                        await audio.put(item)
+            except Exception:
+                await audio.put(None)  # end the transcriber's input so the stream cannot wait forever
+                raise
+            await audio.put(None)
+
+        async def pcm() -> AsyncIterator[bytes]:
+            while (chunk := await audio.get()) is not None:
+                yield chunk
+
+        async def direct() -> None:
+            while (item := await work.get()) is not None:
                 try:
-                    directed = await self._direct.execute(project_id, turn)
+                    if isinstance(item, TranscriptCorrection):
+                        await self._correct.execute(project_id, item.turn_id, item.text)
+                        continue
+                    directed = await self._direct.execute(project_id, item)
                     for shot in directed.shots:
                         counts["shots"] += 1
                         await self._events.publish(project_id, ShotCreated(shot))
@@ -54,24 +164,42 @@ class RunVoiceSession:
                 except ApplicationError as e:
                     await publish_failure(e.user_message)
                 except DomainError:
-                    await publish_failure(DIRECTION_FAILED)
+                    failed = CORRECTION_FAILED if isinstance(item, TranscriptCorrection) else DIRECTION_FAILED
+                    await publish_failure(failed)
 
-        director = asyncio.create_task(direct_turns())
+        director = asyncio.create_task(direct())
+        reader = asyncio.create_task(read_client())
         try:
-            async for event in self._speech.stream(audio, options):
+            async for event in self._speech.stream(pcm(), options):
                 if isinstance(event, PartialTranscript):
+                    heard.hear_partial(event.text)
                     await self._events.publish(project_id, TranscriptUpdated(event.text))
+                elif isinstance(event, TurnEnded):
+                    heard.speech_end_ms = max(heard.speech_end_ms, event.end_ms)
                 elif isinstance(event, TurnCompleted):
-                    counts["turns"] += 1
-                    await self._events.publish(project_id, TurnFinished(event.turn))
-                    if event.turn.text.strip():
-                        turns.put_nowait(event.turn)
+                    heard.finish_turn(event.turn.text)
+                    heard.speech_end_ms = max(heard.speech_end_ms, event.turn.end_ms)
+                    if not beat_mode:  # endpointing is the fallback when the narrator sends no beats
+                        heard.cut(event.turn.end_ms)
+                        t = event.turn
+                        await finish(TranscriptTurn(f"{tag}-{t.id}", t.text, t.start_ms, t.end_ms, t.speaker))
+            # The transcriber has stopped reading: discard any audio left so the last beats can still be read.
+            discard = asyncio.create_task(_drain(audio))
+            await reader
+            discard.cancel()
+            if beat_mode:  # the last stretch runs to the end of the speech
+                await close_beat(max(heard.speech_end_ms, heard.cut_ms))
         except ApplicationError as e:
             await publish_failure(e.user_message, fatal=True)
         except BaseException:
             director.cancel()
             raise
-        turns.put_nowait(None)
+        finally:
+            if not reader.done():
+                reader.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.gather(reader, return_exceptions=True)
+        work.put_nowait(None)
         await director  # finish directing what was said before the stream ended
         ended = SessionEnded(counts["turns"], counts["shots"])
         await self._events.publish(project_id, ended)

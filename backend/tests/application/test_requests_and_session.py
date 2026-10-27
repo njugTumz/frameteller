@@ -23,6 +23,7 @@ from frameteller.application.ports import (
 )
 from frameteller.application.use_cases import (
     ApproveCast,
+    CorrectTranscript,
     CreateProject,
     DirectTurn,
     EditPanelAppearance,
@@ -259,11 +260,14 @@ async def no_audio() -> AsyncIterator[bytes]:
 
 def session(repo: InMemoryProjectRepository, speech: FakeSpeechToText, director: FakeDirector):  # type: ignore[no-untyped-def]
     events, jobs = RecordingPublisher(), InMemoryJobQueue()
+    cast = RequestCastReferences(repo, jobs, SequentialIds("n"))
     run = RunVoiceSession(
         speech,
         DirectTurn(repo, director, SequentialIds("shot")),
-        RequestCastReferences(repo, jobs, SequentialIds("n")),
+        CorrectTranscript(repo, director, SequentialIds("fix"), cast, events),
+        cast,
         events,
+        SequentialIds("s"),  # the session tag: turn ids become "s1-..."
     )
     return run, events, jobs
 
@@ -302,7 +306,7 @@ async def test_session_reports_a_failed_turn_and_carries_on() -> None:
 
     class FlakyDirector(FakeDirector):
         async def direct_turn(self, turn: TranscriptTurn, project):  # type: ignore[no-untyped-def]
-            if turn.id == "t1":
+            if turn.id == "s1-t1":
                 raise ModelTimeoutError("muse-spark-1.3")
             return await super().direct_turn(turn, project)
 

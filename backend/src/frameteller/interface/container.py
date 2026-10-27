@@ -22,6 +22,7 @@ from frameteller.application.ports import (
 )
 from frameteller.application.use_cases import (
     ApproveCast,
+    CorrectTranscript,
     CreateProject,
     DirectTurn,
     EditPanelAppearance,
@@ -71,6 +72,7 @@ class Container:
     select_object: SegmentObjectAtPoint
     reorder_shots: ReorderShots
     voice_session: RunVoiceSession
+    correct_transcript: CorrectTranscript
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
 
@@ -142,6 +144,7 @@ def wire(
         lambda p: cast_references.execute(p["project_id"], p["character_ids"].split(","))
     )
 
+    correct_transcript = CorrectTranscript(repo, director, ids, request_cast, hub)
     return Container(
         settings=settings,
         storage=storage,
@@ -156,7 +159,10 @@ def wire(
         request_edit=RequestPanelEdit(repo, queue),
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),
         reorder_shots=ReorderShots(repo),
-        voice_session=RunVoiceSession(speech, DirectTurn(repo, director, ids), request_cast, hub),
+        voice_session=RunVoiceSession(
+            speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids
+        ),
+        correct_transcript=correct_transcript,
         readiness=readiness or {},
     )
 

@@ -1,15 +1,44 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
-from frameteller.application.ports import DirectorPort, IdGenerator, ProjectRepository
-from frameteller.domain import Character, Project, Shot, TranscriptTurn
+from frameteller.application.ports import DirectorPort, IdGenerator, ProjectRepository, ShotDraft
+from frameteller.domain import Character, Project, Shot, TranscriptTurn, split_duration
 
 
 @dataclass(frozen=True, slots=True)
 class DirectedShots:
     shots: tuple[Shot, ...]
     new_characters: tuple[Character, ...]
+
+
+def shots_for_turn(drafts: Sequence[ShotDraft], turn: TranscriptTurn, ids: IdGenerator, first: int) -> list[Shot]:
+    """Number the director's drafts from `first` and share the turn's time between them by word count (ADR 0008)."""
+    words = [len(f"{d.action} {d.dialogue}".split()) for d in drafts]
+    durations = split_duration(turn.duration_ms, words)
+    return [
+        Shot(
+            id=ids.new_id(),
+            number=first + i,
+            framing=d.framing,
+            character_ids=d.character_ids,
+            setting=d.setting,
+            action=d.action,
+            dialogue=d.dialogue,
+            source_turn_ids=d.source_turn_ids,
+            duration_ms=durations[i],
+        )
+        for i, d in enumerate(drafts)
+    ]
+
+
+def add_new_characters(project: Project, candidates: Sequence[Character]) -> tuple[Character, ...]:
+    # Another turn may have introduced the same character meanwhile: the first description wins.
+    new = tuple(c for c in candidates if c.id not in project.bible)
+    for c in new:
+        project.upsert_character(c)
+    return new
 
 
 class DirectTurn:
@@ -25,26 +54,9 @@ class DirectTurn:
 
         def apply(project: Project) -> DirectedShots:
             project.add_turn(turn)
-            # Another turn may have introduced the same character meanwhile: the first description wins.
-            new = tuple(c for c in directed.new_characters if c.id not in project.bible)
-            for c in new:
-                project.upsert_character(c)
-            first = len(project.shots) + 1
-            shots = tuple(
-                Shot(
-                    id=self._ids.new_id(),
-                    number=first + i,
-                    framing=d.framing,
-                    character_ids=d.character_ids,
-                    setting=d.setting,
-                    action=d.action,
-                    dialogue=d.dialogue,
-                    source_turn_ids=d.source_turn_ids,
-                    duration_ms=d.duration_ms,
-                )
-                for i, d in enumerate(directed.shots)
-            )
+            new = add_new_characters(project, directed.new_characters)
+            shots = shots_for_turn(directed.shots, turn, self._ids, len(project.shots) + 1)
             project.append_shots(shots)
-            return DirectedShots(shots, new)
+            return DirectedShots(tuple(shots), new)
 
         return await self._repo.update(project_id, apply)
