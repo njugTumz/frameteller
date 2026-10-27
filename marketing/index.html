@@ -63,6 +63,7 @@
   :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
   .wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; }
   @media (min-width: 720px) { .wrap { padding-inline: 32px; } }
+  [hidden] { display: none !important; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   /* Top bar */
@@ -257,7 +258,7 @@
       <svg viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="6" width="24" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M8 11c2 2 2 4 0 6M12 9c3 3 3 7 0 10" fill="none" stroke="#4F8FD0" stroke-width="2.2" stroke-linecap="round"/><circle cx="20" cy="14" r="3" fill="#F2C230" stroke="currentColor" stroke-width="1.4"/></svg>
       <span data-config="name">Frameteller</span>
     </a>
-    <a class="btn" data-config="x" href="#" target="_blank" rel="noopener">Follow on X</a>
+    <a class="btn" data-config="x" href="https://x.com/izaktmz" target="_blank" rel="noopener">Follow on X</a>
   </header>
 
   <main>
@@ -360,20 +361,21 @@
             <circle class="ring" cx="100" cy="100" r="78"/>
             <path class="cross" d="M100 0 V200 M0 100 H200"/>
           </svg>
-          <div class="num" id="leader-num">0</div>
+          <div class="num" id="leader-num"></div>
         </div>
         <div>
           <div id="cd-before">
             <h2 id="cd-title">The live demo opens soon</h2>
             <p class="when">We go live with a working product on <strong id="cd-local">Mon Nov 2, 12:00 PM ET</strong>. Anyone can try it.</p>
-            <ul class="units" aria-hidden="true">
+            <p class="when" id="cd-static"><strong>Live demo: Mon Nov 2, 12:00 PM ET</strong></p>
+            <ul class="units" id="units" aria-hidden="true" hidden>
               <li><span class="v" id="d">0</span><span class="k">days</span></li>
               <li><span class="v" id="h">00</span><span class="k">hours</span></li>
               <li><span class="v" id="m">00</span><span class="k">minutes</span></li>
               <li><span class="v" id="s">00</span><span class="k">seconds</span></li>
             </ul>
             <p class="sr-only" aria-live="polite" id="cd-sr"></p>
-            <a class="btn" data-config="x" href="#" target="_blank" rel="noopener">Get the launch post on X</a>
+            <a class="btn" data-config="x" href="https://x.com/izaktmz" target="_blank" rel="noopener">Get the launch post on X</a>
           </div>
           <div id="cd-after" hidden>
             <h2>The live demo is open</h2>
@@ -401,20 +403,20 @@
         <span class="live" id="live"><span class="dot" aria-hidden="true"></span><span id="live-text">Live updates</span></span>
       </div>
       <p class="intro">We're building this in public, Oct 26 to Nov 4. New entries appear here without reloading.</p>
-      <ol class="log" id="log" aria-live="polite"></ol>
+      <ol class="log" id="log" aria-live="polite">
+        <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Marketing page is live</h3><p>This page is now deployed on Azure Static Web Apps from our public repo. Every push to main updates this build log within a minute.</p></li>
+        <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Project kicked off</h3><p>Picked the idea, wrote the build plan and put this page up. The public live demo goes up on Nov 2.</p></li>
+        <li data-status="next"><time datetime="2026-10-28">Oct 28</time><span class="status">Up next</span><h3>Proving the hard parts first</h3><p>Testing speech-to-shot-list, and whether one character stays recognisable across six panels.</p></li>
+      </ol>
     </section>
   </main>
 
   <footer>
     <div class="wrap">
       <span>Built for the Meta Global AI Developer Hackathon, Oct 26 to Nov 4, 2026.</span>
-      <span><a data-config="github" href="#" target="_blank" rel="noopener">Source on GitHub</a> (MIT)</span>
+      <span><a data-config="github" href="https://github.com/njugTumz/frameteller" target="_blank" rel="noopener">Source on GitHub</a> (MIT)</span>
     </div>
   </footer>
-
-  <script type="application/json" id="seed-updates">
-  {"updated_at":"2026-10-27T10:00:00Z","items":[{"date":"2026-10-27","status":"shipped","title":"Project kicked off","body":"Picked the idea, wrote the build plan and put this page up. The public live demo goes up on Nov 2."},{"date":"2026-10-28","status":"next","title":"Proving the hard parts first","body":"Testing speech-to-shot-list, and whether one character stays recognisable across six panels."}]}
-  </script>
 
   <script>
   (function () {
@@ -460,6 +462,7 @@
         return false;
       }
       var s = Math.floor(diff / 1000);
+      $("cd-static").hidden = true; $("units").hidden = false;
       var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
       $("d").textContent = d; $("h").textContent = pad(h); $("m").textContent = pad(m); $("s").textContent = pad(sec);
       // Film leader: shows days while more than a day remains, then hours, then minutes, then seconds
@@ -506,7 +509,6 @@
         .then(function (data) { lastOk = Date.now(); render(data); setLive(); })
         .catch(function () { setLive(); });
     }
-    try { render(JSON.parse($("seed-updates").textContent)); } catch (e) {}
     poll();
     setInterval(poll, CONFIG.pollMs);
     setInterval(setLive, 5000);
