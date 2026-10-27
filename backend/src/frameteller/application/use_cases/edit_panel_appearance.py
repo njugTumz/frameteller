@@ -12,7 +12,7 @@ from frameteller.application.ports import (
     Quality,
 )
 from frameteller.application.prompts import edit_prompt
-from frameteller.domain import Panel
+from frameteller.domain import Panel, Project
 
 
 class EditPanelAppearance:
@@ -30,17 +30,21 @@ class EditPanelAppearance:
     async def execute(
         self, project_id: str, shot_id: str, target: str, parts: Sequence[str], change: str, quality: Quality = "high"
     ) -> Panel:
-        project = await self._repo.get(project_id)
-        project.require_cast_approved()
-        panel = project.panel(shot_id)
-        _, response_id = panel.require_ready()
+        snapshot = await self._repo.get(project_id)
+        snapshot.require_cast_approved()
+        _, response_id = snapshot.panel(shot_id).require_ready()
         prompt = edit_prompt(change, target, parts)
-        revision = panel.revision + 1
+        revision = snapshot.panel(shot_id).revision + 1
         await self._budget.charge(project_id, costs.IMAGE, f"edit {shot_id} r{revision}")
         stored = await self._images.edit(
             response_id, prompt, quality, store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}"
         )
-        panel.record_render(revision, stored.ref, stored.response_id, stored.size)
-        await self._repo.save(project)
+
+        def apply(project: Project) -> Panel:
+            panel = project.panel(shot_id)
+            panel.record_render(revision, stored.ref, stored.response_id, stored.size)  # refuses if overtaken
+            return panel
+
+        panel = await self._repo.update(project_id, apply)
         await self._jobs.enqueue(pre_segment_job(project_id, shot_id, revision))
         return panel

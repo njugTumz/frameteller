@@ -67,9 +67,10 @@ async def test_cached_mask_hit_skips_the_segmentation_port(world: World) -> None
     await pre_segment(world).execute("p1", "s2", revision=1)
     charges_before = len(world.budget.charges)
 
-    mask = await click(world).execute("p1", "s2", Point(150, 200))
+    selection = await click(world).execute("p1", "s2", Point(150, 200))
 
-    assert mask.id == "character:mira"
+    assert selection.mask.id == "character:mira"
+    assert selection.cached
     assert world.sam.point_calls == []
     assert len(world.budget.charges) == charges_before
 
@@ -80,8 +81,9 @@ async def test_click_miss_calls_sam_once_then_hits_the_cache(world: World) -> No
     first = await click(world).execute("p1", "s2", Point(520, 60))
     second = await click(world).execute("p1", "s2", Point(530, 70))
 
-    assert first.id == second.id == "object:obj1"
-    assert first.label == "lamp"
+    assert first.mask.id == second.mask.id == "object:obj1"
+    assert first.mask.label == "lamp"
+    assert (first.cached, second.cached) == (False, True)
     assert world.sam.point_calls == [Point(520, 60)]
 
 
@@ -90,8 +92,8 @@ async def test_preview_click_is_converted_to_media_pixels_before_the_cache_check
     await render(world)  # 1920x1280 panel
     await pre_segment(world).execute("p1", "s2", revision=1)
     # (75, 100) on a 960x640 preview is (150, 200) in the panel: inside Mira
-    mask = await click(world).execute("p1", "s2", Point(75, 100), shown=Size(960, 640))
-    assert mask.id == "character:mira"
+    selection = await click(world).execute("p1", "s2", Point(75, 100), shown=Size(960, 640))
+    assert selection.mask.id == "character:mira"
     assert world.sam.point_calls == []
 
 

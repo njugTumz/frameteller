@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 from collections import defaultdict
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from datetime import UTC, datetime
 
+from frameteller.application.errors import ProjectNotFoundError
+from frameteller.application.events import ProjectEvent
 from frameteller.application.ports import (
     DirectedTurn,
+    EditIntent,
     ImageRequest,
     Job,
     Quality,
@@ -19,7 +23,7 @@ from frameteller.application.ports import (
     TurnCompleted,
     UsageRecord,
 )
-from frameteller.domain import Animatic, Character, MediaRef, Point, Project, Size, TranscriptTurn
+from frameteller.domain import Animatic, Character, MediaRef, Point, Project, Shot, Size, TranscriptTurn
 
 PANEL_SIZE = Size(1920, 1280)
 
@@ -30,13 +34,23 @@ class InMemoryProjectRepository:
     def __init__(self, *projects: Project) -> None:
         self._data: dict[str, Project] = {p.id: copy.deepcopy(p) for p in projects}
         self.saves = 0
+        self._lock = asyncio.Lock()
 
     async def get(self, project_id: str) -> Project:
+        if project_id not in self._data:
+            raise ProjectNotFoundError(project_id)
         return copy.deepcopy(self._data[project_id])
 
     async def save(self, project: Project) -> None:
         self._data[project.id] = copy.deepcopy(project)
         self.saves += 1
+
+    async def update[T](self, project_id: str, change: Callable[[Project], T]) -> T:
+        async with self._lock:
+            project = await self.get(project_id)
+            result = change(project)  # if change raises, nothing is saved
+            await self.save(project)
+            return result
 
     def peek(self, project_id: str) -> Project:
         return copy.deepcopy(self._data[project_id])
@@ -59,6 +73,12 @@ class FakeDirector:
     async def extract_characters(self, turns: Sequence[TranscriptTurn], known: Sequence[Character]) -> list[Character]:
         self.calls.append("extract_characters")
         return list(self.characters)
+
+    async def interpret_edit(self, instruction: str, shot: Shot, cast: Sequence[Character]) -> EditIntent:
+        self.calls.append(f"interpret_edit:{instruction}")
+        return self.edit_intent
+
+    edit_intent = EditIntent("girl", ("raincoat", "hood"), "make it red")
 
 
 class InMemoryMediaStorage:
@@ -120,14 +140,20 @@ class FakeSegmentation:
 
 
 class FakeSpeechToText:
-    def __init__(self, turns: Sequence[TranscriptTurn]) -> None:
+    """Consumes the audio, then emits `events` (or one TurnCompleted per turn)."""
+
+    def __init__(self, turns: Sequence[TranscriptTurn] = (), events: Sequence[SpeechEvent] | None = None) -> None:
         self.turns = list(turns)
+        self.events = list(events) if events is not None else [TurnCompleted(t) for t in turns]
+        self.audio = bytearray()
+        self.options: SpeechOptions | None = None
 
     async def stream(self, audio: AsyncIterator[bytes], options: SpeechOptions) -> AsyncIterator[SpeechEvent]:
-        async for _ in audio:
-            pass
-        for t in self.turns:
-            yield TurnCompleted(t)
+        self.options = options
+        async for chunk in audio:
+            self.audio.extend(chunk)
+        for event in self.events:
+            yield event
 
     async def transcribe_file(self, wav: bytes, options: SpeechOptions) -> list[TranscriptTurn]:
         return list(self.turns)
@@ -144,6 +170,17 @@ class InMemoryJobQueue:
         self._keys.add(job.idempotency_key)
         self.jobs.append(job)
         return True
+
+
+class RecordingPublisher:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, ProjectEvent]] = []
+
+    async def publish(self, project_id: str, event: ProjectEvent) -> None:
+        self.events.append((project_id, event))
+
+    def of(self, kind: type) -> list[ProjectEvent]:
+        return [e for _, e in self.events if isinstance(e, kind)]
 
 
 class FakeVideoRenderer:

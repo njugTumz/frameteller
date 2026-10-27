@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from frameteller.application.ports import DirectorPort, ProjectRepository
-from frameteller.domain import CharacterBible
+from frameteller.domain import CharacterBible, Project
 
 
 class BuildCharacterBible:
@@ -11,9 +11,13 @@ class BuildCharacterBible:
         self._repo, self._director = repo, director
 
     async def execute(self, project_id: str) -> CharacterBible:
-        project = await self._repo.get(project_id)
-        known = list(project.bible.characters.values())
-        for c in await self._director.extract_characters(project.turns, known):
-            project.upsert_character(c)
-        await self._repo.save(project)
-        return project.bible
+        snapshot = await self._repo.get(project_id)
+        found = await self._director.extract_characters(snapshot.turns, list(snapshot.bible.characters.values()))
+
+        def apply(project: Project) -> CharacterBible:
+            for c in found:
+                if c.id not in project.bible:
+                    project.upsert_character(c)
+            return project.bible
+
+        return await self._repo.update(project_id, apply)

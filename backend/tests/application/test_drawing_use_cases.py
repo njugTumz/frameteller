@@ -16,7 +16,9 @@ def edit(w: World) -> EditPanelAppearance:
 
 
 async def test_generate_reference_stores_it_and_returns_cast_to_draft(world: World) -> None:
-    ref = await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
+    cat = await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
+    ref = cat.reference
+    assert ref is not None
     p = world.project()
     assert p.bible.get("cat").reference == ref
     assert p.bible.status is CastStatus.DRAFT

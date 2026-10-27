@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from frameteller.application.ports import ProjectRepository
-from frameteller.domain import Shot
+from frameteller.domain import Project, Shot
 
 
 class ReorderShots:
@@ -13,7 +13,8 @@ class ReorderShots:
         self._repo = repo
 
     async def execute(self, project_id: str, shot_ids: Sequence[str]) -> list[Shot]:
-        project = await self._repo.get(project_id)
-        project.reorder_shots(shot_ids)
-        await self._repo.save(project)
-        return list(project.shots)
+        def apply(project: Project) -> list[Shot]:
+            project.reorder_shots(shot_ids)
+            return list(project.shots)
+
+        return await self._repo.update(project_id, apply)

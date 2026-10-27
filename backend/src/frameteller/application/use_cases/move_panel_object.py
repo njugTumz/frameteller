@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from frameteller.application.ports import ProjectRepository
-from frameteller.domain import CanvasTransform
+from frameteller.domain import CanvasTransform, Project
 
 
 class MovePanelObject:
@@ -21,10 +21,12 @@ class MovePanelObject:
         scale: float = 1.0,
         deleted: bool = False,
     ) -> CanvasTransform:
-        project = await self._repo.get(project_id)
-        panel = project.panel(shot_id)
-        panel.require_ready()
         transform = CanvasTransform(object_id, dx, dy, scale, deleted)
-        panel.transform(transform)
-        await self._repo.save(project)
-        return transform
+
+        def apply(project: Project) -> CanvasTransform:
+            panel = project.panel(shot_id)
+            panel.require_ready()
+            panel.transform(transform)
+            return transform
+
+        return await self._repo.update(project_id, apply)

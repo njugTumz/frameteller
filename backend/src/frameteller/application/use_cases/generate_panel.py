@@ -11,7 +11,7 @@ from frameteller.application.ports import (
     Quality,
 )
 from frameteller.application.prompts import panel_prompt
-from frameteller.domain import Panel
+from frameteller.domain import Panel, Project
 
 
 class GeneratePanel:
@@ -31,14 +31,14 @@ class GeneratePanel:
         self._repo, self._images, self._budget, self._jobs = repo, images, budget, jobs
 
     async def execute(self, project_id: str, shot_id: str, revision: int, quality: Quality = "low") -> Panel:
-        project = await self._repo.get(project_id)
-        project.require_cast_approved()
-        shot = project.shot(shot_id)
-        panel = project.panel(shot_id)
+        snapshot = await self._repo.get(project_id)
+        snapshot.require_cast_approved()
+        shot = snapshot.shot(shot_id)
+        panel = snapshot.panel(shot_id)
         if panel.has_render(revision):
             return panel
 
-        cast = [project.bible.get(cid) for cid in shot.character_ids]
+        cast = [snapshot.bible.get(cid) for cid in shot.character_ids]
         references = tuple(c.reference for c in cast if c.reference is not None)
         await self._budget.charge(project_id, costs.IMAGE, f"panel {shot_id} r{revision}")
         try:
@@ -47,10 +47,17 @@ class GeneratePanel:
                 store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}",
             )
         except Exception:
-            panel.mark_failed()
-            await self._repo.save(project)
+            await self._repo.update(project_id, lambda p: p.panel(shot_id).mark_failed())
             raise
-        panel.record_render(revision, stored.ref, stored.response_id, stored.size)
-        await self._repo.save(project)
-        await self._jobs.enqueue(pre_segment_job(project_id, shot_id, revision))
-        return panel
+
+        def apply(project: Project) -> tuple[Panel, bool]:
+            current = project.panel(shot_id)
+            if current.has_render(revision):
+                return current, False  # a concurrent run of the same revision won
+            current.record_render(revision, stored.ref, stored.response_id, stored.size)
+            return current, True
+
+        rendered, recorded = await self._repo.update(project_id, apply)
+        if recorded:
+            await self._jobs.enqueue(pre_segment_job(project_id, shot_id, revision))
+        return rendered

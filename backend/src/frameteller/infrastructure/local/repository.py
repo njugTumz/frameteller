@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 from frameteller.application.errors import ProjectNotFoundError
@@ -11,11 +13,14 @@ from frameteller.infrastructure.local.storage import safe_path
 
 
 class JsonFileProjectRepository:
-    """ProjectRepository as one JSON document per project, written atomically."""
+    """ProjectRepository as one JSON document per project, written atomically.
+
+    update() holds a per-project lock, which is enough for one container. Blob Storage will use ETags instead.
+    """
 
     def __init__(self, root: Path) -> None:
         self._root = root / "projects"
-        self._lock = asyncio.Lock()
+        self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def get(self, project_id: str) -> Project:
         path = safe_path(self._root, f"{project_id}.json")
@@ -26,10 +31,20 @@ class JsonFileProjectRepository:
         return project_from_dict(json.loads(text))
 
     async def save(self, project: Project) -> None:
+        async with self._locks[project.id]:
+            await self._write(project)
+
+    async def update[T](self, project_id: str, change: Callable[[Project], T]) -> T:
+        async with self._locks[project_id]:
+            project = await self.get(project_id)
+            result = change(project)
+            await self._write(project)
+            return result
+
+    async def _write(self, project: Project) -> None:
         path = safe_path(self._root, f"{project.id}.json")
         text = json.dumps(project_to_dict(project), ensure_ascii=False)
-        async with self._lock:
-            await asyncio.to_thread(_atomic_write, path, text)
+        await asyncio.to_thread(_atomic_write, path, text)
 
 
 def _atomic_write(path: Path, text: str) -> None:

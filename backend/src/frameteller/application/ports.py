@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal, Protocol
 
+from frameteller.application.events import ProjectEvent
 from frameteller.domain import (
     Animatic,
     Box,
@@ -17,6 +18,7 @@ from frameteller.domain import (
     MediaRef,
     Point,
     Project,
+    Shot,
     Size,
     TranscriptTurn,
 )
@@ -41,6 +43,15 @@ class ShotDraft:
 class DirectedTurn:
     new_characters: tuple[Character, ...]
     shots: tuple[ShotDraft, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EditIntent:
+    """A spoken edit routed by the director: what to change, on which object, naming every part (ADR 0005)."""
+
+    target: str
+    parts: tuple[str, ...]
+    change: str
 
 
 Quality = Literal["low", "high"]  # drafts vs finals (maps to reasoning_strength)
@@ -161,6 +172,10 @@ class DirectorPort(Protocol):
         self, turns: Sequence[TranscriptTurn], known: Sequence[Character]
     ) -> list[Character]: ...
 
+    async def interpret_edit(self, instruction: str, shot: Shot, cast: Sequence[Character]) -> EditIntent:
+        """Turn "her coat is red now" into a target, its parts and the change."""
+        ...
+
 
 class ImageGenerationPort(Protocol):
     async def generate(self, request: ImageRequest, store_as: str) -> StoredImage: ...
@@ -187,6 +202,13 @@ class ProjectRepository(Protocol):
 
     async def save(self, project: Project) -> None: ...
 
+    async def update[T](self, project_id: str, change: Callable[[Project], T]) -> T:
+        """Load, apply `change` and save as one step, so concurrent use cases never overwrite each other.
+
+        Slow work (model calls) happens before update(); `change` must be quick and must not await.
+        """
+        ...
+
 
 class JobQueuePort(Protocol):
     async def enqueue(self, job: Job) -> bool:
@@ -204,6 +226,12 @@ class Clock(Protocol):
 
 class IdGenerator(Protocol):
     def new_id(self) -> str: ...
+
+
+class EventPublisher(Protocol):
+    async def publish(self, project_id: str, event: ProjectEvent) -> None:
+        """Push an event to whoever follows the project (the live session). Must never raise."""
+        ...
 
 
 class BudgetGuard(Protocol):
