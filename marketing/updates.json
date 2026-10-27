@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-27T17:29:21Z",
+  "updated_at": "2026-10-27T19:24:29Z",
   "items": [
+    {
+      "date": "2026-10-27",
+      "status": "shipped",
+      "title": "It's on the internet",
+      "body": "The backend now runs on Azure, so anyone can narrate a scene to it over the internet and get shots, a cast and first panels back."
+    },
     {
       "date": "2026-10-27",
       "status": "shipped",
