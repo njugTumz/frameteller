@@ -1,1 +1,1 @@
-"""FastAPI routes, WebSocket handlers, DTOs and the composition root. Added in later commits."""
+"""Interface: FastAPI routes, the WebSocket session, DTOs and the composition root. No business logic."""

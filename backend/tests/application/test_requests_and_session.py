@@ -41,6 +41,7 @@ from frameteller.domain import (
     CastNotApprovedError,
     Character,
     Framing,
+    InvalidValueError,
     MediaRef,
     PanelNotReadyError,
     TranscriptTurn,
@@ -193,7 +194,7 @@ async def test_edit_request_needs_a_rendered_panel_and_an_instruction(world: Wor
     with pytest.raises(PanelNotReadyError):
         await requests.execute("p1", "s1", "make her coat red")
     await GeneratePanel(world.repo, world.images, world.budget, world.jobs).execute("p1", "s1", 1)
-    with pytest.raises(ValueError, match="instruction"):
+    with pytest.raises(InvalidValueError, match="instruction"):
         await requests.execute("p1", "s1", "   ")
 
     ticket = await requests.execute("p1", "s1", "make her coat red")

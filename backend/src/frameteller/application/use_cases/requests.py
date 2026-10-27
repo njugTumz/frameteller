@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from frameteller.application.jobs import cast_job, edit_job, panel_job
 from frameteller.application.ports import IdGenerator, Job, JobQueuePort, ProjectRepository, Quality
+from frameteller.domain import InvalidValueError
 
 MAX_INSTRUCTION_CHARS = 500
 
@@ -49,7 +50,7 @@ class RequestPanelEdit:
     async def execute(self, project_id: str, shot_id: str, instruction: str) -> JobTicket:
         instruction = instruction.strip()
         if not instruction or len(instruction) > MAX_INSTRUCTION_CHARS:
-            raise ValueError(f"an edit instruction needs 1 to {MAX_INSTRUCTION_CHARS} characters")
+            raise InvalidValueError(f"an edit instruction needs 1 to {MAX_INSTRUCTION_CHARS} characters")
         project = await self._repo.get(project_id)
         project.require_cast_approved()
         panel = project.panel(shot_id)
