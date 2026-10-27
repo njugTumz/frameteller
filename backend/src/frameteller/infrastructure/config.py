@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     director_effort_story: Effort = "low"
     image_panel_size: str = "1536x1024"  # ADR 0003: the Responses image tool rejects 1792x1024
     image_reference_size: str = "1024x1024"
+    # Segment on a copy whose longest side is at most this (None = full size); masks are scaled back up.
+    sam_max_side: int | None = Field(default=768, ge=256)  # ADR 0007
 
     budget_per_project_usd: float = Field(default=2.0, gt=0)
     budget_per_day_usd: float = Field(default=10.0, gt=0)

@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 from collections.abc import Callable
@@ -83,3 +84,21 @@ async def test_point_outside_the_panel_is_clamped(
     await sam.segment_point(await panel(storage), Point(5000, 5000), "masks/obj")
 
     assert "<|point;x=383;y=255;w=384;h=256|>" in parts(seen[0])[0]["text"]
+
+
+async def test_downscaled_copy_gets_a_scaled_point_and_full_size_masks(
+    client_for: Client, caller: ModelCaller, storage: LocalFileMediaStorage, settings: Settings
+) -> None:
+    transport, seen = replay("sam_point")
+    small = settings.model_copy(update={"sam_max_side": 256})
+    sam = MetaSamAdapter(client_for(transport), caller, storage, small)
+
+    segment = await sam.segment_point(await panel(storage), Point(193, 129), "masks/obj")
+
+    # 384x256 -> 256x170: the click is scaled down, and the mask comes back in full-size pixels.
+    assert "<|point;x=128;y=85;w=256;h=170|>" in parts(seen[0])[0]["text"]
+    with Image.open(io.BytesIO(base64.b64decode(parts(seen[0])[1]["image_url"].split(",", 1)[1]))) as sent:
+        assert sent.size == (256, 170)
+    assert segment is not None
+    assert segment.box.right <= W
+    assert segment.box.bottom <= H
