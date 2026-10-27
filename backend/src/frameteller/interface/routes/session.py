@@ -85,7 +85,7 @@ async def _send(ws: WebSocket, message: dict[str, Any]) -> bool:
     try:
         await ws.send_json(message)
         return True
-    except (WebSocketDisconnect, RuntimeError):  # RuntimeError: the socket already closed
+    except Exception:  # disconnected, closed or broken: stop sending, never crash the session
         return False
 
 

@@ -64,6 +64,12 @@ async def handle(request: Request, exc: Exception) -> JSONResponse:
     return error_response(status, code, message, headers)
 
 
+async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
+    log.error("unhandled error", exc_info=exc)
+    return error_response(500, "error", ApplicationError.user_message)
+
+
 def install(app: FastAPI) -> None:
     app.add_exception_handler(DomainError, handle)
     app.add_exception_handler(ApplicationError, handle)
+    app.add_exception_handler(Exception, handle_unexpected)  # JSON, never a stack trace

@@ -1,5 +1,7 @@
 from collections.abc import Callable
 
+import httpx2
+
 from frameteller.application.ports import Segment
 from frameteller.domain import MediaRef
 from tests.builders import bitmap, project
@@ -88,7 +90,7 @@ async def test_edit_is_routed_and_rendered_in_the_background(api: Api) -> None:
 
 
 async def test_select_hits_the_pre_segmented_mask_without_calling_sam(api: Api) -> None:
-    api.fakes.sam.by_concept = {"Mira": MIRA}
+    api.fakes.sam.by_concept = {"8-year-old girl": MIRA}
     await api.client.post("/projects/p1/shots/1/panel", json={})
     await api.settle()  # render, then pre-segmentation (ADR 0006)
 
@@ -165,3 +167,17 @@ async def test_health_and_readiness(api: Api) -> None:
     r = await api.client.get("/readyz")
     assert r.status_code == 503
     assert r.json()["checks"]["storage"] == "failed"
+
+
+async def test_unexpected_errors_are_json_500s(api: Api) -> None:
+    async def broken(*_: object) -> None:
+        raise RuntimeError("disk on fire")
+
+    api.fakes.repo.get = broken  # type: ignore[method-assign,assignment]
+    client = httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=api.app, raise_app_exceptions=False), base_url="http://t"
+    )
+    r = await client.get("/projects/p1")
+    assert r.status_code == 500
+    assert r.json() == {"error": {"code": "error", "message": "Something went wrong. Please try again."}}
+    assert "disk on fire" not in r.text
