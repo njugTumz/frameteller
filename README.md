@@ -42,15 +42,64 @@ Backend (Python 3.12, pip 25.1 or newer):
 ```bash
 cd backend
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install --upgrade "pip>=25.1" && pip install --group dev
+pip install --upgrade "pip>=25.1" && pip install -e . --group dev
 
-ruff check src tests && ruff format --check src tests
+ruff check src tests scripts && ruff format --check src tests scripts
 mypy
 PYTHONPATH=src lint-imports
-pytest --cov
+pytest --cov                              # no network; RUN_LIVE=1 pytest -m live spends real credits
+python scripts/export_openapi.py          # after changing a route or DTO; CI fails if openapi.json is stale
 ```
 
-Create `.env` from `.env.example` and fill in values locally; never commit it. The frontend is not scaffolded yet.
+### Configuration
+
+Settings come from environment variables, or a `.env` file in the repo root or `backend/`. Copy `.env.example`, fill in `MODEL_API_KEY`, and never commit the result.
+
+- With `APP_ENV=local` (the default), the director uses the cheap contributor model. Use it with synthetic stories only.
+- Media and project documents go to `backend/.data/`. This directory is gitignored.
+- Optional settings:
+  - `ALLOWED_ORIGINS`: comma-separated frontend origins for CORS and the WebSocket.
+  - `SAM_MAX_SIDE`: default 768 ([ADR 0007](docs/adr/0007-sam-on-downscaled-copy.md)); empty means full size.
+  - `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_COSTLY_PER_MINUTE`.
+  - The per-project and per-day budget limits; see `backend/src/frameteller/infrastructure/config.py`.
+
+### Run the API
+
+```bash
+cd backend
+uvicorn frameteller.interface.main:app --port 8000 --reload
+```
+
+- `GET /healthz` reports that the process is up.
+- `GET /readyz` checks settings and storage, without calling Meta.
+- Interactive REST docs are at http://127.0.0.1:8000/docs.
+- The live voice WebSocket is documented in [docs/api-events.md](docs/api-events.md).
+
+Or in Docker (the same image CI builds):
+
+```bash
+docker build -t frameteller-backend backend
+docker run --rm -p 8000:8000 --env-file .env frameteller-backend
+```
+
+### End-to-end smoke test
+
+With the API running, the smoke test drives the whole flow and spends about $0.05 in real credits. It:
+1. creates a project
+2. streams `spikes/fixtures/narration.wav` over the session WebSocket at real-time pace
+3. approves the proposed cast
+4. draws draft panels for shots 1–2
+5. clicks once on panel 1
+6. prints events, latency per step and spend
+
+The WAV must be mono, 16-bit, 24 kHz. It is your own recording and is gitignored.
+
+```bash
+cd backend
+python scripts/smoke_local.py --base http://127.0.0.1:8000
+```
+
+The frontend is not scaffolded yet.
 
 ## Built during the hackathon (Oct 26 – Nov 4, 2026)
 
@@ -60,6 +109,8 @@ Everything in this repository was built during the event. The commit history is 
 - [x] Repository foundation: licence, config template, ADR 0001, marketing deploy workflow
 - [x] Day 2 spikes proving voice → shots, character consistency and click-to-select ([findings](docs/spikes/2026-10-28-findings.md))
 - [x] Backend domain and application layers with tests, import contracts and CI
+- [x] Meta model adapters (realtime voice, Spark director, Muse Image, SAM 3.1) with contract fixtures recorded from real calls
+- [x] FastAPI interface: REST, live voice session WebSocket, health probes, rate limiting, OpenAPI export, Docker image
 - [ ] TODO: list features as they ship
 
 ## License
