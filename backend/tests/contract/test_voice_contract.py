@@ -22,6 +22,7 @@ from websockets.asyncio.server import ServerConnection, serve
 
 from frameteller.application.errors import ModelRejectedError, ModelUnavailableError
 from frameteller.application.ports import (
+    AudioProgress,
     PartialTranscript,
     SpeakerIdentified,
     SpeechMode,
@@ -104,7 +105,11 @@ async def test_narration_session_streams_typed_events(
     assert turns[1].text == "She hears a tiny sound under a wooden crate she kneels down and looks"
     assert all(t.speaker is None for t in turns)
     # Every turn arrives as start, partials, end, complete; audioProgress and the final empty partial are dropped.
-    assert [type(e) for e in events[:2]] == [TurnStarted, PartialTranscript]
+    progress = [e.processed_ms for e in events if isinstance(e, AudioProgress)]
+    assert progress == sorted(progress)
+    assert progress
+    story = [e for e in events if not isinstance(e, AudioProgress)]
+    assert [type(e) for e in story[:2]] == [TurnStarted, PartialTranscript]
     assert sum(isinstance(e, TurnStarted) for e in events) == sum(isinstance(e, TurnEnded) for e in events) == 4
     assert all(e.text for e in events if isinstance(e, PartialTranscript))
     [usage] = ledger.usage

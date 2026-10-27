@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import logging
 import time
 import urllib.request
 import uuid
@@ -22,6 +23,7 @@ import websockets.exceptions
 
 from frameteller.application.errors import ModelRejectedError, ModelUnavailableError
 from frameteller.application.ports import (
+    AudioProgress,
     PartialTranscript,
     SpeakerIdentified,
     SpeechEvent,
@@ -35,6 +37,8 @@ from frameteller.domain import TranscriptTurn
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.pricing import asr_cost
 from frameteller.infrastructure.resilience import ModelCaller, RetryPolicy, Usage, classify
+
+log = logging.getLogger("frameteller.models")
 
 SAMPLE_RATE = 24_000
 BYTES_PER_MS = SAMPLE_RATE * 2 // 1000  # PCM_24KHZ s16le mono = 48 bytes/ms
@@ -116,6 +120,16 @@ class MetaVoiceTranscribeAdapter:
             ok = True
             breaker.success()
         except Exception as exc:
+            # The cause (close code and reason, HTTP status) is what tells a pacing problem from an outage.
+            log.warning(
+                "voice stream failed",
+                extra={
+                    "model": model,
+                    "error": type(exc).__name__,
+                    "detail": str(exc)[:300],
+                    "sent_ms": sent_bytes // BYTES_PER_MS,
+                },
+            )
             mapped = classify(model, exc)
             if mapped is None:
                 raise
@@ -171,7 +185,7 @@ async def _events(ws: Any) -> AsyncIterator[SpeechEvent]:
     """Translate server events to typed events. Turn state is keyed on turnId because turns can overlap.
 
     Measured on a real session (Day 2 findings): turnId is an integer; `speaker` events carry `label` and no
-    turnId, and arrive while their turn is still open; `audioProgress` arrives every 80 ms and is ignored.
+    turnId, and arrive while their turn is still open; `audioProgress` arrives every 80 ms.
     """
     starts: dict[str, int] = {}
     ends: dict[str, int] = {}
@@ -209,7 +223,9 @@ async def _events(ws: Any) -> AsyncIterator[SpeechEvent]:
                     current = None
                 text = str(ev.get("transcript", "")).strip()
                 yield TurnCompleted(TranscriptTurn(tid, text, start, end, speakers.pop(tid, None)))
-            # Unknown event types (audioProgress, future ones) are ignored on purpose.
+            elif kind == "audioProgress" and ev.get("audioProcessedMs") is not None:
+                yield AudioProgress(int(ev["audioProcessedMs"]))
+            # Unknown event types are ignored on purpose.
     except websockets.exceptions.ConnectionClosedOK:
         return
 

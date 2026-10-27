@@ -132,7 +132,14 @@ class TurnCompleted:
     turn: TranscriptTurn
 
 
-SpeechEvent = PartialTranscript | TurnStarted | TurnEnded | SpeakerIdentified | TurnCompleted
+@dataclass(frozen=True, slots=True)
+class AudioProgress:
+    """How much audio the transcriber has processed. Partials up to about this point have arrived."""
+
+    processed_ms: int
+
+
+SpeechEvent = PartialTranscript | TurnStarted | TurnEnded | SpeakerIdentified | TurnCompleted | AudioProgress
 
 
 @dataclass(frozen=True, slots=True)
