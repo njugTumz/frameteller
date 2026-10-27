@@ -11,8 +11,8 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, ValidationError
 
 from frameteller.application.errors import InvalidModelOutputError
-from frameteller.application.ports import DirectedTurn, ShotDraft
-from frameteller.domain import Character, Framing, InvalidValueError, Project, TranscriptTurn
+from frameteller.application.ports import DirectedTurn, EditIntent, ShotDraft
+from frameteller.domain import Character, Framing, InvalidValueError, Project, Shot, TranscriptTurn
 from frameteller.infrastructure.config import Effort, Settings
 from frameteller.infrastructure.pricing import token_cost
 from frameteller.infrastructure.resilience import ModelCaller, RetryPolicy, Usage
@@ -42,6 +42,16 @@ id is a short lowercase slug. canonical_description is one concrete, stable visu
 age, build, face, hair, clothing with colours and distinctive features."""
 
 
+EDIT_PROMPT = """You route a storyboard artist's edit instruction for one panel into an appearance edit.
+Return:
+- target: the object to change, as a short noun phrase that identifies it in the picture,
+  using the character bible when it is a character (e.g. "girl in the yellow raincoat").
+- parts: every visible part of the target the change must reach, so none is left behind
+  (e.g. a coat colour change names "raincoat", "hood" and "sleeves"). At most 8.
+- change: the appearance change as a short imperative (e.g. "make it red").
+Appearance only: colour, clothing, material, expression, lighting. Never invent story content."""
+
+
 class CharacterOut(BaseModel):
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
     name: str = Field(min_length=1)
@@ -64,6 +74,12 @@ class DirectorOutput(BaseModel):
 
 class CharactersOutput(BaseModel):
     characters: list[CharacterOut]
+
+
+class EditOutput(BaseModel):
+    target: str = Field(min_length=1, max_length=120)
+    parts: list[str] = Field(max_length=8)
+    change: str = Field(min_length=1, max_length=200)
 
 
 class MetaSparkDirectorAdapter:
@@ -90,6 +106,19 @@ class MetaSparkDirectorAdapter:
         out = await self._parse(messages, CharactersOutput, self._settings.director_effort_story, "characters", None)
         known_ids = {c.id for c in known}
         return [_character(c) for c in out.characters if c.id not in known_ids]
+
+    async def interpret_edit(self, instruction: str, shot: Shot, cast: Sequence[Character]) -> EditIntent:
+        shot_json = json.dumps(
+            {"framing": shot.framing.value, "setting": shot.setting, "action": shot.action}, ensure_ascii=False
+        )
+        messages = [
+            {"role": "system", "content": EDIT_PROMPT},
+            {"role": "system", "content": _bible_message(cast)},
+            {"role": "user", "content": f"Shot: {shot_json}\nInstruction: {instruction}"},
+        ]
+        out = await self._parse(messages, EditOutput, self._settings.director_effort_turn, "interpret_edit", None)
+        parts = tuple(dict.fromkeys(p.strip() for p in out.parts if p.strip()))
+        return EditIntent(out.target.strip(), parts, out.change.strip())
 
     async def _direct(
         self, project: Project, turns: Sequence[TranscriptTurn], effort: Effort, operation: str

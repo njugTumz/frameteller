@@ -127,3 +127,21 @@ async def test_gives_up_after_two_invalid_answers(client_for: Client, caller: Mo
 
     with pytest.raises(InvalidModelOutputError):
         await director.direct_turn(TURN_4, story())
+
+
+async def test_edit_instruction_is_routed_to_target_parts_and_change(
+    client_for: Client, caller: ModelCaller, settings: Settings
+) -> None:
+    transport, seen = replay("director_edit")
+    director = MetaSparkDirectorAdapter(client_for(transport), caller, settings)
+    p = project(approved=True, shots=2)
+
+    intent = await director.interpret_edit("her coat is red now", p.shot("s1"), [p.bible.get("mira")])
+
+    assert intent.target == "girl in the yellow raincoat"
+    assert intent.parts == ("raincoat", "hood", "sleeves")
+    assert intent.change == "make it red"
+    sent = body(seen[0])
+    assert sent["reasoning_effort"] == "minimal"
+    assert sent["messages"][2]["content"].endswith("Instruction: her coat is red now")
+    assert "mira" in sent["messages"][1]["content"]

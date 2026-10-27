@@ -127,5 +127,20 @@ async def main() -> None:
     print(f"total ${spent():.4f}; concept found {len(found)}; point {centre}")
 
 
+async def record_director_edit() -> None:
+    """Only the edit-routing call (about $0.0001): python -m tests.fixtures.record director_edit"""
+    settings = load_settings(app_env="local", local_storage_dir=Path(tempfile.mkdtemp(prefix="frameteller-record-")))
+    if settings.director != "muse-spark-1.3-contributor":
+        raise SystemExit("record with the contributor director model (synthetic data only)")
+    recorder = RecordingTransport(settings.model_api_key.get_secret_value())
+    ledger = InMemorySpendLedger()
+    client = meta_client(settings, httpx2.AsyncClient(transport=recorder, timeout=180))
+    director = MetaSparkDirectorAdapter(client, ModelCaller(ledger, Breakers()), settings)
+    p = project(approved=True, shots=2)
+    intent = await director.interpret_edit("her coat is red now", p.shot("s1"), [p.bible.get("mira")])
+    recorder.take("director_edit")
+    print(f"  {intent}; ${sum(u.cost_usd for u in ledger.usage):.4f}")
+
+
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    sys.exit(asyncio.run(record_director_edit() if sys.argv[1:] == ["director_edit"] else main()))
