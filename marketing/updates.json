@@ -1,0 +1,17 @@
+{
+  "updated_at": "2026-10-27T10:00:00Z",
+  "items": [
+    {
+      "date": "2026-10-27",
+      "status": "shipped",
+      "title": "Project kicked off",
+      "body": "Picked the idea, wrote the build plan and put this page up. The public live demo goes up on Nov 2."
+    },
+    {
+      "date": "2026-10-28",
+      "status": "next",
+      "title": "Proving the hard parts first",
+      "body": "Testing speech-to-shot-list, and whether one character stays recognisable across six panels."
+    }
+  ]
+}
