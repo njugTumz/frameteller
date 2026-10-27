@@ -80,3 +80,6 @@ spikes/out/
 
 # Python caches inside the allowed fixtures folder
 backend/tests/fixtures/**/__pycache__/
+
+# Local backend data (projects, media, spend ledger): LOCAL_STORAGE_DIR
+.data/
