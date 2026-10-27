@@ -26,6 +26,11 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      azurite:  # Blob Storage emulator for the blob adapter contract tests
+        image: mcr.microsoft.com/azure-storage/azurite:3.37.0
+        ports:
+          - 10000:10000
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
