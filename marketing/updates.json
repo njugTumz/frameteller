@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-27T10:00:00Z",
+  "updated_at": "2026-10-27T13:22:51Z",
   "items": [
+    {
+      "date": "2026-10-27",
+      "status": "shipped",
+      "title": "Marketing page is live",
+      "body": "This page is now deployed on Azure Static Web Apps from our public repo. Every push to main updates this build log within a minute."
+    },
     {
       "date": "2026-10-27",
       "status": "shipped",
