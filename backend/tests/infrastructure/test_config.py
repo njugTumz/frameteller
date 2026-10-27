@@ -55,3 +55,9 @@ def test_invalid_values_are_reported_without_echoing_them() -> None:
     assert "APP_ENV" in str(e.value)
     assert "BUDGET_PER_DAY_USD" in str(e.value)
     assert "moon" not in str(e.value)
+
+
+def test_sam_downscale_defaults_to_768_and_empty_means_full_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert load_settings(model_api_key=FAKE_KEY).sam_max_side == 768
+    monkeypatch.setenv("SAM_MAX_SIDE", "")
+    assert load_settings(model_api_key=FAKE_KEY).sam_max_side is None

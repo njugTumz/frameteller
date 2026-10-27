@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, ValidationError, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnv = Literal["local", "staging", "production"]
@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     local_storage_dir: Path = Path(".data")
     allowed_origins: str = ""
     log_level: str = "INFO"
+
+    @field_validator("sam_max_side", mode="before")
+    @classmethod
+    def _empty_means_full_size(cls, value: object) -> object:
+        return None if isinstance(value, str) and value.strip().lower() in ("", "none") else value
 
     @model_validator(mode="after")
     def _director_for_env(self) -> Settings:
