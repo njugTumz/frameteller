@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from pathlib import Path
 
 from frameteller.domain import MediaRef
-
-_SAFE_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9/_.:-]*$")
+from frameteller.infrastructure.storage_keys import check_key
 
 
 def safe_path(root: Path, key: str) -> Path:
     """Resolve a storage key under root, refusing absolute paths and traversal."""
-    if not _SAFE_KEY.match(key) or ".." in key.split("/"):
-        raise ValueError(f"unsafe storage key {key!r}")
-    path = (root / key).resolve()
+    path = (root / check_key(key)).resolve()
     if not path.is_relative_to(root.resolve()):
         raise ValueError(f"unsafe storage key {key!r}")
     return path
