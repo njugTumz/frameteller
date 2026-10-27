@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from frameteller.domain import (
@@ -10,6 +12,7 @@ from frameteller.domain import (
     TranscriptTurn,
     UnknownCharacterError,
     UnknownShotError,
+    UnknownTurnError,
 )
 from tests.builders import CAT, MIRA, project, shot, turn
 
@@ -98,3 +101,35 @@ def test_turn_timing_must_be_ordered() -> None:
 def test_shot_values_are_validated(number: int, duration: int, turns: tuple[str, ...]) -> None:
     with pytest.raises(InvalidValueError):
         Shot("s", number, Framing.WIDE, (), "alley", "rain", "", turns, duration)
+
+
+def test_correcting_a_turn_keeps_its_timing() -> None:
+    p = project()
+    fixed = p.correct_turn("t2", "  She kneels by the crate. ")
+    assert (fixed.text, fixed.start_ms, fixed.end_ms) == ("She kneels by the crate.", 4000, 8000)
+    assert p.turn("t2") == fixed
+    with pytest.raises(UnknownTurnError):
+        p.correct_turn("t9", "text")
+    with pytest.raises(InvalidValueError):
+        p.correct_turn("t2", "  ")
+
+
+def test_replacing_a_turns_shots_keeps_their_place_and_drops_their_panels() -> None:
+    p = project()
+    p.panel("s2")
+    new = [replace(shot(1, "cat", turn_ids=("t2",)), id="n1"), replace(shot(1, "mira", turn_ids=("t2",)), id="n2")]
+    placed = p.replace_shots(["s2"], new)
+    assert [(s.id, s.number) for s in p.shots] == [("s1", 1), ("n1", 2), ("n2", 3), ("s3", 4)]
+    assert [s.number for s in placed] == [2, 3]
+    assert "s2" not in p.panels
+    assert p.shots_from_turn("t2") == placed
+
+
+def test_replacing_with_nothing_old_appends_and_unknown_ids_fail() -> None:
+    p = project()
+    p.replace_shots([], [replace(shot(1, "mira", turn_ids=("t1",)), id="n1")])
+    assert [s.id for s in p.shots] == ["s1", "s2", "s3", "n1"]
+    with pytest.raises(UnknownShotError):
+        p.replace_shots(["s9"], [])
+    with pytest.raises(ShotOrderError):
+        p.replace_shots(["s1"], [replace(shot(1, "mira", turn_ids=("t9",)), id="n2")])

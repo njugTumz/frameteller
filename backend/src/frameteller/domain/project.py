@@ -6,7 +6,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from frameteller.domain.characters import Character, CharacterBible
-from frameteller.domain.errors import CastNotApprovedError, ShotOrderError, UnknownShotError
+from frameteller.domain.errors import (
+    CastNotApprovedError,
+    InvalidValueError,
+    ShotOrderError,
+    UnknownShotError,
+    UnknownTurnError,
+)
 from frameteller.domain.panels import Panel
 from frameteller.domain.shots import Shot
 from frameteller.domain.transcript import TranscriptTurn
@@ -26,6 +32,23 @@ class Project:
     def add_turn(self, turn: TranscriptTurn) -> None:
         if all(t.id != turn.id for t in self.turns):
             self.turns.append(turn)
+
+    def turn(self, turn_id: str) -> TranscriptTurn:
+        for t in self.turns:
+            if t.id == turn_id:
+                return t
+        raise UnknownTurnError(f"no turn {turn_id!r}")
+
+    def correct_turn(self, turn_id: str, text: str) -> TranscriptTurn:
+        """Replace a turn's text (a misheard word fixed by the user). Its timing stays."""
+        if not text.strip():
+            raise InvalidValueError("a corrected turn needs some text")
+        corrected = replace(self.turn(turn_id), text=text.strip())
+        self.turns = [corrected if t.id == turn_id else t for t in self.turns]
+        return corrected
+
+    def shots_from_turn(self, turn_id: str) -> list[Shot]:
+        return [s for s in self.shots if turn_id in s.source_turn_ids]
 
     def upsert_character(self, character: Character) -> None:
         self.bible.upsert(character)
@@ -51,6 +74,30 @@ class Project:
                 raise ShotOrderError(f"shot {s.number} cites unknown turns {sorted(missing)}")
         self.shots.extend(shots)
         self._check_contiguous()
+
+    def replace_shots(self, old_ids: Sequence[str], new: Sequence[Shot]) -> list[Shot]:
+        """Swap shots for re-directed ones, where the first old shot was (or at the end), and renumber 1..n.
+
+        Panels of the removed shots are dropped: they show what the old shots said.
+        """
+        old = set(old_ids)
+        if missing := old - {s.id for s in self.shots}:
+            raise UnknownShotError(f"no shots {sorted(missing)}")
+        for s in new:
+            self.bible.require(s.character_ids)
+        known = {t.id for t in self.turns}
+        for s in new:
+            if missing_turns := set(s.source_turn_ids) - known:
+                raise ShotOrderError(f"a new shot cites unknown turns {sorted(missing_turns)}")
+        at = next((i for i, s in enumerate(self.shots) if s.id in old), len(self.shots))  # no old shot before it
+        kept = [s for s in self.shots if s.id not in old]
+        ordered = [*kept[:at], *new, *kept[at:]]
+        self.shots = [replace(s, number=n) for n, s in enumerate(ordered, start=1)]
+        for shot_id in old:
+            self.panels.pop(shot_id, None)
+        self._check_contiguous()
+        new_ids = {s.id for s in new}
+        return [s for s in self.shots if s.id in new_ids]
 
     def reorder_shots(self, shot_ids: Sequence[str]) -> None:
         """Put shots in the given order and renumber 1..n. Must name every shot exactly once."""

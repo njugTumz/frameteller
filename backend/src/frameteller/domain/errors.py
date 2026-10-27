@@ -29,6 +29,10 @@ class UnknownShotError(DomainError):
     """The shot does not exist in this project."""
 
 
+class UnknownTurnError(DomainError):
+    """The transcript turn does not exist in this project."""
+
+
 class PanelNotReadyError(DomainError):
     """The operation needs a rendered panel."""
 
