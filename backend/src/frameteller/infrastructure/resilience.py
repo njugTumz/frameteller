@@ -161,7 +161,7 @@ class ModelCaller:
                 raise
             except Exception as exc:
                 mapped = classify(model, exc)
-                await self._record(model, operation, started, Usage(0.0), ok=False)
+                await self.record(model, operation, _since(started), Usage(0.0), ok=False)
                 if mapped is None:
                     raise
                 error, retryable = mapped
@@ -176,12 +176,15 @@ class ModelCaller:
                 await self._sleep(policy.delay(attempt, self._rand))
                 continue
             breaker.success()
-            await self._record(model, operation, started, usage, ok=True)
+            await self.record(model, operation, _since(started), usage, ok=True)
             return result
         raise AssertionError("unreachable")  # pragma: no cover
 
-    async def _record(self, model: str, operation: str, started: float, usage: Usage, *, ok: bool) -> None:
-        latency_ms = round((time.perf_counter() - started) * 1000)
+    def breaker(self, model: str) -> CircuitBreaker:
+        return self._breakers.for_model(model)
+
+    async def record(self, model: str, operation: str, latency_ms: int, usage: Usage, *, ok: bool) -> None:
+        """For calls that cannot go through call(), such as a live audio stream."""
         record = UsageRecord(
             model=model,
             operation=operation,
@@ -207,3 +210,7 @@ class ModelCaller:
                 "ok": ok,
             },
         )
+
+
+def _since(started: float) -> int:
+    return round((time.perf_counter() - started) * 1000)
