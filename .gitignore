@@ -77,3 +77,6 @@ desktop.ini
 
 # --- Spikes (generated media, logs) ---
 spikes/out/
+
+# Python caches inside the allowed fixtures folder
+backend/tests/fixtures/**/__pycache__/
