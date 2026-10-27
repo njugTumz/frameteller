@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,7 @@ import pytest
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.errors import BudgetExceededError, ProjectNotFoundError
 from frameteller.application.ports import UsageRecord
-from frameteller.domain import CanvasTransform, MediaRef, ObjectMask, Size
+from frameteller.domain import CanvasTransform, MediaRef, ObjectMask, Project, Size
 from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
 from tests.builders import bitmap, project
 from tests.fakes import FixedClock
@@ -68,3 +69,30 @@ async def test_usage_records_do_not_count_toward_budgets(tmp_path: Path) -> None
     await ledger.record_usage(usage)
     assert await ledger.spent_by_project("p1") == 0
     assert await ledger.usage() == [usage]
+
+
+async def test_json_repository_update_is_atomic_per_project(tmp_path: Path) -> None:
+    repo = JsonFileProjectRepository(tmp_path)
+    await repo.save(Project(id="p1", title="0"))
+
+    async def bump() -> None:
+        def change(p: Project) -> None:
+            p.title = str(int(p.title) + 1)
+
+        await repo.update("p1", change)
+
+    await asyncio.gather(*(bump() for _ in range(20)))
+    assert (await repo.get("p1")).title == "20"
+
+
+async def test_json_repository_update_saves_nothing_when_the_change_fails(tmp_path: Path) -> None:
+    repo = JsonFileProjectRepository(tmp_path)
+    await repo.save(Project(id="p1", title="kept"))
+
+    def change(p: Project) -> None:
+        p.title = "lost"
+        raise ValueError("rule broken")
+
+    with pytest.raises(ValueError, match="rule broken"):
+        await repo.update("p1", change)
+    assert (await repo.get("p1")).title == "kept"
