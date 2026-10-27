@@ -63,3 +63,23 @@ jobs:
 
       - name: Tests with coverage
         run: pytest --cov --cov-report=term-missing --cov-fail-under=90
+
+  backend-image:
+    name: Backend image (build only, no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Build the image
+        run: docker build --tag frameteller-backend:ci backend
+
+      - name: Container starts and passes its health check
+        run: |
+          docker run -d --name backend -p 8000:8000 -e MODEL_API_KEY=LLM_ci_placeholder_not_a_key frameteller-backend:ci
+          for i in $(seq 30); do curl -sf http://127.0.0.1:8000/healthz && exit 0; sleep 1; done
+          docker logs backend
+          exit 1
