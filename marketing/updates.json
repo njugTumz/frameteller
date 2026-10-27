@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-27T15:35:41Z",
+  "updated_at": "2026-10-27T16:09:54Z",
   "items": [
+    {
+      "date": "2026-10-27",
+      "status": "building",
+      "title": "Building the engine",
+      "body": "Started the backend: story rules, cast approval and budget guards, all tested before any UI."
+    },
     {
       "date": "2026-10-27",
       "status": "shipped",
