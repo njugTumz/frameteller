@@ -132,8 +132,10 @@ class MetaVoiceTranscribeAdapter:
     async def transcribe_file(self, wav: bytes, options: SpeechOptions) -> list[TranscriptTurn]:
         """Fallback: POST /v1/asr/transcribe with a WAV (mono, 16-bit, 16 or 24 kHz, <= 32 MB and 10 minutes)."""
         audio_ms = _check_wav(self._settings.asr_model, wav)
-        request = {k: v for k, v in self._handshake(options).items() if k not in ("authorization", "audioEncoding")}
-        request.pop("partialMode", None)
+        # The file endpoint needs audioEncoding "WAV" (400 "You must specify the 'audioEncoding' field" without it,
+        # "Malformed request" with PCM_24KHZ); auth goes in the HTTP header instead of the request.
+        drop = ("authorization", "partialMode")
+        request = {k: v for k, v in self._handshake(options).items() if k not in drop} | {"audioEncoding": "WAV"}
         body, content_type = _multipart(request, wav)
         url = self._settings.meta_base_url.rstrip("/") + "/asr/transcribe"
         key = self._settings.model_api_key.get_secret_value()
@@ -166,35 +168,48 @@ async def _await_session(ws: Any) -> str:
 
 
 async def _events(ws: Any) -> AsyncIterator[SpeechEvent]:
-    """Translate server events to typed events. Turn state is keyed on turnId because turns can overlap."""
+    """Translate server events to typed events. Turn state is keyed on turnId because turns can overlap.
+
+    Measured on a real session (Day 2 findings): turnId is an integer; `speaker` events carry `label` and no
+    turnId, and arrive while their turn is still open; `audioProgress` arrives every 80 ms and is ignored.
+    """
     starts: dict[str, int] = {}
     ends: dict[str, int] = {}
     speakers: dict[str, str] = {}
+    current: str | None = None  # the most recent turn that started and has not completed
     try:
         async for raw in ws:
             if not isinstance(raw, str):
                 continue
             ev = json.loads(raw)
-            kind, tid = ev.get("type"), ev.get("turnId")
+            kind = ev.get("type")
+            tid = str(ev["turnId"]) if ev.get("turnId") is not None else None
             if kind == "speechStart" and tid is not None:
                 starts[tid] = int(ev.get("audioProcessedMs", 0))
+                current = tid
                 yield TurnStarted(tid, starts[tid])
             elif kind == "transcript":
+                if ev.get("final") and not ev.get("transcript"):
+                    continue  # end-of-stream marker; the final text came with speechComplete
                 # CUMULATIVE partials replace the previous one; they belong to the most recent speechStart.
-                yield PartialTranscript(str(ev.get("transcript", "")))
+                yield PartialTranscript(str(ev.get("transcript", "")).strip())
             elif kind == "speechEnd" and tid is not None:
                 ends[tid] = int(ev.get("audioProcessedMs", 0))
                 yield TurnEnded(tid, ends[tid])
-            elif kind == "speaker" and tid is not None:
-                speakers[tid] = str(ev.get("speaker"))
-                yield SpeakerIdentified(tid, speakers[tid])
+            elif kind == "speaker":
+                target = tid or current
+                label = ev.get("label") or ev.get("speaker")
+                if target is not None and label:
+                    speakers[target] = str(label)
+                    yield SpeakerIdentified(target, speakers[target])
             elif kind == "speechComplete" and tid is not None:
                 start = starts.pop(tid, 0)
                 end = max(ends.pop(tid, start), start)
-                yield TurnCompleted(
-                    TranscriptTurn(tid, str(ev.get("transcript", "")), start, end, speakers.pop(tid, None))
-                )
-            # Unknown event types are ignored on purpose.
+                if current == tid:
+                    current = None
+                text = str(ev.get("transcript", "")).strip()
+                yield TurnCompleted(TranscriptTurn(tid, text, start, end, speakers.pop(tid, None)))
+            # Unknown event types (audioProgress, future ones) are ignored on purpose.
     except websockets.exceptions.ConnectionClosedOK:
         return
 
