@@ -251,7 +251,6 @@
   /* Footer */
   footer { margin-top: 96px; padding: 32px 0 48px; border-top: 1.5px solid var(--rule); color: var(--muted); font-size: 0.95rem; }
   footer .wrap { display: flex; padding-block: 0; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
-  footer a { color: var(--ink); }
 
   @media (prefers-reduced-motion: reduce) {
     .anim .draw, .anim .fill-in, .anim .said { animation: none; stroke-dashoffset: 0; opacity: 1; clip-path: none; }
@@ -423,7 +422,6 @@
   <footer>
     <div class="wrap">
       <span>Built for the Meta Global AI Developer Hackathon, Oct 26 to Nov 4, 2026.</span>
-      <span><a data-config="github" href="https://github.com/njugTumz/frameteller" target="_blank" rel="noopener">Source on GitHub</a> (MIT)</span>
     </div>
   </footer>
 
@@ -435,7 +433,6 @@
       launchAt: "2026-11-02T17:00:00Z",   // Mon Nov 2, 12:00 PM ET (EST, UTC-5) = 9:00 PM UTC+4
       xUrl: "https://x.com/izaktmz",      // your X profile or the launch post
       demoUrl: "https://app.example.com", // production app URL
-      githubUrl: "https://github.com/njugTumz/frameteller",   // public repo
       updatesUrl: "updates.json",
       pollMs: 60000
     };
@@ -443,7 +440,6 @@
     // Config into links and names
     document.querySelectorAll('[data-config="x"]').forEach(function (a) { a.href = CONFIG.xUrl; });
     document.querySelectorAll('[data-config="demo"]').forEach(function (a) { a.href = CONFIG.demoUrl; });
-    document.querySelectorAll('[data-config="github"]').forEach(function (a) { a.href = CONFIG.githubUrl; });
     document.querySelectorAll('[data-config="name"]').forEach(function (el) { el.textContent = CONFIG.name; });
 
     // Hero animation runs once unless reduced motion
