@@ -7,10 +7,10 @@ from frameteller.application.ports import (
     ImageGenerationPort,
     ImageRequest,
     JobQueuePort,
-    MediaStoragePort,
     ProjectRepository,
+    Quality,
 )
-from frameteller.application.prompts import PANEL_SIZE, panel_prompt
+from frameteller.application.prompts import panel_prompt
 from frameteller.domain import Panel
 
 
@@ -25,14 +25,12 @@ class GeneratePanel:
         self,
         repo: ProjectRepository,
         images: ImageGenerationPort,
-        storage: MediaStoragePort,
         budget: BudgetGuard,
         jobs: JobQueuePort,
     ) -> None:
-        self._repo, self._images, self._storage = repo, images, storage
-        self._budget, self._jobs = budget, jobs
+        self._repo, self._images, self._budget, self._jobs = repo, images, budget, jobs
 
-    async def execute(self, project_id: str, shot_id: str, revision: int, quality: str = "low") -> Panel:
+    async def execute(self, project_id: str, shot_id: str, revision: int, quality: Quality = "low") -> Panel:
         project = await self._repo.get(project_id)
         project.require_cast_approved()
         shot = project.shot(shot_id)
@@ -41,18 +39,18 @@ class GeneratePanel:
             return panel
 
         cast = [project.bible.get(cid) for cid in shot.character_ids]
-        references = tuple([await self._storage.get(c.reference) for c in cast if c.reference is not None])
+        references = tuple(c.reference for c in cast if c.reference is not None)
         await self._budget.charge(project_id, costs.IMAGE, f"panel {shot_id} r{revision}")
         try:
-            image = await self._images.generate(ImageRequest(panel_prompt(shot, cast), PANEL_SIZE, quality, references))
+            stored = await self._images.generate(
+                ImageRequest(panel_prompt(shot, cast), quality, "panel", references),
+                store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}",
+            )
         except Exception:
             panel.mark_failed()
             await self._repo.save(project)
             raise
-        ref = await self._storage.put(
-            f"projects/{project_id}/panels/{shot_id}/r{revision}", image.data, image.content_type
-        )
-        panel.record_render(revision, ref, image.response_id)
+        panel.record_render(revision, stored.ref, stored.response_id, stored.size)
         await self._repo.save(project)
         await self._jobs.enqueue(pre_segment_job(project_id, shot_id, revision))
         return panel

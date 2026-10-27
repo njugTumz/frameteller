@@ -19,6 +19,23 @@ class Point:
     x: int
     y: int
 
+    def to_media(self, shown: Size, media: Size, offset: Point | None = None) -> Point:
+        """Convert a click on a scaled preview to media pixels: subtract the offset, scale, round down, clamp."""
+        ox, oy = (offset.x, offset.y) if offset else (0, 0)
+        x = (self.x - ox) * media.width // shown.width
+        y = (self.y - oy) * media.height // shown.height
+        return Point(max(0, min(media.width - 1, x)), max(0, min(media.height - 1, y)))
+
+
+@dataclass(frozen=True, slots=True)
+class Size:
+    width: int
+    height: int
+
+    def __post_init__(self) -> None:
+        if self.width <= 0 or self.height <= 0:
+            raise InvalidValueError(f"invalid size {self.width}x{self.height}")
+
 
 @dataclass(frozen=True, slots=True)
 class Box:
@@ -101,10 +118,11 @@ class Panel:
     status: PanelStatus = PanelStatus.PENDING
     image: MediaRef | None = None
     response_id: str | None = None
+    size: Size | None = None
     masks: dict[str, ObjectMask] = field(default_factory=dict)
     transforms: list[CanvasTransform] = field(default_factory=list)
 
-    def record_render(self, revision: int, image: MediaRef, response_id: str) -> None:
+    def record_render(self, revision: int, image: MediaRef, response_id: str, size: Size) -> None:
         """A new model render. Revisions only increase.
 
         Masks of older revisions are dropped. Canvas transforms are kept: pre-segmented character masks
@@ -112,7 +130,7 @@ class Panel:
         """
         if revision <= self.revision:
             raise RevisionOrderError(f"panel {self.shot_id}: revision {revision} is not after {self.revision}")
-        self.revision, self.image, self.response_id = revision, image, response_id
+        self.revision, self.image, self.response_id, self.size = revision, image, response_id, size
         self.status = PanelStatus.READY
         self.masks = {}
 

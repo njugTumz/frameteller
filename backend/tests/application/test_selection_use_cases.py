@@ -11,7 +11,7 @@ from frameteller.application.use_cases import (
     SegmentObjectAtPoint,
     character_mask_id,
 )
-from frameteller.domain import MediaRef, PanelNotReadyError, Point, UnknownObjectError
+from frameteller.domain import MediaRef, PanelNotReadyError, Point, Size, UnknownObjectError
 from tests.application.conftest import World
 from tests.builders import bitmap
 from tests.fakes import FakeVideoRenderer
@@ -21,15 +21,15 @@ CAT_SEGMENT = Segment(bitmap(320, 300, 380, 360).box, bitmap(320, 300, 380, 360)
 
 
 async def render(w: World, shot_id: str = "s2") -> None:
-    await GeneratePanel(w.repo, w.images, w.storage, w.budget, w.jobs).execute("p1", shot_id, revision=1)
+    await GeneratePanel(w.repo, w.images, w.budget, w.jobs).execute("p1", shot_id, revision=1)
 
 
 def pre_segment(w: World) -> PreSegmentPanel:
-    return PreSegmentPanel(w.repo, w.storage, w.sam, w.budget)
+    return PreSegmentPanel(w.repo, w.sam, w.budget)
 
 
 def click(w: World) -> SegmentObjectAtPoint:
-    return SegmentObjectAtPoint(w.repo, w.storage, w.sam, w.budget, w.ids)
+    return SegmentObjectAtPoint(w.repo, w.sam, w.budget, w.ids)
 
 
 async def test_pre_segment_caches_each_character_with_a_stable_id(world: World) -> None:
@@ -83,6 +83,16 @@ async def test_click_miss_calls_sam_once_then_hits_the_cache(world: World) -> No
     assert first.id == second.id == "object:obj1"
     assert first.label == "lamp"
     assert world.sam.point_calls == [Point(520, 60)]
+
+
+async def test_preview_click_is_converted_to_media_pixels_before_the_cache_check(world: World) -> None:
+    world.sam.by_concept = {"Mira": MIRA_SEGMENT}
+    await render(world)  # 1920x1280 panel
+    await pre_segment(world).execute("p1", "s2", revision=1)
+    # (75, 100) on a 960x640 preview is (150, 200) in the panel: inside Mira
+    mask = await click(world).execute("p1", "s2", Point(75, 100), shown=Size(960, 640))
+    assert mask.id == "character:mira"
+    assert world.sam.point_calls == []
 
 
 async def test_click_on_nothing_raises(world: World) -> None:

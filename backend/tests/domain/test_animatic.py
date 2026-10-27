@@ -1,12 +1,14 @@
 import pytest
 
-from frameteller.domain import Animatic, CanvasTransform, MediaRef, ObjectMask, PanelNotReadyError, Project
+from frameteller.domain import Animatic, CanvasTransform, MediaRef, ObjectMask, PanelNotReadyError, Project, Size
 from tests.builders import bitmap, project, shot, turn
+
+SIZE = Size(1920, 1280)
 
 
 def rendered(p: Project) -> Project:
     for s in p.shots:
-        p.panel(s.id).record_render(1, MediaRef(f"panels/{s.id}/r1"), f"resp_{s.id}")
+        p.panel(s.id).record_render(1, MediaRef(f"panels/{s.id}/r1"), f"resp_{s.id}", SIZE)
     return p
 
 
@@ -37,7 +39,7 @@ def test_clips_carry_canvas_transforms() -> None:
 
 def test_every_shot_needs_a_ready_panel() -> None:
     p = project(shots=2)
-    p.panel("s1").record_render(1, MediaRef("panels/s1/r1"), "resp")
+    p.panel("s1").record_render(1, MediaRef("panels/s1/r1"), "resp", SIZE)
     with pytest.raises(PanelNotReadyError):
         Animatic.from_project(p)
     p.panel("s2")  # pending panel

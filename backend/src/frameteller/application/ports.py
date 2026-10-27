@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Protocol
+from enum import StrEnum
+from typing import Literal, Protocol
 
-from frameteller.domain import Animatic, Box, Character, Framing, MaskBitmap, MediaRef, Point, Project, TranscriptTurn
+from frameteller.domain import (
+    Animatic,
+    Box,
+    Character,
+    Framing,
+    MaskBitmap,
+    MediaRef,
+    Point,
+    Project,
+    Size,
+    TranscriptTurn,
+)
 
 # ---- data crossing the ports ----
 
@@ -31,19 +43,25 @@ class DirectedTurn:
     shots: tuple[ShotDraft, ...]
 
 
+Quality = Literal["low", "high"]  # drafts vs finals (maps to reasoning_strength)
+Aspect = Literal["square", "panel"]  # the adapter maps these to sizes from settings
+
+
 @dataclass(frozen=True, slots=True)
 class ImageRequest:
     prompt: str
-    size: str
-    quality: str  # "low" for drafts, "high" for finals (maps to reasoning_strength)
-    references: tuple[bytes, ...] = ()
+    quality: Quality
+    aspect: Aspect
+    references: tuple[MediaRef, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
-class GeneratedImage:
-    data: bytes
-    content_type: str
+class StoredImage:
+    """An image the adapter already persisted. Model output is never kept anywhere else."""
+
+    ref: MediaRef
     response_id: str
+    size: Size
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +69,7 @@ class Segment:
     box: Box
     bitmap: MaskBitmap
     label: str = ""
+    mask_ref: MediaRef | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,15 +79,83 @@ class Job:
     payload: dict[str, str] = field(default_factory=dict)
 
 
+class SpeechMode(StrEnum):
+    NARRATION = "narration"  # one narrator, low-latency turn endpointing
+    CO_DIRECTION = "co_direction"  # speaker labels, chosen before recording starts
+
+
+@dataclass(frozen=True, slots=True)
+class SpeechOptions:
+    mode: SpeechMode = SpeechMode.NARRATION
+    keywords: tuple[str, ...] = ()
+    language_bias: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PartialTranscript:
+    """Cumulative text of the turn in progress: replaces the previous partial."""
+
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class TurnStarted:
+    turn_id: str
+    start_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class TurnEnded:
+    turn_id: str
+    end_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class SpeakerIdentified:
+    turn_id: str
+    speaker: str
+
+
+@dataclass(frozen=True, slots=True)
+class TurnCompleted:
+    turn: TranscriptTurn
+
+
+SpeechEvent = PartialTranscript | TurnStarted | TurnEnded | SpeakerIdentified | TurnCompleted
+
+
+@dataclass(frozen=True, slots=True)
+class UsageRecord:
+    """One model call, for observability and cost reporting."""
+
+    model: str
+    operation: str
+    latency_ms: int
+    cost_usd: float
+    project_id: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cached_tokens: int | None = None
+    ok: bool = True
+
+
 # ---- ports ----
 
 
 class SpeechToTextPort(Protocol):
-    async def transcribe(self, audio: bytes, keywords: Sequence[str]) -> list[TranscriptTurn]: ...
+    def stream(self, audio: AsyncIterator[bytes], options: SpeechOptions) -> AsyncIterator[SpeechEvent]:
+        """Live transcription of raw PCM chunks, yielding typed events until the stream ends."""
+        ...
+
+    async def transcribe_file(self, wav: bytes, options: SpeechOptions) -> list[TranscriptTurn]: ...
 
 
 class DirectorPort(Protocol):
     async def direct_turn(self, turn: TranscriptTurn, project: Project) -> DirectedTurn: ...
+
+    async def direct_story(self, project: Project) -> DirectedTurn:
+        """Full-story pass over every turn, only on demand (ADR 0002)."""
+        ...
 
     async def extract_characters(
         self, turns: Sequence[TranscriptTurn], known: Sequence[Character]
@@ -76,15 +163,17 @@ class DirectorPort(Protocol):
 
 
 class ImageGenerationPort(Protocol):
-    async def generate(self, request: ImageRequest) -> GeneratedImage: ...
+    async def generate(self, request: ImageRequest, store_as: str) -> StoredImage: ...
 
-    async def edit(self, previous_response_id: str, prompt: str, size: str, quality: str) -> GeneratedImage: ...
+    async def edit(self, previous_response_id: str, prompt: str, quality: Quality, store_as: str) -> StoredImage: ...
 
 
 class SegmentationPort(Protocol):
-    async def segment_concept(self, image: bytes, concept: str) -> list[Segment]: ...
+    async def segment_concept(self, image: MediaRef, concept: str, store_prefix: str) -> list[Segment]: ...
 
-    async def segment_point(self, image: bytes, point: Point) -> Segment | None: ...
+    async def segment_point(self, image: MediaRef, point: Point, store_prefix: str) -> Segment | None:
+        """`point` is in media pixels; convert preview clicks with Point.to_media first."""
+        ...
 
 
 class MediaStoragePort(Protocol):
@@ -124,10 +213,14 @@ class BudgetGuard(Protocol):
 
 
 class SpendLedger(Protocol):
-    """Persistent spend counters behind the application's budget policy."""
+    """Persistent spend counters behind the budget policy, plus per-call usage records."""
 
     async def spent_by_project(self, project_id: str) -> float: ...
 
     async def spent_on_day(self, day: str) -> float: ...
 
     async def record(self, project_id: str, day: str, cost_usd: float, what: str) -> None: ...
+
+    async def record_usage(self, usage: UsageRecord) -> None:
+        """Observability only: budget totals come from record(), so usage is never counted twice."""
+        ...

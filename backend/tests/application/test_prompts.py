@@ -1,6 +1,6 @@
 import pytest
 
-from frameteller.application.prompts import PANEL_SIZE, edit_prompt, panel_prompt, reference_prompt
+from frameteller.application.prompts import edit_prompt, panel_prompt, reference_prompt
 from tests.builders import CAT, MIRA, shot
 
 
@@ -46,6 +46,5 @@ def test_panel_prompt_without_cast() -> None:
     assert "reference sheets" not in panel_prompt(shot(1), [])
 
 
-def test_reference_prompt_and_panel_size() -> None:
+def test_reference_prompt_names_the_character() -> None:
     assert MIRA.canonical_description in reference_prompt(MIRA)
-    assert PANEL_SIZE == "1536x1024"  # ADR 0003

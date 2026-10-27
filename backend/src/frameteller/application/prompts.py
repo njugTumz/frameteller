@@ -6,8 +6,6 @@ from collections.abc import Sequence
 
 from frameteller.domain import Character, Shot
 
-PANEL_SIZE = "1536x1024"  # 3:2, the widest the Responses image tool accepts (ADR 0003)
-REFERENCE_SIZE = "1024x1024"
 PANEL_STYLE = "clean pencil storyboard sketch, light grey wash, one accent colour"
 
 

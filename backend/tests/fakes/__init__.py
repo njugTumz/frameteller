@@ -4,17 +4,24 @@ from __future__ import annotations
 
 import copy
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
 
 from frameteller.application.ports import (
     DirectedTurn,
-    GeneratedImage,
     ImageRequest,
     Job,
+    Quality,
     Segment,
+    SpeechEvent,
+    SpeechOptions,
+    StoredImage,
+    TurnCompleted,
+    UsageRecord,
 )
-from frameteller.domain import Animatic, Character, MediaRef, Point, Project, TranscriptTurn
+from frameteller.domain import Animatic, Character, MediaRef, Point, Project, Size, TranscriptTurn
+
+PANEL_SIZE = Size(1920, 1280)
 
 
 class InMemoryProjectRepository:
@@ -45,29 +52,51 @@ class FakeDirector:
         self.calls.append(turn.id)
         return self.turns[turn.id]
 
+    async def direct_story(self, project: Project) -> DirectedTurn:
+        self.calls.append("direct_story")
+        return DirectedTurn((), ())
+
     async def extract_characters(self, turns: Sequence[TranscriptTurn], known: Sequence[Character]) -> list[Character]:
         self.calls.append("extract_characters")
         return list(self.characters)
 
 
-class FakeImageGeneration:
+class InMemoryMediaStorage:
     def __init__(self) -> None:
+        self.files: dict[str, tuple[bytes, str]] = {}
+
+    async def put(self, key: str, data: bytes, content_type: str) -> MediaRef:
+        self.files[key] = (data, content_type)
+        return MediaRef(key)
+
+    async def get(self, ref: MediaRef) -> bytes:
+        return self.files[ref.key][0]
+
+
+class FakeImageGeneration:
+    """Stores a tiny fake image under `store_as`, like the real adapter does with model output."""
+
+    def __init__(self, storage: InMemoryMediaStorage) -> None:
+        self.storage = storage
         self.generated: list[ImageRequest] = []
         self.edits: list[tuple[str, str]] = []
         self.fail_next = False
 
-    async def generate(self, request: ImageRequest) -> GeneratedImage:
+    async def generate(self, request: ImageRequest, store_as: str) -> StoredImage:
         if self.fail_next:
             self.fail_next = False
             raise RuntimeError("model unavailable")
         self.generated.append(request)
-        n = len(self.generated) + len(self.edits)
-        return GeneratedImage(f"image-{n}".encode(), "image/webp", f"resp_{n}")
+        return await self._store(store_as)
 
-    async def edit(self, previous_response_id: str, prompt: str, size: str, quality: str) -> GeneratedImage:
+    async def edit(self, previous_response_id: str, prompt: str, quality: Quality, store_as: str) -> StoredImage:
         self.edits.append((previous_response_id, prompt))
+        return await self._store(store_as)
+
+    async def _store(self, key: str) -> StoredImage:
         n = len(self.generated) + len(self.edits)
-        return GeneratedImage(f"image-{n}".encode(), "image/webp", f"resp_{n}")
+        ref = await self.storage.put(key, f"image-{n}".encode(), "image/webp")
+        return StoredImage(ref, f"resp_{n}", PANEL_SIZE)
 
     @property
     def calls(self) -> int:
@@ -81,11 +110,11 @@ class FakeSegmentation:
         self.concept_calls: list[str] = []
         self.point_calls: list[Point] = []
 
-    async def segment_concept(self, image: bytes, concept: str) -> list[Segment]:
+    async def segment_concept(self, image: MediaRef, concept: str, store_prefix: str) -> list[Segment]:
         self.concept_calls.append(concept)
         return [self.by_concept[concept]] if concept in self.by_concept else []
 
-    async def segment_point(self, image: bytes, point: Point) -> Segment | None:
+    async def segment_point(self, image: MediaRef, point: Point, store_prefix: str) -> Segment | None:
         self.point_calls.append(point)
         return self.at_point
 
@@ -94,20 +123,14 @@ class FakeSpeechToText:
     def __init__(self, turns: Sequence[TranscriptTurn]) -> None:
         self.turns = list(turns)
 
-    async def transcribe(self, audio: bytes, keywords: Sequence[str]) -> list[TranscriptTurn]:
+    async def stream(self, audio: AsyncIterator[bytes], options: SpeechOptions) -> AsyncIterator[SpeechEvent]:
+        async for _ in audio:
+            pass
+        for t in self.turns:
+            yield TurnCompleted(t)
+
+    async def transcribe_file(self, wav: bytes, options: SpeechOptions) -> list[TranscriptTurn]:
         return list(self.turns)
-
-
-class InMemoryMediaStorage:
-    def __init__(self) -> None:
-        self.files: dict[str, tuple[bytes, str]] = {}
-
-    async def put(self, key: str, data: bytes, content_type: str) -> MediaRef:
-        self.files[key] = (data, content_type)
-        return MediaRef(key)
-
-    async def get(self, ref: MediaRef) -> bytes:
-        return self.files[ref.key][0]
 
 
 class InMemoryJobQueue:
@@ -154,6 +177,7 @@ class InMemorySpendLedger:
         self.by_project: dict[str, float] = defaultdict(float)
         self.by_day: dict[str, float] = defaultdict(float)
         self.entries: list[tuple[str, str, float, str]] = []
+        self.usage: list[UsageRecord] = []
 
     async def spent_by_project(self, project_id: str) -> float:
         return self.by_project[project_id]
@@ -165,6 +189,9 @@ class InMemorySpendLedger:
         self.by_project[project_id] += cost_usd
         self.by_day[day] += cost_usd
         self.entries.append((project_id, day, cost_usd, what))
+
+    async def record_usage(self, usage: UsageRecord) -> None:
+        self.usage.append(usage)
 
 
 class RecordingBudget:

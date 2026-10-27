@@ -3,24 +3,26 @@ import pytest
 from frameteller.application import costs
 from frameteller.application.jobs import PRE_SEGMENT_PANEL
 from frameteller.application.use_cases import EditPanelAppearance, GenerateCharacterReference, GeneratePanel
-from frameteller.domain import CastNotApprovedError, CastStatus, PanelNotReadyError, PanelStatus
+from frameteller.domain import CastNotApprovedError, CastStatus, MediaRef, PanelNotReadyError, PanelStatus, Size
 from tests.application.conftest import World
 
 
 def generate(w: World) -> GeneratePanel:
-    return GeneratePanel(w.repo, w.images, w.storage, w.budget, w.jobs)
+    return GeneratePanel(w.repo, w.images, w.budget, w.jobs)
 
 
 def edit(w: World) -> EditPanelAppearance:
-    return EditPanelAppearance(w.repo, w.images, w.storage, w.budget, w.jobs)
+    return EditPanelAppearance(w.repo, w.images, w.budget, w.jobs)
 
 
 async def test_generate_reference_stores_it_and_returns_cast_to_draft(world: World) -> None:
-    ref = await GenerateCharacterReference(world.repo, world.images, world.storage, world.budget).execute("p1", "cat")
+    ref = await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
     p = world.project()
     assert p.bible.get("cat").reference == ref
     assert p.bible.status is CastStatus.DRAFT
     assert world.images.generated[0].quality == "high"
+    assert world.images.generated[0].aspect == "square"
+    assert ref.key in world.storage.files
     assert world.budget.charges == [("p1", costs.IMAGE, "reference cat")]
 
 
@@ -34,9 +36,12 @@ async def test_cast_not_approved_blocks_panel_generation(draft_world: World) -> 
 async def test_generate_panel_uses_the_shot_cast_references(world: World) -> None:
     panel = await generate(world).execute("p1", "s2", revision=1)
     request = world.images.generated[0]
-    assert request.references == (b"mira-ref", b"cat-ref")
-    assert request.size == "1536x1024"
+    assert request.references == (MediaRef("refs/mira.webp"), MediaRef("refs/cat.webp"))
+    assert request.aspect == "panel"
     assert panel.status is PanelStatus.READY
+    assert panel.image is not None
+    assert panel.image.key in world.storage.files
+    assert panel.size == Size(1920, 1280)
     assert world.project().panel("s2").response_id == "resp_1"
 
 

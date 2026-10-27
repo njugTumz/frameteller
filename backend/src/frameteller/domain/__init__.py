@@ -15,7 +15,7 @@ from frameteller.domain.errors import (
     UnknownShotError,
 )
 from frameteller.domain.media import MediaRef
-from frameteller.domain.panels import Box, CanvasTransform, MaskBitmap, ObjectMask, Panel, PanelStatus, Point
+from frameteller.domain.panels import Box, CanvasTransform, MaskBitmap, ObjectMask, Panel, PanelStatus, Point, Size
 from frameteller.domain.project import Project
 from frameteller.domain.shots import Framing, Shot
 from frameteller.domain.transcript import TranscriptTurn
@@ -44,6 +44,7 @@ __all__ = [
     "RevisionOrderError",
     "Shot",
     "ShotOrderError",
+    "Size",
     "TranscriptTurn",
     "UnknownCharacterError",
     "UnknownObjectError",

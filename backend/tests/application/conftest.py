@@ -37,7 +37,7 @@ def make_world(p: Project) -> World:
     storage.files["refs/cat.webp"] = (b"cat-ref", "image/webp")
     return World(
         InMemoryProjectRepository(p),
-        FakeImageGeneration(),
+        FakeImageGeneration(storage),
         storage,
         RecordingBudget(),
         InMemoryJobQueue(),
