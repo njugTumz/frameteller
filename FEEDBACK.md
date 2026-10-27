@@ -10,6 +10,9 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-27 · muse-voice-transcribe-1.0 · good · The realtime WebSocket worked first time from the documented protocol: a 48.5 s narration streamed at real time closed cleanly with code 1000 about 2 s after the audio ended, for $0.0024.
+- 2026-10-27 · muse-image-1.0 · good · Prompt caching applies to image requests: a panel request with two reference images reported 3,968 of 4,364 input tokens cached, and a chained edit 4,352. Worth stating in the image docs.
+- 2026-10-27 · sam-3.1 · good · Point selection on a 384×256 image took 2.5–2.9 s, against ~7.5 s at 1920×1280. A note on input size versus latency would help.
 - 2026-10-27 · muse-image-1.0 · issue · The Responses `image_generation` tool rejects `size: "1792x1024"` with 400 "unknown value" (also `16:9`, `1920x1080`), while `/v1/images/edits` accepts it. The error does not list allowed values; we found `1536x1024` by trial.
 - 2026-10-27 · muse-image-1.0 · good · Reference sheets as `input_image` kept two characters on model across 18 panels, at 15–25 s per image. It even faithfully carried a detail the reference sheet invented.
 - 2026-10-27 · muse-image-1.0 · idea · `/v1/images/edits` returns only `b64_json`, no response id, so its images cannot continue as a `previous_response_id` edit chain. Returning one would let us use it for native 16:9 panels.
