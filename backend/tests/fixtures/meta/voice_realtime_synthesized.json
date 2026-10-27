@@ -1,0 +1,34 @@
+{
+ "_source": "SYNTHESIZED from the realtime protocol in CLAUDE.md section 5, not recorded: spikes/fixtures/narration.wav does not exist yet. Replace with a recording once it does.",
+ "ack": {"sessionId": "sess_fixture1"},
+ "narration": [
+  {"type": "speechStart", "turnId": "1", "audioProcessedMs": 120},
+  {"type": "transcript", "transcript": "Scene one"},
+  {"type": "transcript", "transcript": "Scene one. Night, a rainy alley."},
+  {"type": "somethingNew", "detail": "unknown events are ignored"},
+  {"type": "speechEnd", "turnId": "1", "audioProcessedMs": 2400},
+  {"type": "speechStart", "turnId": "2", "audioProcessedMs": 2600},
+  {"type": "speechComplete", "turnId": "1", "transcript": "Scene one. Night, a rainy alley."},
+  {"type": "transcript", "transcript": "Close on the crate."},
+  {"type": "speechEnd", "turnId": "2", "audioProcessedMs": 4000},
+  {"type": "speechComplete", "turnId": "2", "transcript": "Close on the crate."}
+ ],
+ "co_direction": [
+  {"type": "speechStart", "turnId": "1", "audioProcessedMs": 0},
+  {"type": "transcript", "transcript": "Wide shot of the alley."},
+  {"type": "speechEnd", "turnId": "1", "audioProcessedMs": 1800},
+  {"type": "speaker", "turnId": "1", "speaker": "A"},
+  {"type": "speechComplete", "turnId": "1", "transcript": "Wide shot of the alley."},
+  {"type": "speechStart", "turnId": "2", "audioProcessedMs": 2000},
+  {"type": "speechEnd", "turnId": "2", "audioProcessedMs": 3500},
+  {"type": "speaker", "turnId": "2", "speaker": "B"},
+  {"type": "speechComplete", "turnId": "2", "transcript": "No, make it a close-up."}
+ ],
+ "file": {
+  "transcript": "Scene one. Night, a rainy alley. Close on the crate.",
+  "turns": [
+   {"turnId": "1", "startMs": 120, "endMs": 2400, "transcript": "Scene one. Night, a rainy alley.", "speaker": null},
+   {"turnId": "2", "startMs": 2600, "endMs": 4000, "transcript": "Close on the crate.", "speaker": null}
+  ]
+ }
+}
