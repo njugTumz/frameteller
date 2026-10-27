@@ -69,7 +69,7 @@ class Segment:
     box: Box
     bitmap: MaskBitmap
     label: str = ""
-    mask_ref: MediaRef | None = None
+    cutout: MediaRef | None = None  # RGBA cut-out of the object, stored by the adapter
 
 
 @dataclass(frozen=True, slots=True)

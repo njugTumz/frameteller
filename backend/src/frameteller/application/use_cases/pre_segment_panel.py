@@ -34,7 +34,7 @@ class PreSegmentPanel:
             if not segments:
                 continue
             best = max(segments, key=lambda s: len(s.bitmap.data))
-            mask = ObjectMask(mask_id, character.name, best.bitmap, cutout=best.mask_ref, character_id=cid)
+            mask = ObjectMask(mask_id, character.name, best.bitmap, cutout=best.cutout, character_id=cid)
             if panel.cache_mask(revision, mask):
                 cached.append(mask)
         await self._repo.save(project)

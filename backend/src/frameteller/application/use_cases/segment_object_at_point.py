@@ -37,7 +37,7 @@ class SegmentObjectAtPoint:
         segment = await self._sam.segment_point(image_ref, point, prefix)
         if segment is None:
             raise NothingToSegmentError(f"nothing found at ({point.x}, {point.y})")
-        mask = ObjectMask(object_id, segment.label or "object", segment.bitmap, cutout=segment.mask_ref)
+        mask = ObjectMask(object_id, segment.label or "object", segment.bitmap, cutout=segment.cutout)
         panel.cache_mask(panel.revision, mask)
         await self._repo.save(project)
         return mask
