@@ -9,7 +9,7 @@ FAKE_KEY = "LLM_test_not_a_real_key_000000"
 def _no_env_files(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
     """Settings must come only from what each test passes, never from a developer's .env."""
     monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
-    for name in ("MODEL_API_KEY", "APP_ENV", "DIRECTOR_MODEL"):
+    for name in ("MODEL_API_KEY", "APP_ENV", "DIRECTOR_MODEL", "STORAGE_BACKEND", "AZURE_STORAGE_ACCOUNT"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -61,3 +61,15 @@ def test_sam_downscale_defaults_to_768_and_empty_means_full_size(monkeypatch: py
     assert load_settings(model_api_key=FAKE_KEY).sam_max_side == 768
     monkeypatch.setenv("SAM_MAX_SIDE", "")
     assert load_settings(model_api_key=FAKE_KEY).sam_max_side is None
+
+
+def test_blob_storage_needs_an_account_and_defaults_to_local() -> None:
+    assert load_settings(model_api_key=FAKE_KEY).storage_backend == "local"
+    with pytest.raises(ConfigError, match="AZURE_STORAGE_ACCOUNT"):
+        load_settings(model_api_key=FAKE_KEY, storage_backend="blob")
+    s = load_settings(model_api_key=FAKE_KEY, storage_backend="blob", azure_storage_account="stframetellerstg")
+    assert (s.azure_media_container, s.azure_projects_container) == ("media", "projects")
+    assert (
+        load_settings(model_api_key=FAKE_KEY, azure_storage_connection_string=" ").azure_storage_connection_string
+        is None
+    )

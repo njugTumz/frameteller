@@ -9,6 +9,7 @@ from pydantic import Field, SecretStr, ValidationError, field_validator, model_v
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnv = Literal["local", "staging", "production"]
+StorageBackend = Literal["local", "blob"]
 Effort = Literal["minimal", "low", "medium", "high"]
 
 CONTRIBUTOR_DIRECTOR = "muse-spark-1.3-contributor"
@@ -52,7 +53,14 @@ class Settings(BaseSettings):
     breaker_failures: int = Field(default=5, ge=1)
     breaker_cooldown_s: float = Field(default=30, gt=0)
 
+    # Where media, project documents and the spend ledger live. Container disk is ephemeral: blob in Azure.
+    storage_backend: StorageBackend = "local"
     local_storage_dir: Path = Path(".data")
+    azure_storage_account: str = ""  # with DefaultAzureCredential (managed identity in Azure, az login locally)
+    azure_storage_connection_string: SecretStr | None = None  # the Azurite emulator only
+    azure_storage_api_version: str | None = None  # pin an older API version for Azurite
+    azure_media_container: str = "media"
+    azure_projects_container: str = "projects"
     allowed_origins: str = ""  # comma-separated browser origins for CORS and WebSocket Origin checks
     log_level: str = "INFO"
 
@@ -64,12 +72,23 @@ class Settings(BaseSettings):
     def _empty_means_full_size(cls, value: object) -> object:
         return None if isinstance(value, str) and value.strip().lower() in ("", "none") else value
 
+    @field_validator("azure_storage_connection_string", "azure_storage_api_version", mode="before")
+    @classmethod
+    def _empty_means_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
     @model_validator(mode="after")
     def _director_for_env(self) -> Settings:
         if self.director_model is None:
             self.director_model = CONTRIBUTOR_DIRECTOR if self.app_env == "local" else PAID_DIRECTOR
         if self.app_env != "local" and self.director_model.endswith("-contributor"):
             raise ValueError("contributor models are for synthetic local data only, not staging or production")
+        return self
+
+    @model_validator(mode="after")
+    def _blob_needs_an_account(self) -> Settings:
+        if self.storage_backend == "blob" and not (self.azure_storage_account or self.azure_storage_connection_string):
+            raise ValueError("STORAGE_BACKEND=blob needs AZURE_STORAGE_ACCOUNT (or a connection string for Azurite)")
         return self
 
     @property
