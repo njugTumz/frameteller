@@ -2,6 +2,7 @@
 
 from frameteller.application.events import SessionFailed, ShotCreated, ShotsReplaced, TurnFinished
 from frameteller.application.ports import (
+    AudioProgress,
     DirectedTurn,
     PartialTranscript,
     ShotDraft,
@@ -68,13 +69,18 @@ async def test_beats_cut_shots_at_the_words_heard_so_far_and_the_audio_position(
     speech = ScriptedSpeech(
         [
             LISTEN,
+            AudioProgress(900),  # the first beat closes with nothing said: it only marks the start
             TurnStarted("0", 500),
             PartialTranscript("Night in the alley"),
             LISTEN,
-            PartialTranscript("Night in the alley she hears a sound"),
+            AudioProgress(4300),  # not yet 500 ms past the beat at 4000
+            PartialTranscript("Night in the alley tonight"),  # a word that was still in flight at the beat
+            AudioProgress(4500),
+            PartialTranscript("Night in the alley tonight she hears a sound"),
             TurnEnded("0", 9000),
-            TurnCompleted(TranscriptTurn("0", "Night in the alley she hears a sound", 500, 9000)),
+            TurnCompleted(TranscriptTurn("0", "Night in the alley tonight she hears a sound", 500, 9000)),
             LISTEN,
+            AudioProgress(9700),
             TurnStarted("1", 9500),
             PartialTranscript("Close on the crate"),
             TurnEnded("1", 12000),
@@ -89,7 +95,7 @@ async def test_beats_cut_shots_at_the_words_heard_so_far_and_the_audio_position(
     )
 
     assert s.turns() == [
-        ("s1-b1", "Night in the alley", 400, 4000),  # the first beat only marked the start
+        ("s1-b1", "Night in the alley tonight", 400, 4000),  # closed once the transcript caught up
         ("s1-b2", "she hears a sound", 4000, 9200),  # split inside one transcriber turn
         ("s1-b3", "Close on the crate a cat", 9200, 12000),  # the last stretch runs to the end of the speech
     ]
@@ -109,6 +115,7 @@ async def test_a_later_speech_complete_never_directs_the_same_audio_twice() -> N
             TurnStarted("1", 2500),
             PartialTranscript("It hoots"),
             LISTEN,
+            AudioProgress(4500),
             TurnCompleted(TranscriptTurn("1", "It hoots twice", 2500, 5000)),  # after a beat: not directed
         ]
     )
@@ -200,3 +207,14 @@ async def test_corrections_in_a_session_run_after_the_shots_they_fix() -> None:
     [failure] = s.events.of(SessionFailed)
     assert isinstance(failure, SessionFailed)
     assert "correction" in failure.message
+
+
+async def test_beats_still_waiting_when_the_stream_ends_close_in_order() -> None:
+    speech = ScriptedSpeech([PartialTranscript("one two"), LISTEN, PartialTranscript("one two three")])
+    director = FakeDirector({"b1": one_shot(), "b2": one_shot()})
+    s = Session(speech, director)
+
+    await s.run.execute("p1", speech.paced(Beat(1000), CHUNK), SpeechOptions())
+
+    # No progress events at all (another adapter, or a short stream): the beat closes when the transcript ends.
+    assert s.turns() == [("s1-b1", "one two three", 0, 1000)]

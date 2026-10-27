@@ -4,6 +4,7 @@ import pytest
 
 from frameteller.application.errors import InvalidModelOutputError
 from frameteller.application.ports import (
+    AudioProgress,
     DirectedTurn,
     PartialTranscript,
     ShotDraft,
@@ -213,6 +214,7 @@ async def test_beats_cut_shots_and_corrections_redirect_them(fakes: Fakes, make_
             TurnStarted("0", 0),
             PartialTranscript("An owl lands"),
             LISTEN,
+            AudioProgress(600),  # 500 ms past the beat at 80 ms: it closes here
             PartialTranscript("An owl lands it hoots"),
             TurnCompleted(TranscriptTurn("0", "An owl lands it hoots", 0, 160)),
         ]

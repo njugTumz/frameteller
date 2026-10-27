@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from frameteller.application.errors import ApplicationError
 from frameteller.application.events import SessionEnded, SessionFailed, ShotCreated, TranscriptUpdated, TurnFinished
 from frameteller.application.ports import (
+    AudioProgress,
     EventPublisher,
     IdGenerator,
     PartialTranscript,
@@ -24,11 +25,17 @@ from frameteller.domain import DomainError, TranscriptTurn
 DIRECTION_FAILED = "The director couldn't place that line. Try saying it again."
 CORRECTION_FAILED = "We couldn't apply that correction. Check the turn and try again."
 AUDIO_BUFFER_FRAMES = 256  # about 20 s of 80 ms frames waiting for the transcriber
+# A beat closes once the transcriber has processed this much audio past it (ADR 0008). The last word before a
+# pause reached the transcript up to 240 ms after the pause; the next sentence's first word, 840 ms or more.
+BEAT_GRACE_MS = 500
 
 
 @dataclass(frozen=True, slots=True)
 class Beat:
-    """The narrator marked "a new shot starts now", `at_ms` into the audio they have sent (ADR 0008)."""
+    """The narrator marked "a new shot starts now", `at_ms` into the audio they have sent (ADR 0008).
+
+    It closes the stretch since the previous beat once the transcript has caught up with `at_ms`.
+    """
 
     at_ms: int
 
@@ -48,8 +55,8 @@ class _Heard:
     """Every word heard so far this session, and where the last shot boundary fell (ADR 0008).
 
     Partials are cumulative per transcriber turn, so the words of finished turns are kept and the current partial
-    is appended. A beat takes the words since the previous boundary. Beats are matched to the transcript by word
-    position, so later rewording inside a finished beat cannot move words into the next one.
+    is appended. Closing a beat takes the words since the previous boundary. Beats are matched to the transcript by
+    word position, so later rewording inside a closed beat cannot move words into the next one.
     """
 
     def __init__(self) -> None:
@@ -86,7 +93,9 @@ class RunVoiceSession:
     """Live narration: transcribe, direct each finished stretch into shots, and queue sheets for new characters.
 
     Shots are cut by the narrator's beats when they send them, otherwise by the transcriber's turns (ADR 0008).
-    Once a beat has arrived, transcriber turns no longer create shots, so the same audio is never directed twice.
+    A beat closes as soon as the transcriber has processed BEAT_GRACE_MS of audio past it, so the last words before
+    it are in. Once a beat has arrived, transcriber turns no longer create shots: the same audio is never directed
+    twice.
     Direction runs one stretch at a time, in order, beside the stream (ADR 0002); a failure is reported and
     skipped, and the session carries on.
     """
@@ -113,6 +122,7 @@ class RunVoiceSession:
         heard = _Heard()
         counts = {"beats": 0, "turns": 0, "shots": 0}
         beat_mode = False  # set by the first beat: from then on beats, not the transcriber, cut the shots
+        beats: list[int] = []  # beats waiting for the transcript to catch up, oldest first
 
         async def publish_failure(message: str, *, fatal: bool = False) -> None:
             await self._events.publish(project_id, SessionFailed(message, fatal))
@@ -129,13 +139,18 @@ class RunVoiceSession:
                 counts["beats"] += 1
                 await finish(TranscriptTurn(f"{tag}-b{counts['beats']}", text, start, end))
 
+        async def close_beats_heard(processed_ms: int | None = None) -> None:
+            """Close the waiting beats the transcript has caught up with (all of them when it has ended)."""
+            while beats and (processed_ms is None or processed_ms >= beats[0] + BEAT_GRACE_MS):
+                await close_beat(beats.pop(0))
+
         async def read_client() -> None:
             nonlocal beat_mode
             try:
                 async for item in client:
                     if isinstance(item, Beat):
                         beat_mode = True
-                        await close_beat(item.at_ms)
+                        beats.append(item.at_ms)
                     elif isinstance(item, TranscriptCorrection):
                         work.put_nowait(item)
                     else:
@@ -174,6 +189,8 @@ class RunVoiceSession:
                 if isinstance(event, PartialTranscript):
                     heard.hear_partial(event.text)
                     await self._events.publish(project_id, TranscriptUpdated(event.text))
+                elif isinstance(event, AudioProgress):
+                    await close_beats_heard(event.processed_ms)
                 elif isinstance(event, TurnEnded):
                     heard.speech_end_ms = max(heard.speech_end_ms, event.end_ms)
                 elif isinstance(event, TurnCompleted):
@@ -187,7 +204,8 @@ class RunVoiceSession:
             discard = asyncio.create_task(_drain(audio))
             await reader
             discard.cancel()
-            if beat_mode:  # the last stretch runs to the end of the speech
+            if beat_mode:  # the transcript is complete: close every waiting beat, then the last stretch
+                await close_beats_heard()
                 await close_beat(max(heard.speech_end_ms, heard.cut_ms))
         except ApplicationError as e:
             await publish_failure(e.user_message, fatal=True)
