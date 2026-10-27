@@ -1,0 +1,87 @@
+[project]
+name = "frameteller"
+version = "0.1.0"
+description = "Frameteller backend: spoken stories to storyboards and timed animatics"
+readme = "../README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.14,<3",
+]
+
+# No build backend yet: tools find the package via the src paths configured below.
+# Install with: pip install --group dev   (pip >= 25.1)
+[dependency-groups]
+dev = [
+    "import-linter==2.15",
+    "mypy==2.4.0",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.3",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "N", "PT", "TID"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "src:."
+packages = ["frameteller", "tests"]
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--strict-markers -ra"
+
+[tool.coverage.run]
+source = ["frameteller.domain", "frameteller.application"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+
+# Clean Architecture dependency rule (CLAUDE.md section 6, ADR 0001).
+# Run from backend/ with: PYTHONPATH=src lint-imports
+[tool.importlinter]
+root_package = "frameteller"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers point inward only"
+type = "layers"
+layers = [
+    "frameteller.interface",
+    "frameteller.infrastructure",
+    "frameteller.application",
+    "frameteller.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain imports nothing from outer layers"
+type = "forbidden"
+source_modules = ["frameteller.domain"]
+forbidden_modules = ["frameteller.application", "frameteller.infrastructure", "frameteller.interface"]
+
+[[tool.importlinter.contracts]]
+name = "Application imports only domain"
+type = "forbidden"
+source_modules = ["frameteller.application"]
+forbidden_modules = ["frameteller.infrastructure", "frameteller.interface"]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application stay framework-free"
+type = "forbidden"
+source_modules = ["frameteller.domain", "frameteller.application"]
+forbidden_modules = ["pydantic", "fastapi", "openai", "httpx", "azure"]
