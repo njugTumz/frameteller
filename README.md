@@ -11,6 +11,7 @@ Built for indie filmmakers, YouTubers, animators, comic and game writers, and ad
 - **Live demo:** TODO (production URL)
 - **Marketing page and build log:** https://gentle-stone-032869c0f.3.azurestaticapps.net
 - **Demo video:** TODO
+- **Source:** https://github.com/njugTumz/frameteller
 
 ## How it works
 
