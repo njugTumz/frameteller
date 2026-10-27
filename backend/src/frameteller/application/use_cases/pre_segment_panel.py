@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from frameteller.application import costs
 from frameteller.application.ports import BudgetGuard, ProjectRepository, SegmentationPort
+from frameteller.application.prompts import concept_phrase
 from frameteller.domain import ObjectMask, Project
 
 
@@ -30,7 +31,7 @@ class PreSegmentPanel:
             character = snapshot.bible.get(cid)
             await self._budget.charge(project_id, costs.SAM_IMAGE, f"pre-segment {shot_id} r{revision} {cid}")
             prefix = f"projects/{project_id}/panels/{shot_id}/r{revision}/masks/{cid}"
-            segments = await self._sam.segment_concept(image_ref, character.name, prefix)
+            segments = await self._sam.segment_concept(image_ref, concept_phrase(character), prefix)
             if segments:
                 best = max(segments, key=lambda s: len(s.bitmap.data))
                 found.append(ObjectMask(mask_id, character.name, best.bitmap, cutout=best.cutout, character_id=cid))

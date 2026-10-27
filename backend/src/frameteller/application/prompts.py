@@ -30,6 +30,16 @@ def panel_prompt(shot: Shot, cast: Sequence[Character]) -> str:
     return " ".join(lines)
 
 
+def concept_phrase(c: Character, max_words: int = 8) -> str:
+    """A short visual noun phrase for SAM, which finds "girl in yellow raincoat" but not "Mira" (ADR 0006).
+
+    The first clause of the canonical description, which the director writes as who-or-what first.
+    """
+    first = c.canonical_description.replace(";", ",").split(",")[0].split(".")[0].strip()
+    words = first.split()[:max_words]
+    return " ".join(words) if words else c.name
+
+
 def edit_prompt(change: str, target: str, parts: Sequence[str]) -> str:
     """Appearance edit that names every affected part, so none is left behind (ADR 0005)."""
     change, target = change.strip().rstrip("."), target.strip()

@@ -48,3 +48,14 @@ def test_panel_prompt_without_cast() -> None:
 
 def test_reference_prompt_names_the_character() -> None:
     assert MIRA.canonical_description in reference_prompt(MIRA)
+
+
+def test_concept_phrase_is_a_short_visual_noun_phrase() -> None:
+    from frameteller.application.prompts import concept_phrase
+    from frameteller.domain import Character
+
+    girl = Character("mira", "Mira", "young girl about 8 years old, small slim build, round face")
+    assert concept_phrase(girl) == "young girl about 8 years old"
+    cat = Character("cat", "Grey Cat", "tiny small kitten with short soft grey fur and white paws and amber eyes")
+    assert concept_phrase(cat) == "tiny small kitten with short soft grey fur"
+    assert concept_phrase(Character("x", "Owl", "   ,   ")) == "Owl"

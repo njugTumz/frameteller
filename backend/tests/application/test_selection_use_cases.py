@@ -33,36 +33,42 @@ def click(w: World) -> SegmentObjectAtPoint:
 
 
 async def test_pre_segment_caches_each_character_with_a_stable_id(world: World) -> None:
-    world.sam.by_concept = {"Mira": MIRA_SEGMENT, "Grey Cat": CAT_SEGMENT}
+    world.sam.by_concept = {"8-year-old girl": MIRA_SEGMENT, "small grey kitten with glowing amber eyes": CAT_SEGMENT}
     await render(world)
     masks = await pre_segment(world).execute("p1", "s2", revision=1)
 
     assert [m.id for m in masks] == [character_mask_id("mira"), character_mask_id("cat")]
     assert set(world.project().panel("s2").masks) == {"character:mira", "character:cat"}
-    assert world.sam.concept_calls == ["Mira", "Grey Cat"]
+    assert world.sam.concept_calls == [
+        "8-year-old girl",
+        "small grey kitten with glowing amber eyes",
+    ]  # noun phrases, not names
     assert sum(c for _, c, w in world.budget.charges if w.startswith("pre-segment")) == pytest.approx(
         2 * costs.SAM_IMAGE
     )
 
 
 async def test_pre_segment_skips_stale_revisions_and_cached_masks(world: World) -> None:
-    world.sam.by_concept = {"Mira": MIRA_SEGMENT, "Grey Cat": CAT_SEGMENT}
+    world.sam.by_concept = {"8-year-old girl": MIRA_SEGMENT, "small grey kitten with glowing amber eyes": CAT_SEGMENT}
     await render(world)
     assert await pre_segment(world).execute("p1", "s2", revision=0) == []
     await pre_segment(world).execute("p1", "s2", revision=1)
     assert await pre_segment(world).execute("p1", "s2", revision=1) == []
-    assert world.sam.concept_calls == ["Mira", "Grey Cat"]
+    assert world.sam.concept_calls == [
+        "8-year-old girl",
+        "small grey kitten with glowing amber eyes",
+    ]  # noun phrases, not names
 
 
 async def test_pre_segment_tolerates_a_character_sam_cannot_find(world: World) -> None:
-    world.sam.by_concept = {"Mira": MIRA_SEGMENT}
+    world.sam.by_concept = {"8-year-old girl": MIRA_SEGMENT}
     await render(world)
     masks = await pre_segment(world).execute("p1", "s2", revision=1)
     assert [m.id for m in masks] == ["character:mira"]
 
 
 async def test_cached_mask_hit_skips_the_segmentation_port(world: World) -> None:
-    world.sam.by_concept = {"Mira": MIRA_SEGMENT, "Grey Cat": CAT_SEGMENT}
+    world.sam.by_concept = {"8-year-old girl": MIRA_SEGMENT, "small grey kitten with glowing amber eyes": CAT_SEGMENT}
     await render(world)
     await pre_segment(world).execute("p1", "s2", revision=1)
     charges_before = len(world.budget.charges)
@@ -88,7 +94,7 @@ async def test_click_miss_calls_sam_once_then_hits_the_cache(world: World) -> No
 
 
 async def test_preview_click_is_converted_to_media_pixels_before_the_cache_check(world: World) -> None:
-    world.sam.by_concept = {"Mira": MIRA_SEGMENT}
+    world.sam.by_concept = {"8-year-old girl": MIRA_SEGMENT}
     await render(world)  # 1920x1280 panel
     await pre_segment(world).execute("p1", "s2", revision=1)
     # (75, 100) on a 960x640 preview is (150, 200) in the panel: inside Mira
@@ -109,7 +115,7 @@ async def test_click_needs_a_ready_panel(world: World) -> None:
 
 
 async def test_move_object_records_a_canvas_transform_without_model_calls(world: World) -> None:
-    world.sam.by_concept = {"Mira": MIRA_SEGMENT}
+    world.sam.by_concept = {"8-year-old girl": MIRA_SEGMENT}
     await render(world)
     await pre_segment(world).execute("p1", "s2", revision=1)
     calls = world.images.calls
