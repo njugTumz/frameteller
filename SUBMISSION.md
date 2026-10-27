@@ -82,6 +82,6 @@ TODO: paste from [FEEDBACK.md](FEEDBACK.md) (Fireworks, Modal, Baseten).
 
 ## Links
 
-- Repository: TODO (public GitHub URL)
+- Repository: https://github.com/njugTumz/frameteller
 - Production: TODO
-- Marketing page: TODO
+- Marketing page: https://gentle-stone-032869c0f.3.azurestaticapps.net

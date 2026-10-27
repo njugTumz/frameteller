@@ -9,7 +9,7 @@ Built for indie filmmakers, YouTubers, animators, comic and game writers, and ad
 > Built for the Meta Global AI Developer Hackathon (Indie Developer track, "Build for Your World").
 
 - **Live demo:** TODO (production URL)
-- **Marketing page and build log:** TODO (marketing URL)
+- **Marketing page and build log:** https://gentle-stone-032869c0f.3.azurestaticapps.net
 - **Demo video:** TODO
 
 ## How it works
