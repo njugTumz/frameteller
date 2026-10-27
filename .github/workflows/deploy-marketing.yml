@@ -1,0 +1,43 @@
+name: Deploy marketing page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "marketing/**"
+      - ".github/workflows/deploy-marketing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-marketing
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Azure Static Web Apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate JSON files
+        run: |
+          for f in marketing/updates.json marketing/staticwebapp.config.json; do
+            python3 -m json.tool "$f" > /dev/null || { echo "::error file=$f::Invalid JSON"; exit 1; }
+          done
+
+      - name: Deploy marketing/
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_MARKETING }}
+          action: upload
+          app_location: marketing
+          output_location: ""
+          skip_app_build: true
+          skip_api_build: true
