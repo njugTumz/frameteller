@@ -1,0 +1,50 @@
+"""Prompt builders. Pure functions so they can be unit-tested without a model."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from frameteller.domain import Character, Shot
+
+PANEL_SIZE = "1536x1024"  # 3:2, the widest the Responses image tool accepts (ADR 0003)
+REFERENCE_SIZE = "1024x1024"
+PANEL_STYLE = "clean pencil storyboard sketch, light grey wash, one accent colour"
+
+
+def reference_prompt(c: Character) -> str:
+    return (
+        f"Character reference sheet for an original character named {c.name}: {c.canonical_description}. "
+        "Show the same character twice side by side: a front view and a three-quarter view, full body, "
+        "neutral standing pose, identical outfit and colours in both views. Plain light grey background, "
+        "no text, no props, no scenery."
+    )
+
+
+def panel_prompt(shot: Shot, cast: Sequence[Character]) -> str:
+    who = "; ".join(f"{c.name}: {c.canonical_description}" for c in cast)
+    lines = [
+        f"Storyboard panel, {shot.framing.value.replace('_', ' ')} framing. Keep key action in the central 16:9 band.",
+        f"Setting: {shot.setting}. Action: {shot.action}.",
+    ]
+    if who:
+        lines.append(f"Characters: {who}. Draw each exactly as in the attached reference sheets.")
+    lines.append(f"Style: {PANEL_STYLE}. No text, captions or panel borders.")
+    return " ".join(lines)
+
+
+def edit_prompt(change: str, target: str, parts: Sequence[str]) -> str:
+    """Appearance edit that names every affected part, so none is left behind (ADR 0005)."""
+    change, target = change.strip().rstrip("."), target.strip()
+    if not change or not target:
+        raise ValueError("an edit needs a change and a target")
+    named = [p.strip() for p in parts if p.strip()]
+    scope = f"the {target}" + (f", including {_join(named)}" if named else "")
+    return (
+        f"Edit {scope}: {change}. Apply the change to every part listed. "
+        "Keep the composition, pose, size, position and everything else in the panel identical."
+    )
+
+
+def _join(items: Sequence[str]) -> str:
+    quoted = [f"the {i}" for i in items]
+    return quoted[0] if len(quoted) == 1 else ", ".join(quoted[:-1]) + " and " + quoted[-1]
