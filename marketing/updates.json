@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-27T13:22:51Z",
+  "updated_at": "2026-10-27T13:45:51Z",
   "items": [
+    {
+      "date": "2026-10-27",
+      "status": "shipped",
+      "title": "Mapped the Meta APIs",
+      "body": "Read the docs for live speech, image editing and segmentation, and confirmed the pipeline works end to end on paper."
+    },
     {
       "date": "2026-10-27",
       "status": "shipped",
