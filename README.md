@@ -35,6 +35,31 @@ The backend follows Clean Architecture: `domain` ← `application` ← `infrastr
 
 See [docs/architecture.md](docs/architecture.md) and the decision records in [docs/adr/](docs/adr/).
 
+## Deployment
+
+**Staging:** https://ca-frameteller-staging.orangeplant-e171b35e.eastus2.azurecontainerapps.io (`/healthz`, `/readyz`, `/docs`, live session at `wss://…/ws/projects/{id}/session`)
+
+```
+GitHub push to main ──► deploy-staging.yml
+                         ├─ build backend image ──► ghcr.io/njugtumz/frameteller-backend:<sha> (public)
+                         └─ OIDC login ──► Bicep what-if ──► deploy infra/main.bicep (image + key) ──► check /healthz, /readyz
+
+rg-frameteller-staging (eastus2, tags project=frameteller env=staging)
+  ca-frameteller-staging         Container App: HTTPS + WebSocket ingress, 0–1 replicas (ADR 0009),
+   │  system-assigned identity    probes on /healthz and /readyz, MODEL_API_KEY as a Container App secret
+   │  ──Storage Blob Data Contributor──►
+  stftstag…                      Storage account, identity-only access: media/ (30-day lifecycle in staging), projects/
+  cae-frameteller-staging        Container Apps environment (consumption) ──► log-frameteller-staging (Log Analytics)
+  appi-frameteller-staging       Application Insights (workspace-based)
+  budget-frameteller-staging     USD 20/month, alerts at 80% actual and 100% forecast
+```
+
+- **Infrastructure as code:** everything except the resource group and the budget is in [`infra/`](infra/): `main.bicep`, `modules/`, and `parameters/{staging,production}.bicepparam`. Production stays unused until staging is proven.
+- **Auth:** GitHub Actions signs in to Azure with an Entra app that has a federated credential for this repo's `staging` environment. There is no client secret. Its roles are Contributor on the resource group only, and the right to assign only Storage Blob Data Contributor there.
+- **Configuration:** `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` are environment variables. `MODEL_API_KEY` is an environment secret, passed to Bicep from the job's environment and never written in a file.
+- **Storage:** the backend uses `STORAGE_BACKEND=blob` in Azure. Projects are one JSON blob each, with ETag concurrency; spend is kept in append blobs. Locally the default is files under `backend/.data/`.
+- **Smoke test against staging:** `python scripts/smoke_local.py --base <staging URL> --beats --ledger none`. Spend is in the `model call` log lines in Log Analytics.
+
 ## Local setup
 
 Backend (Python 3.12, pip 25.1 or newer):
@@ -111,6 +136,8 @@ Everything in this repository was built during the event. The commit history is 
 - [x] Backend domain and application layers with tests, import contracts and CI
 - [x] Meta model adapters (realtime voice, Spark director, Muse Image, SAM 3.1) with contract fixtures recorded from real calls
 - [x] FastAPI interface: REST, live voice session WebSocket, health probes, rate limiting, OpenAPI export, Docker image
+- [x] Narrator beats and transcript corrections on the live session ([ADR 0008](docs/adr/0008-reliable-beats.md))
+- [x] Azure staging: Blob Storage adapters, Bicep, OIDC deploy pipeline, live at the staging URL above
 - [ ] TODO: list features as they ship
 
 ## License
