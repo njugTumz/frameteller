@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-27T16:09:54Z",
+  "updated_at": "2026-10-27T16:38:25Z",
   "items": [
+    {
+      "date": "2026-10-27",
+      "status": "shipped",
+      "title": "Connected to Meta's models",
+      "body": "The backend now talks to all four Meta models it needs, listening, directing, drawing and selecting, and each one passed a live test against the real service."
+    },
     {
       "date": "2026-10-27",
       "status": "building",
