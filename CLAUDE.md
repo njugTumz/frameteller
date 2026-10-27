@@ -101,31 +101,65 @@ Stage 1 pass/fail → Stage 2 scored 0–10 per category → Stage 3 top 5 per t
 
 ## 5. Meta models we use
 
-Base URL `https://api.meta.ai/v1`, auth `Authorization: Bearer $MODEL_API_KEY`. Model API is OpenAI-SDK compatible: use the `openai` Python SDK with `base_url` set. Prices below are from the console; chat prices are assumed per 1M tokens.
+Base URL `https://api.meta.ai/v1`, auth `Authorization: Bearer $MODEL_API_KEY` on HTTP endpoints (realtime ASR differs, see below). Keys start with `LLM_`. Model API is OpenAI-SDK compatible: use the `openai` Python SDK with `base_url="https://api.meta.ai/v1"` and **pass `api_key` explicitly** from settings; the SDK does not read `MODEL_API_KEY` on its own. Prices below are from the console; chat prices are assumed per 1M tokens.
 
 | Role in Frameteller | Model ID | Endpoint | Cost |
 |---|---|---|---|
-| Hear (live transcript) | `muse-voice-transcribe-1.0` | `wss://api.meta.ai/v1/asr/realtime` (live), `POST /v1/asr/transcribe` (files) | $0.18 / hour |
+| Hear (live transcript) | `muse-voice-transcribe-1.0` | `wss://api.meta.ai/v1/asr/realtime` (live), `POST /v1/asr/transcribe` (files) | $0.18 / hour of audio, billed per whole second processed |
 | Direct (shot list, edit routing) | `muse-spark-1.3` | `POST /v1/responses` (structured output, tool calls) | $1.25 in / $0.15 cached / $4.25 out |
 | Direct, cheap dev mode | `muse-spark-1.3-contributor` | same | $0.10 / $0.002 / $0.20 — select countries only; inputs/outputs used for training. **Dev and synthetic data only, never user data.** |
-| Draw | `muse-image-1.0` | `/v1/images/generations`, `/v1/images/edits`, multi-turn via Responses API | $0.01 / image |
-| Select objects | `sam-3.1` | `POST /v1/responses`, `POST /v1/files` | $2.50 / 1K images, $0.20 / 1K video frames |
+| Draw | `muse-image-1.0` | `/v1/images/generations`, `/v1/images/edits`, multi-turn via Responses API | flat $0.01 / generated image |
+| Select objects | `sam-3.1` | `POST /v1/responses` (streaming), `POST /v1/files` | $2.50 / 1K images, $0.20 / 1K video frames |
 | Optional heavy reasoning | `muse-wonder-1.0` | `POST /v1/responses` | $4 / $0.20 / $20 — use sparingly |
 | Optional open-weight | Muse Glimmer (30B, Apache 2.0, single GPU) | self-hosted (vLLM / llama.cpp) on Modal or Baseten | partner credits |
 
 Not used: Muse Wonder Full (Muse Code subscription only), Muse Spark 1.1/1.2 (same price as 1.3, older).
 
 ### Facts and limits to respect
-- Voice Transcribe returns **turn-level timestamps, not word-level**. Animatic timing is per turn.
-- Muse Image returns base64 or a **signed URL**: persist every image to Blob Storage immediately; never store the signed URL as the source of truth.
+
+**General**
 - Prompt caching: keep the system prompt and character bible as a **stable prefix** at the start of every Spark request.
+- **Never send audio to Spark.** Audio input to `muse-spark-1.3` is degraded per Meta's docs; all speech goes through Voice Transcribe.
+- Files API: **always set `expires_after`** (`anchor: "created_at"`, `seconds` 3600–2592000) on uploads. Files otherwise never expire and count toward the team storage cap. Delete files we no longer need.
 - Budget: $150 Meta credits per person. Spend limit set on the Billing page.
 
+**Voice Transcribe (`muse-voice-transcribe-1.0`)**
+- Realtime handshake: auth goes in the **first JSON frame** as `authorization.accessToken = "Bearer <key>"`, sent within 10 s of connecting. The HTTP `Authorization` header is ignored. Wait for the `{sessionId}` acknowledgement before sending audio.
+- Handshake also sets `keywords` (character and place names) and `languageBias`. Neither can change mid-session.
+- Audio: raw PCM, signed 16-bit little-endian, mono. Prefer `audioEncoding: PCM_24KHZ` (48,000 bytes/s); `PCM_16KHZ` also works. Send as binary frames **paced at real time** (the server rejects streams that run ahead).
+- End input with `{"type":"endStream"}` and keep reading until close code 1000. Max session 60 minutes, no resume token.
+- Narration uses mode `ENDPOINTING`:
+  - Partial `transcript` events use `partialMode: CUMULATIVE`: **replace** the previous partial, never append. Partials carry no `turnId`; they belong to the most recent `speechStart`.
+  - `speechComplete` per `turnId` carries the cleaned-up final text. Key all turn state on `turnId`; turns can overlap.
+  - Panel timing comes from `audioProcessedMs` on `speechStart` and `speechEnd`. Timestamps are **turn-level, not word-level**; animatic timing is per turn.
+  - Ignore unknown event types.
+- Co-direction uses mode `DIARIZATION`: adds `speaker` events with session-scoped labels (`A`, `B`), one per turn. Not tuned for low latency. **Mode is fixed per session**, so co-direction is chosen before recording starts.
+- Fallback: `POST /v1/asr/transcribe`, multipart with a `request` JSON part and an `audio` WAV part (mono, 16-bit PCM, 16 or 24 kHz; max 32 MB and 10 minutes). Returns `transcript` plus `turns[]` with `turnId`, `startMs`, `endMs`, `transcript`, `speaker`. Handle 429 with exponential backoff.
+
+**Muse Image (`muse-image-1.0`)**
+- Output is **base64**, never a URL: `image_generation_call.result` on the Responses API, `b64_json` on the images endpoints. Default format webp. Persist every image to Blob Storage immediately.
+- Flat $0.01 per generated image regardless of `reasoning_strength` or tool use. Usage token counts are informational, not billed.
+- Panels use `size: "1792x1024"`. This sets the aspect ratio only; output resolution is fixed by the model.
+- On the Responses API, the only allowed tool for image models is `image_generation`:
+  `tools=[{"type":"image_generation","enable_image_search":false,"enable_web_search":false,"enable_shell":false,"reasoning_strength":"low"|"high","size":"1792x1024"}]` (`low` for drafts, `high` for finals).
+- **`enable_image_search` must stay `false`** so renders never pull in real people's likenesses or copyrighted designs (hackathon rights rule).
+- Multi-turn edits chain with `previous_response_id`; send only the change.
+- Character consistency: pass character reference sheets as `input_image` parts inside a `{"role":"user","content":[...]}` message on Responses, or as `images[]` (1–10 items, each `image_url` or `file_id`) on `POST /v1/images/edits`.
+- **No seed parameter** (an unknown field returns HTTP 400). Consistency comes only from references.
+- **Masked edits are not supported: never send a `mask` parameter.** Targeted edit = whole-panel edit with a prompt naming the SAM-selected object. Move, swap and delete = we composite SAM cut-outs ourselves on the canvas.
+
+**SAM (`sam-3.1`)**
+- Called via the Responses API, streaming. The text part holds **either** a short noun phrase **or** box/point prompts, never both.
+- Click-to-select = point prompt `<0f>1<|point;x=..;y=..;w=..;h=..|>`, with coordinates converted from preview pixels to media pixels (scale, round down, clamp). Negative points are prefixed with `-`. One box per object per frame.
+- Output is special-token text. **Parse it only with the official libraries**, never a hand-written parser: `meta_sam_parser` (Python ≥ 3.10, zero dependencies) and `@meta-sam/parser` (npm, ESM only, Node ≥ 20.17). Masks are base85 run-length encoded and decoded by these libraries.
+
 ### Verify on day 1 (do not assume)
-- [ ] Does `/v1/images/edits` accept a mask? If yes, SAM masks drive targeted edits. If no, fall back to region-described edit prompts.
+- [x] ~~Does `/v1/images/edits` accept a mask?~~ **No.** Targeted edits are whole-panel prompt edits naming the SAM-selected object; move/swap/delete are canvas composites.
+- [x] ~~Panel aspect ratio~~ Set via `size: "1792x1024"`.
+- [x] ~~Realtime ASR audio format and session limits~~ PCM s16le mono, 24 kHz preferred, real-time pacing, 60-minute sessions, no resume.
 - [ ] How well do reference images hold a character across 6+ panels? Measure before building UI.
-- [ ] Realtime ASR audio format (sample rate, encoding, chunk size) and session limits.
 - [ ] Rate limits per model on our account.
+- [ ] Retention period for `previous_response_id` (how long a multi-turn edit chain stays resumable).
 
 Docs sections worth reading: Quickstart, Capabilities (Speech to text, Image generation, Media segmentation, Structured output, Prompt caching, Tool calling), Protocols, Agent guides, Get unblocked, Pricing and rate limits, API reference.
 
@@ -196,7 +230,7 @@ frontend/src/
 - **Typed contracts everywhere.** Pydantic models for every API boundary and every LLM structured output; validate model output and retry once with the validation error on failure.
 - **Async jobs for slow work.** Image generation, segmentation and export run as background jobs (`JobQueuePort`) with status pushed to the client over WebSocket. Never block a request on image generation.
 - **Idempotency.** Jobs carry an idempotency key (project + shot + revision) so retries never double-charge credits.
-- **Resilience.** Every external call has a timeout, bounded retries with exponential backoff and jitter, and a clear error mapped to a user-facing message. Circuit-break a model that keeps failing; degrade gracefully (e.g. no-mask edits if mask edits fail).
+- **Resilience.** Every external call has a timeout, bounded retries with exponential backoff and jitter, and a clear error mapped to a user-facing message. Circuit-break a model that keeps failing; degrade gracefully (e.g. draft-quality renders if high-reasoning renders keep failing).
 - **Cost guardrails.** Per-project and per-day budget counters in the application layer; SAM on video samples at 2–5 fps; Wonder only behind an explicit flag; cache stable prompt prefixes.
 - **12-factor config.** All config from environment variables via a settings class. Nothing environment-specific in code.
 - **Persistence.** Media and project documents in Azure Blob Storage behind `MediaStoragePort` / `ProjectRepository`. Container disk is ephemeral; never rely on it.
@@ -267,7 +301,7 @@ The repo is public from day one and judges read the commit history.
 | Day | Goal |
 |---|---|
 | Tue Oct 27 | Repo, licence, CI, Azure skeleton. Marketing page live with countdown. First X post. |
-| Wed Oct 28 | Spikes in plain scripts: voice → shot JSON; character consistency across 6 panels; SAM mask → edit. Decide fallbacks. |
+| Wed Oct 28 | Spikes in plain scripts: voice → shot JSON; character consistency across 6 panels; SAM point select → prompt edit and canvas composite. Decide fallbacks. |
 | Thu Oct 29 – Fri Oct 30 | Domain + use cases + adapters; storyboard UI; live mic streaming. Staging up. |
 | Sat Oct 31 – Sun Nov 1 | Voice edits, animatic export, hardening, Playwright smoke. |
 | **Mon Nov 2, 9 PM** | **Public live demo on production. Countdown hits zero. Launch post on X.** |
