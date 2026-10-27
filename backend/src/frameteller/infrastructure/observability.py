@@ -62,8 +62,9 @@ def configure_logging(level: str = "INFO") -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level.upper())
-    for noisy in ("httpx", "httpx2", "httpcore", "openai", "websockets"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)  # their debug logs can include request bodies
+    # Their debug logs can include request bodies; the Azure SDK logs every blob request and header at INFO.
+    for noisy in ("httpx", "httpx2", "httpcore", "openai", "websockets", "azure"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 @contextmanager

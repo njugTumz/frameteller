@@ -52,3 +52,13 @@ def test_exceptions_are_redacted() -> None:
 
         record = logging.makeLogRecord({"msg": "boom", "levelname": "ERROR", "exc_info": sys.exc_info()})
     assert "abcdefghijklmnop" not in JsonFormatter().format(record)
+
+
+def test_azure_sdk_request_logs_are_quiet() -> None:
+    import logging
+
+    from frameteller.infrastructure.observability import configure_logging
+
+    configure_logging("INFO")
+    assert not logging.getLogger("azure.core.pipeline.policies.http_logging_policy").isEnabledFor(logging.INFO)
+    assert logging.getLogger("frameteller.models").isEnabledFor(logging.INFO)
