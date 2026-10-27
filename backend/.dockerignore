@@ -1,0 +1,18 @@
+# Only pyproject.toml and src/ are needed. Secrets, local data and test media never enter the image.
+**/.env
+**/.env.*
+.data/
+.venv/
+tests/
+scripts/
+**/__pycache__/
+**/*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.wav
+*.webp
+*.png
+openapi.json
