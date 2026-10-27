@@ -7,6 +7,10 @@ Creates a project, streams spikes/fixtures/narration.wav over the session WebSoc
 prints events as they arrive, approves the proposed cast, renders draft panels for shots 1-2, clicks once
 on panel 1, and prints latency per step and spend (read from the server's spend ledger for this project).
 Starts nothing itself and never reads .env: the server holds the key.
+
+--beats sends {"type": "beat"} at the start of each of the recording's six paragraphs (ADR 0008), at the onsets
+measured in docs/spikes/2026-10-28-findings.md, so each paragraph becomes its own stretch of shots.
+--ledger none skips the spend report (for a remote backend, read spend from its logs instead).
 """
 
 from __future__ import annotations
@@ -29,6 +33,8 @@ ROOT = Path(__file__).resolve().parents[2]
 NARRATION = ROOT / "spikes" / "fixtures" / "narration.wav"
 FRAME_MS = 80
 BYTES_PER_MS = 48
+# Paragraph onsets in narration.wav, 200 ms before speech resumes after each pause (findings doc, ADR 0008).
+BEATS_MS = (5500, 15800, 21800, 28400, 33600, 40500)
 T0 = time.perf_counter()
 
 
@@ -108,12 +114,12 @@ def jobs_done(kind: str, keys: set[str]) -> Any:
     return done
 
 
-async def main(base: str, data_dir: Path) -> int:
+async def main(base: str, data_dir: Path | None, beats: bool) -> int:
     timings: dict[str, float] = {}
     with wave.open(io.BytesIO(NARRATION.read_bytes())) as w:
         assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 24_000), "need mono 16-bit 24 kHz"
         pcm = w.readframes(w.getnframes())
-    print(f"narration {len(pcm) / 48_000:.1f} s; backend {base}")
+    print(f"narration {len(pcm) / 48_000:.1f} s; backend {base}; beats {'at ' + str(BEATS_MS) if beats else 'off'}")
 
     status, health = rest(base, "GET", "/readyz")
     print(f"{stamp()}  readyz {status} {health}")
@@ -130,8 +136,13 @@ async def main(base: str, data_dir: Path) -> int:
 
         started = time.perf_counter()
         step = FRAME_MS * BYTES_PER_MS
+        pending = list(BEATS_MS) if beats else []
         for i, offset in enumerate(range(0, len(pcm), step)):
             await asyncio.sleep(max(0.0, started + i * FRAME_MS / 1000 - time.perf_counter()))
+            if pending and offset // BYTES_PER_MS >= pending[0]:
+                await ws.send(json.dumps({"type": "beat"}))
+                print(f"{stamp()}  -> beat at {offset // BYTES_PER_MS} ms of audio", flush=True)
+                pending.pop(0)
             await ws.send(pcm[offset : offset + step])
         await ws.send(json.dumps({"type": "end"}))
         sent_at = time.perf_counter()
@@ -153,7 +164,11 @@ async def main(base: str, data_dir: Path) -> int:
         for n in (1, 2):
             status, ticket = rest(base, "POST", f"/projects/{pid}/shots/{n}/panel", {"quality": "draft"})
             print(f"{stamp()}  render shot {n}: {status} {ticket}")
-            tickets.append(ticket)
+            if status == 202:
+                tickets.append(ticket)
+        if not tickets:
+            print("no panel could be queued; stopping")
+            return 1
         await session.wait_for(jobs_done("generate_panel", {tk["key"] for tk in tickets}), 240)
         timings["draft panels 1-2 (parallel)"] = time.perf_counter() - t
 
@@ -191,11 +206,19 @@ async def main(base: str, data_dir: Path) -> int:
     shots = [e for e in session.events if e["type"] == "shot.created"]
     turns = [e for e in session.events if e["type"] == "turn.completed"]
     print(f"\n{len(turns)} turns, {len(shots)} shots, {session.partials} partials, project {pid}")
+    for e in turns:
+        t = e["turn"]
+        print(f"  turn {t['id']:<12} {t['start_ms']:>6}-{t['end_ms']:<6} ms  {t['text'][:70]!r}")
+    for e in shots:
+        sh = e["shot"]
+        print(f"  shot {sh['number']:<3} {sh['duration_ms']:>6} ms  {sh['framing']:<9} {sh['action'][:60]!r}")
     print("\nlatency")
     for name, seconds in timings.items():
         print(f"  {name:<42} {seconds:6.1f} s")
     print(f"  {'total wall time':<42} {time.perf_counter() - T0:6.1f} s")
 
+    if data_dir is None:
+        return 0
     by_model: dict[str, list[float]] = defaultdict(list)
     ledger = data_dir / "spend.jsonl"
     rows = [json.loads(line) for line in ledger.read_text().splitlines()] if ledger.exists() else []
@@ -212,6 +235,9 @@ async def main(base: str, data_dir: Path) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--base", default="http://127.0.0.1:8000")
-    parser.add_argument("--data-dir", type=Path, default=Path(__file__).resolve().parents[1] / ".data")
+    parser.add_argument("--data-dir", default=str(Path(__file__).resolve().parents[1] / ".data"))
+    parser.add_argument("--ledger", choices=["local", "none"], default="local")
+    parser.add_argument("--beats", action="store_true", help="send a beat at each paragraph start")
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.base.rstrip("/"), args.data_dir)))
+    data_dir = Path(args.data_dir) if args.ledger == "local" else None
+    sys.exit(asyncio.run(main(args.base.rstrip("/"), data_dir, args.beats)))
