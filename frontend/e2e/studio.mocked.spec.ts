@@ -21,13 +21,18 @@ function shot(n: number, panel: Json | null = null): Json {
   }
 }
 
-const panel = (n: number) => ({
+const panel = (n: number, over: Json = {}) => ({
   revision: 1,
+  shown_revision: 1,
   status: 'ready',
   image_url: `/media/projects/p1/panels/s${n}/r1/image`,
+  base_image_url: `/media/projects/p1/panels/s${n}/r1/image`,
   width: 1920,
   height: 1280,
   masks: [],
+  layers: [],
+  outdated: false,
+  ...over,
 })
 
 const coat = { id: 'object:coat', label: 'yellow raincoat', character_id: null, box: { left: 850, top: 600, right: 1150, bottom: 930 }, cutout_url: '/media/projects/p1/m/coat.png' }
@@ -41,6 +46,9 @@ async function fakeBackend(page: Page) {
     cast: { status: state.cast, characters: [{ id: 'mira', name: 'Mira', description: 'a girl in a yellow raincoat with a red scarf', reference_url: '/media/projects/p1/characters/mira/reference' }] },
     turns: [],
     shots: state.shots,
+    narrations: [],
+    animatic: null,
+    share_token: null,
   })
 
   await page.route(`${API}/**`, async (route) => {
@@ -165,4 +173,214 @@ test('a blocked microphone says how to allow it', async ({ browser }) => {
   await expect(page.getByRole('alert')).toContainText('Allow the microphone to start telling.')
   await expect(page.getByRole('alert')).toContainText('address bar')
   await context.close()
+})
+
+/** A told story with three characters, two drawn shots and a vague "Ember" the narration later reveals. */
+async function storyBackend(page: Page) {
+  const ref = (id: string) => `/media/projects/p1/characters/${id}/reference`
+  const state = {
+    characters: [
+      { id: 'ada', name: 'Ada', description: 'elderly woman with long silver hair', reference_url: ref('ada') },
+      { id: 'pip', name: 'Pip', description: 'tiny young fox kit with reddish-brown fur', reference_url: ref('pip') },
+      { id: 'ember', name: 'Ember', description: 'something small and orange', reference_url: ref('ember') },
+    ] as Json[],
+    shots: [
+      { ...shot(1, panel(1)), character_ids: ['ada'], action: 'Ada climbs the lighthouse stairs.' },
+      { ...shot(2, panel(2)), character_ids: ['ember'], action: 'Something small and orange moves in the reeds.' },
+    ] as Json[],
+    animatic: null as Json | null,
+    shareToken: null as string | null,
+    narrations: [{ session: 't', duration_ms: 10400, url: '/media/projects/p1/narration/t.wav' }] as Json[],
+    posted: [] as { method: string; path: string; body: Json | null }[],
+    ws: null as WebSocketRoute | null,
+  }
+  const project = () => ({
+    id: 'p1',
+    title: 'The Lighthouse',
+    style: 'pencil',
+    cast: { status: 'approved', characters: state.characters },
+    turns: [],
+    shots: state.shots,
+    narrations: state.narrations,
+    animatic: state.animatic,
+    share_token: state.shareToken,
+  })
+  const send = (e: Json) => state.ws?.send(JSON.stringify(e))
+  const recast = (from: string, to: string | null) => {
+    state.shots = state.shots.map((s) => {
+      const ids = s.character_ids as string[]
+      if (!ids.includes(from)) return s
+      const next = to ? ids.map((c) => (c === from ? to : c)) : ids.filter((c) => c !== from)
+      return { ...s, character_ids: [...new Set(next)], panel: { ...(s.panel as Json), outdated: true } }
+    })
+  }
+
+  await page.route(`${API}/**`, async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname
+    const method = req.method()
+    const body = (method === 'GET' ? null : req.postDataJSON?.()) as Json | null
+    if (method !== 'GET') state.posted.push({ method, path, body })
+    const json = (status: number, b: unknown) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) })
+    const character = /^\/projects\/p1\/cast\/(\w+)(\/merge)?$/.exec(path)
+    if (path === '/healthz') return json(200, { status: 'ok' })
+    if (path === '/projects/p1' && method === 'GET') return json(200, project())
+    if (character && method === 'PATCH') {
+      state.characters = state.characters.map((c) => (c.id === character[1] ? { ...c, name: body?.name } : c))
+      return json(200, project())
+    }
+    if (character && method === 'DELETE') {
+      state.characters = state.characters.filter((c) => c.id !== character[1])
+      recast(String(character[1]), null)
+      return json(200, project())
+    }
+    if (character?.[2]) {
+      state.characters = state.characters.filter((c) => c.id !== character[1])
+      recast(String(character[1]), String(body?.into))
+      return json(200, project())
+    }
+    if (path === '/projects/p1/shots/1/panel/select') return json(200, { cached: false, mask: coat })
+    if (path === '/projects/p1/shots/1/panel/layers') {
+      setTimeout(() => {
+        state.shots = state.shots.map((s) =>
+          s.number === 1 ? { ...s, panel: panel(1, { shown_revision: 2, image_url: '/media/projects/p1/panels/s1/r1/composites/c.webp', layers: [{ ...body, deleted: false }] }) } : s,
+        )
+        send({ type: 'job.updated', kind: 'compose_panel', key: 'c1', status: 'succeeded', shot_id: 's1', revision: 1, message: null, progress: null })
+      }, 1500)
+      return json(202, { kind: 'compose_panel', key: 'c1', enqueued: true, shot_id: 's1', revision: 1 })
+    }
+    if (path === '/projects/p1/exports/animatic') {
+      setTimeout(() => send({ type: 'job.updated', kind: 'export_animatic', key: 'e1', status: 'running', shot_id: null, revision: null, message: null, progress: 0.5 }), 200)
+      setTimeout(() => {
+        state.animatic = { url: '/media/projects/p1/exports/animatic-1.mp4', duration_ms: 12400, subtitles: Boolean(body?.subtitles), voiced: true }
+        send({ type: 'job.updated', kind: 'export_animatic', key: 'e1', status: 'succeeded', shot_id: null, revision: null, message: null, progress: null })
+      }, 1200)
+      return json(202, { kind: 'export_animatic', key: 'e1', enqueued: true, shot_id: null, revision: null })
+    }
+    if (path === '/projects/p1/share' && method === 'POST') {
+      state.shareToken = 'tok123'
+      return json(200, { token: 'tok123', url: `${API}/s/tok123`, page_url: 'http://localhost:4173/s/tok123' })
+    }
+    if (path === '/projects/p1/share' && method === 'DELETE') {
+      state.shareToken = null
+      return route.fulfill({ status: 204 })
+    }
+    if (path === '/shares/tok123') {
+      if (!state.shareToken) return json(404, { error: { code: 'share_not_found', message: 'This link was turned off, or never existed.' } })
+      return json(200, {
+        title: 'The Lighthouse',
+        style: 'pencil',
+        shots: state.shots.map((s) => ({ number: s.number, framing: s.framing, action: s.action, dialogue: '', duration_ms: s.duration_ms, image_url: `/shares/tok123/panels/${s.number}` })),
+        animatic: state.animatic ? { url: '/shares/tok123/animatic', duration_ms: 12400 } : null,
+      })
+    }
+    if (path.endsWith('.mp4') || path.endsWith('/animatic')) return route.fulfill({ status: 200, contentType: 'video/mp4', body: '' })
+    if (path.startsWith('/media/') || path.startsWith('/shares/')) {
+      const svg = path.includes('/characters/') ? sheetSvg(path.split('/')[4] ?? '') : path.endsWith('coat.png') ? cutoutSvg : panelSvg(Number(/(?:s|panels\/)(\d+)/.exec(path)?.[1] ?? 1))
+      return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg })
+    }
+    return json(404, { error: { code: 'not_mocked', message: path } })
+  })
+
+  await page.routeWebSocket(/\/ws\/projects\/p1\/session$/, (ws) => {
+    state.ws = ws
+    ws.onMessage((message) => {
+      if (typeof message !== 'string') return
+      const m = JSON.parse(message) as Json
+      if ('mode' in m) {
+        send({ type: 'session.started', mode: m.mode })
+        setTimeout(() => send({ type: 'audio.silent', after_ms: 8000, level: 0.001 }), 300)
+      }
+      if (m.type === 'beat') {
+        // The reveal: "something small and orange" was Pip all along.
+        const revealed: Json = { ...(state.shots[1] as Json), character_ids: ['pip'], action: 'Pip, the fox kit, moves in the reeds.' }
+        state.shots = [state.shots[0] as Json, { ...revealed, panel: { ...(revealed.panel as Json), outdated: true } }]
+        state.characters = state.characters.filter((c) => c.id !== 'ember')
+        send({ type: 'transcript.partial', text: '' })
+        send({ type: 'shot.updated', shot: revealed })
+      }
+      if (m.type === 'end') send({ type: 'session.ended', turns: 0, shots: 0, heard: false })
+    })
+  })
+  return state
+}
+
+test('manage the cast, follow a reveal, hear the silence warning, move, export and share', async ({ page }) => {
+  const backend = await storyBackend(page)
+  await page.goto('/projects/p1')
+  const cards = page.getByTestId('character-card')
+  await expect(cards).toHaveCount(3)
+
+  // Rename: Ada becomes Ada Vell.
+  await cards.filter({ hasText: 'Ada' }).getByRole('button', { name: 'Rename' }).click()
+  await page.getByLabel('New name for Ada').fill('Ada Vell')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('heading', { name: 'Ada Vell' })).toBeVisible()
+  expect(backend.posted.at(-1)).toEqual({ method: 'PATCH', path: '/projects/p1/cast/ada', body: { name: 'Ada Vell' } })
+
+  // Silence warning, then a reveal: Ember turns out to be Pip.
+  await page.getByRole('button', { name: 'Start telling' }).click()
+  await expect(page.getByTestId('silence-notice')).toContainText('We can’t hear you')
+  await expect(page.getByTestId('silence-notice').locator('strong')).not.toBeEmpty()
+  await page.getByRole('button', { name: /next shot/i }).click()
+  const second = page.locator('[data-testid="shot-card"][data-shot="2"]')
+  await expect(second).toContainText('Pip, the fox kit, moves in the reeds.')
+  await expect(second).toHaveAttribute('data-outdated', 'true')
+  await expect(second.getByRole('button', { name: 'Draw again' })).toBeVisible()
+  await expect(cards).toHaveCount(2) // the guessed Ember left the cast
+  await page.getByRole('button', { name: 'Stop telling' }).click()
+  await expect(page.getByText('We didn’t hear anything. Check your microphone.')).toBeVisible()
+
+  // Merge Pip into Ada Vell (contrived, but it exercises the path), then remove her: shots keep their action.
+  await cards.filter({ hasText: 'Pip' }).getByRole('button', { name: 'Merge into…' }).click()
+  await page.getByLabel('Pip is really…').selectOption({ label: 'Ada Vell' })
+  await page.getByRole('button', { name: 'Merge', exact: true }).click()
+  await expect(cards).toHaveCount(1)
+  expect(backend.posted.at(-1)).toEqual({ method: 'POST', path: '/projects/p1/cast/pip/merge', body: { into: 'ada' } })
+  await expect(page.locator('[data-testid="shot-card"][data-shot="2"]')).toContainText('With Ada Vell')
+  await cards.getByRole('button', { name: 'Remove' }).click()
+  await page.getByRole('button', { name: 'Remove Ada Vell' }).click()
+  await expect(cards).toHaveCount(0)
+  await expect(page.locator('[data-testid="shot-card"][data-shot="1"]')).toContainText('Ada climbs the lighthouse stairs.')
+
+  // Move the selected raincoat: saved as a layer, composited on a clean plate.
+  await page.getByRole('button', { name: 'Edit the panel of shot 1' }).click()
+  const canvas = page.getByTestId('panel-canvas')
+  await expect(canvas.locator('canvas').first()).toBeVisible()
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('no canvas')
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.6)
+  await expect(page.getByTestId('selection-status')).toContainText('yellow raincoat')
+  await canvas.focus()
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect(page.getByText('Preparing the background…')).toBeVisible()
+  expect(backend.posted.find((p) => p.path.endsWith('/layers'))?.body).toEqual({ object_id: 'object:coat', dx: 50, dy: 0, scale: 1, deleted: false })
+  await expect(page.getByText('Preparing the background…')).toHaveCount(0, { timeout: 5000 })
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('img', { name: /^Shot 1:/ })).toHaveAttribute('src', /composites\/c\.webp$/)
+
+  // Export: progress, then an inline player and a download. The kept recording can be deleted.
+  await expect(page.getByTestId('recording-kept')).toBeVisible()
+  await page.getByLabel('Burn in subtitles').check()
+  await page.getByRole('button', { name: 'Export animatic' }).click()
+  await expect(page.getByText(/Rendering the animatic… 50%/)).toBeVisible()
+  await expect(page.getByTestId('animatic-player')).toBeVisible({ timeout: 5000 })
+  await expect(page.getByRole('link', { name: 'Download MP4' })).toHaveAttribute('href', /animatic-1\.mp4\?download=1$/)
+  await expect(page.getByRole('link', { name: 'Download storyboard PDF' })).toHaveAttribute('href', `${API}/projects/p1/exports/storyboard.pdf`)
+  expect(backend.posted.find((p) => p.path.endsWith('/exports/animatic'))?.body).toEqual({ subtitles: true })
+
+  // Share: a link that previews on X, a read-only page, then turned off.
+  await page.getByRole('button', { name: 'Create a share link' }).click()
+  await expect(page.getByLabel('Share link')).toHaveValue(`${API}/s/tok123`)
+  await page.goto('/s/tok123')
+  await expect(page.getByRole('heading', { name: 'The Lighthouse' })).toBeVisible()
+  await expect(page.getByTestId('shared-shot')).toHaveCount(2)
+  await expect(page.getByTestId('shared-animatic')).toBeVisible()
+  await page.goto('/projects/p1')
+  await page.getByRole('button', { name: 'Turn off the link' }).click()
+  await expect(page.getByRole('button', { name: 'Create a share link' })).toBeVisible()
+  await page.goto('/s/tok123')
+  await expect(page.getByText('This link was turned off, or never existed.')).toBeVisible()
+  await page.getByRole('button', { name: 'Make your own' }).click()
+  await expect(page).toHaveURL(/\/$/)
 })
