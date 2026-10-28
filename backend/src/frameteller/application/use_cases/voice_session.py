@@ -75,6 +75,10 @@ class _Heard:
         self.done += final if len(final) >= len(self.partial) else self.partial
         self.partial = []
 
+    def pending(self) -> str:
+        """The words heard since the last boundary: the live line the narrator sees."""
+        return " ".join((self.done + self.partial)[self.cursor :])
+
     def cut(self, at_ms: int) -> tuple[str, int, int]:
         """Close the stretch since the last boundary: (its text, start ms, end ms)."""
         words = self.done + self.partial
@@ -138,6 +142,7 @@ class RunVoiceSession:
             if text:
                 counts["beats"] += 1
                 await finish(TranscriptTurn(f"{tag}-b{counts['beats']}", text, start, end))
+                await self._events.publish(project_id, TranscriptUpdated(heard.pending()))
 
         async def close_beats_heard(processed_ms: int | None = None) -> None:
             """Close the waiting beats the transcript has caught up with (all of them when it has ended)."""
@@ -188,7 +193,7 @@ class RunVoiceSession:
             async for event in self._speech.stream(pcm(), options):
                 if isinstance(event, PartialTranscript):
                     heard.hear_partial(event.text)
-                    await self._events.publish(project_id, TranscriptUpdated(event.text))
+                    await self._events.publish(project_id, TranscriptUpdated(heard.pending()))
                 elif isinstance(event, AudioProgress):
                     await close_beats_heard(event.processed_ms)
                 elif isinstance(event, TurnEnded):

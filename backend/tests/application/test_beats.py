@@ -1,6 +1,6 @@
 """Beats, the duration split and transcript corrections (ADR 0008), with a speech fake scripted in step with audio."""
 
-from frameteller.application.events import SessionFailed, ShotCreated, ShotsReplaced, TurnFinished
+from frameteller.application.events import SessionFailed, ShotCreated, ShotsReplaced, TranscriptUpdated, TurnFinished
 from frameteller.application.ports import (
     AudioProgress,
     DirectedTurn,
@@ -103,6 +103,16 @@ async def test_beats_cut_shots_at_the_words_heard_so_far_and_the_audio_position(
     assert [s.duration_ms for s in s.shots()] == [3600, 5200, 2800]
     assert (ended.turns, ended.shots) == (3, 3)
     assert [e.turn.id for e in s.events.of(TurnFinished) if isinstance(e, TurnFinished)] == ["s1-b1", "s1-b2", "s1-b3"]
+    # The live line holds only the words not yet in a beat, so the UI never shows a word twice.
+    assert [e.text for e in s.events.of(TranscriptUpdated) if isinstance(e, TranscriptUpdated)] == [
+        "Night in the alley",
+        "Night in the alley tonight",
+        "",
+        "she hears a sound",
+        "",
+        "Close on the crate",
+        "",
+    ]
 
 
 async def test_a_later_speech_complete_never_directs_the_same_audio_twice() -> None:

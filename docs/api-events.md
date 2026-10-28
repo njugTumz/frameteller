@@ -30,7 +30,7 @@ Every server message is JSON with a `type`.
 | `type` | Fields | Meaning |
 |---|---|---|
 | `session.started` | `mode` | Start message accepted; send audio. |
-| `transcript.partial` | `text` | Cumulative text of the turn in progress. **Replace** the previous partial; never append. |
+| `transcript.partial` | `text` | The words heard since the last completed turn (with beats: since the last beat closed). **Replace** the previous partial; never append. It is sent again, often empty, when a beat closes, so a word never shows both in a `turn.completed` and in the partial. |
 | `turn.completed` | `turn: {id, text, start_ms, end_ms, speaker}` | A finished turn, sent to the director. With beats, there is one per beat; without beats, one per transcriber turn. `start_ms`/`end_ms` are positions in the audio and drive animatic timing. `speaker` is `null` in `narrate` mode. Ids are unique per session (`55a635ca-b2`, `55a635ca-0`). |
 | `shot.created` | `shot: {id, number, framing, character_ids, setting, action, dialogue, duration_ms, source_turn_ids, panel: null}` | The director turned a turn into a shot (one or more per turn). The shots of one turn share its time by word count, at least 1.5 s each, and add up to the turn. |
 | `shots.replaced` | `turn, removed_shot_ids, shots` | A correction was applied. `shots` (already renumbered) replace `removed_shot_ids` at the same place in the storyboard. Shots after them may have new numbers, so refresh numbering with `GET /projects/{id}`. Panels of removed shots are gone. |
