@@ -1,5 +1,5 @@
 import { MAX_KEYWORDS, type ServerEvent } from '../../../shared/events'
-import { micError, openMicrophone, type MicError, type Microphone } from '../audio/microphone'
+import { micError, openMicrophone, type MicError, type Microphone } from '../../../shared/audio/microphone'
 import type { ProblemKind, RecordingState, useRecordingStore } from '../store'
 import { SessionSocket, closeMessage, sessionUrl, type SocketFactory } from './sessionSocket'
 

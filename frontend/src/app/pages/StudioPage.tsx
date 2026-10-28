@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo } from 'react'
 import { castReadyFor, useCastStore } from '../../features/cast/store'
 import { Notices, ProblemNotice } from '../../features/recording/components/ProblemNotice'
 import { TellingControls } from '../../features/recording/components/TellingControls'
@@ -15,8 +15,12 @@ import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
 import { mediaUrl } from '../../shared/api/client'
 import type { Shot } from '../../shared/api/types'
 import { loadNames } from '../../shared/keywords'
+import { useEditorStore } from '../../features/panel-editor/store'
 import { CastZone } from '../studio/CastZone'
 import { dispatchEvent, projectLoaded, resetStudio } from '../studio/dispatch'
+
+// The editor brings react-konva; load it the first time a panel is opened.
+const EditorZone = lazy(() => import('../studio/EditorZone').then((m) => ({ default: m.EditorZone })))
 
 export function StudioPage({ projectId }: { projectId: string }) {
   const r = useRecordingStore()
@@ -31,6 +35,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
   const canDraw = useCallback((shot: Shot) => castReadyFor(cast, shot), [cast])
   useAutoDraft(projectId, canDraw)
   const draw = usePanelRender(projectId)
+  const editing = useEditorStore((s) => s.shotId)
   const nameOf = (id: string) => cast.characters.find((c) => c.id === id)?.name ?? id
 
   useEffect(() => {
@@ -59,13 +64,18 @@ export function StudioPage({ projectId }: { projectId: string }) {
                 phase={phase}
                 imageSrc={phase.kind === 'ready' ? mediaUrl(phase.imageUrl) : null}
                 names={shot.character_ids.map(nameOf)}
-                onOpen={() => undefined}
+                onOpen={() => useEditorStore.getState().open(shot.id, shot.panel?.revision ?? null)}
                 onRetry={() => void draw(shot, 'draft')}
               />
             )
           })}
         </StoryboardGrid>
       </div>
+      {editing && (
+        <Suspense fallback={null}>
+          <EditorZone projectId={projectId} />
+        </Suspense>
+      )}
     </div>
   )
 }

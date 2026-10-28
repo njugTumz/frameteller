@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeSocket } from '../../../test/fakeSocket'
-import { MicError, type MicHandlers, type Microphone } from '../audio/microphone'
+import { MicError, type MicHandlers, type Microphone } from '../../../shared/audio/microphone'
 import { useRecordingStore } from '../store'
 import { Narration, RECONNECTED } from './narration'
 
