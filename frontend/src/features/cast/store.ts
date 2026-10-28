@@ -14,6 +14,8 @@ export interface CastState {
   /** A reference-sheet job is queued or running. */
   drawing: boolean
   approving: boolean
+  /** A rename, remove or merge is on its way. */
+  managing: boolean
   error: string | null
 }
 
@@ -25,6 +27,7 @@ export const initialCast: CastState = {
   redrawing: {},
   drawing: false,
   approving: false,
+  managing: false,
   error: null,
 }
 

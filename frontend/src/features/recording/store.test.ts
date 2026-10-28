@@ -66,6 +66,24 @@ describe('reduceRecording', () => {
   })
 })
 
+describe('silence', () => {
+  it('warns on audio.silent until words arrive', () => {
+    let s = reduceRecording({ ...initialRecording, telling: 'live' }, { type: 'audio.silent', after_ms: 8000, level: 0.002 })
+    expect(s.silent).toBe(true)
+    s = reduceRecording(s, { type: 'transcript.partial', text: '' })
+    expect(s.silent).toBe(true)
+    s = reduceRecording(s, { type: 'transcript.partial', text: 'Scene one' })
+    expect(s.silent).toBe(false)
+  })
+
+  it('says nothing was heard when the session ends without words', () => {
+    const s = reduceRecording({ ...initialRecording, telling: 'finishing', silent: true }, { type: 'session.ended', turns: 0, shots: 0, heard: false })
+    expect(s).toMatchObject({ telling: 'ended', heardNothing: true, silent: false })
+    expect(reduceRecording(s, { type: 'session.started', mode: 'narrate' }).heardNothing).toBe(false)
+    expect(reduceRecording(initialRecording, { type: 'session.ended', turns: 1, shots: 1, heard: true }).heardNothing).toBe(false)
+  })
+})
+
 describe('useRecordingStore', () => {
   beforeEach(() => useRecordingStore.getState().reset())
 

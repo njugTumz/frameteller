@@ -78,7 +78,7 @@ export class Narration {
   private async connect(onDrop: (code: number) => void): Promise<SocketSession> {
     const s: SocketSession = new SessionSocket(
       sessionUrl(this.projectId),
-      { mode: 'narrate', keywords: this.keywords() },
+      { mode: 'narrate', keywords: this.keywords(), keep_audio: this.state.keepAudio },
       {
         onEvent: (e) => {
           this.state.apply(e)
@@ -147,18 +147,31 @@ export class Narration {
     }
   }
 
+  private openMic(): Promise<Microphone> {
+    return (this.deps.openMic ?? openMicrophone)(
+      {
+        onFrame: (pcm) => this.frame(pcm),
+        onLevel: (level) => this.state.setLevel(level),
+        onLost: (error) => this.micLost(error),
+        onSwitched: (label) => {
+          this.state.set({ micLabel: label })
+          this.state.notice(`Now recording from ${label}.`)
+        },
+      },
+      undefined,
+      { deviceId: this.state.deviceId ?? undefined },
+    )
+  }
+
   async start(): Promise<void> {
     const { telling } = this.state
     if (this.disposed || telling === 'mic' || telling === 'connecting' || telling === 'live') return
     this.state.setProblem(null)
+    this.state.set({ silent: false, heardNothing: false })
     this.state.setTelling('mic')
     try {
-      this.mic = await (this.deps.openMic ?? openMicrophone)({
-        onFrame: (pcm) => this.frame(pcm),
-        onLevel: (level) => this.state.setLevel(level),
-        onLost: (error) => this.micLost(error),
-        onSwitched: (label) => this.state.notice(`Now recording from ${label}.`),
-      })
+      this.mic = await this.openMic()
+      this.state.set({ micLabel: this.mic.label })
     } catch (e) {
       const error = micError(e)
       this.fail(MIC_PROBLEMS[error.problem], error.message)
@@ -181,6 +194,25 @@ export class Narration {
     const ended = this.socket?.end() ?? false // keep what was said: finish the session normally
     this.state.setProblem({ kind: MIC_PROBLEMS[error.problem], message: error.message })
     this.state.setTelling(ended ? 'finishing' : 'idle')
+  }
+
+  /**
+   * "We can't hear you": record from another microphone. While live, the session carries on with the new
+   * device (frames keep flowing to the same socket); otherwise it is used the next time telling starts.
+   */
+  async useMicrophone(deviceId: string): Promise<void> {
+    this.state.set({ deviceId, silent: false })
+    if (!this.mic || this.state.telling !== 'live') return
+    const previous = this.mic
+    try {
+      this.mic = await this.openMic()
+    } catch (e) {
+      this.mic = previous
+      this.state.notice(micError(e).message)
+      return
+    }
+    void previous.close()
+    this.state.set({ micLabel: this.mic.label })
   }
 
   stop(): void {

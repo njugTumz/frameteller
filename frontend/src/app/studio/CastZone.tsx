@@ -1,12 +1,15 @@
 import { CastTray } from '../../features/cast/components/CastTray'
 import { CharacterCard } from '../../features/cast/components/CharacterCard'
+import { useCastManage } from '../../features/cast/hooks/useCastManage'
 import { useCastReview } from '../../features/cast/hooks/useCastReview'
 import { approvalBlock, nameFromId, useCastStore } from '../../features/cast/store'
 import { mediaUrl } from '../../shared/api/client'
+import type { Project } from '../../shared/api/types'
 
-export function CastZone({ projectId }: { projectId: string }) {
+export function CastZone({ projectId, onProject }: { projectId: string; onProject: (p: Project) => void }) {
   const cast = useCastStore()
   const { approve, regenerate, edit } = useCastReview(projectId)
+  const manage = useCastManage(projectId, onProject)
   if (cast.characters.length === 0 && cast.expected.length === 0) return null
   const locked = cast.status === 'approved'
   return (
@@ -29,6 +32,11 @@ export function CastZone({ projectId }: { projectId: string }) {
           locked={locked}
           onDescribe={(text) => edit(c.id, text)}
           onRegenerate={() => void regenerate(c.id)}
+          others={cast.characters.filter((o) => o.id !== c.id)}
+          busy={cast.managing}
+          onRename={(name) => manage.rename(c.id, name)}
+          onRemove={() => manage.remove(c.id)}
+          onMerge={(into) => manage.merge(c.id, into)}
         />
       ))}
     </CastTray>

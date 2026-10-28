@@ -19,6 +19,8 @@ export interface EditorView {
   showBefore: boolean
   beforeSrc: string | null
   editError: string | null
+  /** A saved move is being composited on a clean plate. */
+  preparing?: boolean
 }
 
 const DRAWING = { draft: 'Drawing draft…', final: 'Drawing the final panel…', change: 'Making your change…' } as const
@@ -85,9 +87,9 @@ export function PanelEditor({
               ) : (
                 canvas
               )}
-              {(view.drawing || view.selecting) && (
+              {(view.drawing || view.selecting || view.preparing) && (
                 <p className="absolute top-3 left-3 m-0 rounded-full bg-ink px-3 py-1 text-sm font-semibold text-paper" role="status">
-                  {view.drawing ? DRAWING[view.drawing] : 'Finding the object…'}
+                  {view.drawing ? DRAWING[view.drawing] : view.selecting ? 'Finding the object…' : 'Preparing the background…'}
                 </p>
               )}
             </div>
@@ -128,7 +130,7 @@ export function PanelEditor({
               )}
               {view.hasMoves && (
                 <div className="flex items-center justify-between gap-2 text-sm text-muted">
-                  <span>Moves and resizes are kept on this device.</span>
+                  <span>{view.preparing ? 'Saving to the storyboard…' : 'Moves are saved to the storyboard.'}</span>
                   <Button size="sm" variant="quiet" onClick={onResetMoves}>
                     Put everything back
                   </Button>

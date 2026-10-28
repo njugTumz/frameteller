@@ -32,6 +32,7 @@ export function ShotCard({
   phase,
   imageSrc,
   names,
+  composing = false,
   onOpen,
   onRetry,
 }: {
@@ -39,12 +40,14 @@ export function ShotCard({
   phase: PanelPhase
   imageSrc: string | null
   names: string[]
+  composing?: boolean
   onOpen: () => void
   onRetry: () => void
 }) {
   const busy = phase.kind === 'drawing' || phase.kind === 'queued'
+  const outdated = phase.kind === 'ready' && phase.outdated
   return (
-    <li className="arrive flex flex-col" data-testid="shot-card" data-shot={shot.number} data-phase={phase.kind}>
+    <li className="arrive flex flex-col" data-testid="shot-card" data-shot={shot.number} data-phase={phase.kind} data-outdated={outdated || undefined}>
       <article aria-labelledby={`shot-${shot.id}`} className="flex flex-col gap-2">
         <div className="frame aspect-video">
           {phase.kind === 'ready' && imageSrc ? (
@@ -53,6 +56,11 @@ export function ShotCard({
               <span className="absolute right-2 bottom-2 rounded-full bg-ink px-3 py-1 text-sm font-semibold text-paper opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
                 Edit panel
               </span>
+              {(outdated || composing) && (
+                <span className="absolute top-2 left-2 rounded-full bg-marker px-3 py-1 text-xs font-bold text-ink ring-1 ring-ink">
+                  {composing ? 'Saving your move…' : 'Out of date'}
+                </span>
+              )}
             </button>
           ) : (
             <div className="grid size-full place-items-center">
@@ -76,6 +84,14 @@ export function ShotCard({
         {names.length > 0 && <p className="m-0 text-xs text-muted">With {names.join(', ')}</p>}
         {phase.kind === 'waiting-cast' && (
           <p className="m-0 text-xs text-muted">Panels are drawn once you approve the cast, so every frame shows the same characters.</p>
+        )}
+        {outdated && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted">The story changed after this was drawn.</span>
+            <Button size="sm" onClick={onRetry}>
+              Draw again
+            </Button>
+          </div>
         )}
         {phase.kind === 'failed' && (
           <div className="flex flex-wrap items-center gap-2 text-sm" role="alert">

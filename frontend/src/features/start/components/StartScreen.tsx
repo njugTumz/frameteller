@@ -8,6 +8,7 @@ export interface StartForm {
   title: string
   style: PanelStyle
   names: string
+  keepAudio: boolean
 }
 
 export function StartScreen({
@@ -101,6 +102,25 @@ export function StartScreen({
           <p id="names-help" className="m-0 text-sm text-muted">
             Separate them with commas. They help the transcriber spell your characters and places right.
           </p>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <input
+            id="keep-audio"
+            type="checkbox"
+            checked={form.keepAudio}
+            aria-describedby="keep-audio-help"
+            onChange={(e) => onChange({ keepAudio: e.target.checked })}
+            className="mt-1 size-5 accent-[var(--ink)]"
+          />
+          <div>
+            <label htmlFor="keep-audio" className="font-bold">
+              Keep my narration for the animatic
+            </label>
+            <p id="keep-audio-help" className="m-0 text-sm text-muted">
+              Your recording becomes the animatic's voice track. It stays with this story, and you can delete it any time.
+            </p>
+          </div>
         </div>
 
         {error && <Notice tone="error" title={error} />}

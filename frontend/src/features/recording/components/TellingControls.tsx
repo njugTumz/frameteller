@@ -12,8 +12,11 @@ const STATUS: Record<Telling, string> = {
   ended: 'Done. Tell more any time.',
 }
 
+export const HEARD_NOTHING = 'We didn’t hear anything. Check your microphone.'
+
 export function TellingControls({
   telling,
+  heardNothing = false,
   level,
   beats,
   onStart,
@@ -21,6 +24,7 @@ export function TellingControls({
   onBeat,
 }: {
   telling: Telling
+  heardNothing?: boolean
   level: number
   beats: number
   onStart: () => void
@@ -37,7 +41,7 @@ export function TellingControls({
             aria-hidden="true"
             className={live ? 'live-dot size-2.5 rounded-full bg-marker ring-1 ring-ink' : 'size-2.5 rounded-full bg-rule'}
           />
-          {STATUS[telling]}
+          {telling === 'ended' && heardNothing ? HEARD_NOTHING : STATUS[telling]}
         </p>
         <MicMeter level={level} active={live} />
       </div>

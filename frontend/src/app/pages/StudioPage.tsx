@@ -1,6 +1,13 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo } from 'react'
 import { castReadyFor, useCastStore } from '../../features/cast/store'
+import { storyboardPdfUrl, shareUrl } from '../../features/export/api'
+import { ExportPanel } from '../../features/export/components/ExportPanel'
+import { SharePanel } from '../../features/export/components/SharePanel'
+import { useExport } from '../../features/export/hooks/useExport'
 import { Notices, ProblemNotice } from '../../features/recording/components/ProblemNotice'
+import { RecordingKept } from '../../features/recording/components/RecordingKept'
+import { SilenceNotice } from '../../features/recording/components/SilenceNotice'
+import { useAudioInputs } from '../../features/recording/hooks/useAudioInputs'
 import { TellingControls } from '../../features/recording/components/TellingControls'
 import { TranscriptRail } from '../../features/recording/components/TranscriptRail'
 import { useBeatShortcut } from '../../features/recording/hooks/useBeatShortcut'
@@ -13,7 +20,8 @@ import { usePanelRender } from '../../features/storyboard/hooks/usePanelRender'
 import { useProjectSync } from '../../features/storyboard/hooks/useProjectSync'
 import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
 import { mediaUrl } from '../../shared/api/client'
-import type { Shot } from '../../shared/api/types'
+import type { Project, Shot } from '../../shared/api/types'
+import { loadKeepAudio } from '../../shared/consent'
 import { loadNames } from '../../shared/keywords'
 import { useEditorStore } from '../../features/panel-editor/store'
 import { CastZone } from '../studio/CastZone'
@@ -37,23 +45,42 @@ export function StudioPage({ projectId }: { projectId: string }) {
   const draw = usePanelRender(projectId)
   const editing = useEditorStore((s) => s.shotId)
   const nameOf = (id: string) => cast.characters.find((c) => c.id === id)?.name ?? id
+  const onProject = useCallback((p: Project) => {
+    useStoryboardStore.getState().load(p)
+    projectLoaded(p)
+  }, [])
+  const exporting = useExport(projectId, onProject)
+  const inputs = useAudioInputs(r.silent)
+  const allDrawn = board.shots.length > 0 && board.shots.every((s) => s.panel?.status === 'ready')
+  const kept = board.narrations.reduce((ms, n) => ms + n.duration_ms, 0)
 
   useEffect(() => {
     resetStudio()
     useRecordingStore.getState().setKeywords(loadNames(projectId))
+    useRecordingStore.getState().set({ keepAudio: loadKeepAudio(projectId) })
   }, [projectId])
 
   return (
     <div className="grid gap-6 p-4 lg:grid-cols-[340px_1fr] lg:p-6">
       <aside className="flex flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
         {r.problem && <ProblemNotice problem={r.problem} onRetry={() => void narration.start()} onDismiss={() => r.setProblem(null)} />}
-        <TellingControls telling={r.telling} level={r.level} beats={r.beats} onStart={() => void narration.start()} onStop={() => narration.stop()} onBeat={beat} />
+        {r.silent && (
+          <SilenceNotice
+            micLabel={r.micLabel}
+            inputs={inputs}
+            deviceId={r.deviceId}
+            onPick={(deviceId) => void narration.useMicrophone(deviceId)}
+            onDismiss={() => r.set({ silent: false })}
+          />
+        )}
+        <TellingControls telling={r.telling} heardNothing={r.heardNothing} level={r.level} beats={r.beats} onStart={() => void narration.start()} onStop={() => narration.stop()} onBeat={beat} />
         <Notices notices={r.notices} onDismiss={r.dismissNotice} />
+        {kept > 0 && <RecordingKept durationMs={kept} onDelete={() => void exporting.forgetRecording()} />}
         <TranscriptRail turns={r.turns} partial={r.partial} listening={r.telling === 'live'} correcting={r.correcting} onCorrect={(id, text) => narration.correct(id, text)} />
       </aside>
       <div className="flex min-w-0 flex-col gap-6">
         {sync.status === 'loading' && <p className="m-0 text-muted">Opening the storyboard…</p>}
-        <CastZone projectId={projectId} />
+        <CastZone projectId={projectId} onProject={onProject} />
         <StoryboardGrid count={board.shots.length} telling={r.telling === 'live'}>
           {board.shots.map((shot) => {
             const phase = panelPhase(shot, board.jobs[shot.id], castReadyFor(cast, shot))
@@ -64,12 +91,34 @@ export function StudioPage({ projectId }: { projectId: string }) {
                 phase={phase}
                 imageSrc={phase.kind === 'ready' ? mediaUrl(phase.imageUrl) : null}
                 names={shot.character_ids.map(nameOf)}
+                composing={board.composing[shot.id] === 'queued' || board.composing[shot.id] === 'running'}
                 onOpen={() => useEditorStore.getState().open(shot.id, shot.panel?.revision ?? null)}
                 onRetry={() => void draw(shot, 'draft')}
               />
             )
           })}
         </StoryboardGrid>
+        {board.shots.length > 0 && (
+          <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+            <ExportPanel
+              ready={allDrawn}
+              job={board.exportJob}
+              animatic={board.animatic}
+              videoSrc={mediaUrl(board.animatic?.url)}
+              downloadHref={board.animatic ? `${mediaUrl(board.animatic.url)}?download=1` : null}
+              pdfHref={storyboardPdfUrl(projectId)}
+              voiceKept={kept > 0}
+              error={exporting.error}
+              onExport={(subtitles) => void exporting.animatic(subtitles)}
+            />
+            <SharePanel
+              link={board.shareToken ? shareUrl(board.shareToken) : null}
+              busy={exporting.sharing}
+              onShare={() => void exporting.share()}
+              onRevoke={() => void exporting.unshare()}
+            />
+          </div>
+        )}
       </div>
       {editing && (
         <Suspense fallback={null}>

@@ -11,6 +11,8 @@ export type SessionMode = 'narrate' | 'co_direct'
 export interface StartMessage {
   mode: SessionMode
   keywords: string[]
+  /** Keep the recording for the animatic's voice track. Only with the narrator's consent. */
+  keep_audio: boolean
 }
 export interface BeatMessage {
   type: 'beat'
@@ -30,7 +32,7 @@ export const MAX_KEYWORDS = 50
 
 // ---- server → client ----
 
-export type JobKind = 'generate_cast' | 'generate_panel' | 'pre_segment_panel' | 'edit_panel'
+export type JobKind = 'generate_cast' | 'generate_panel' | 'pre_segment_panel' | 'edit_panel' | 'compose_panel' | 'export_animatic'
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 
 export type ServerEvent =
@@ -38,6 +40,7 @@ export type ServerEvent =
   | { type: 'transcript.partial'; text: string }
   | { type: 'turn.completed'; turn: Turn }
   | { type: 'shot.created'; shot: Shot }
+  | { type: 'shot.updated'; shot: Shot }
   | { type: 'shots.replaced'; turn: Turn; removed_shot_ids: string[]; shots: Shot[] }
   | { type: 'cast.proposed'; characters: Character[] }
   | {
@@ -48,9 +51,12 @@ export type ServerEvent =
       shot_id: string | null
       revision: number | null
       message: string | null
+      /** 0–1 while an animatic export runs; null otherwise. */
+      progress?: number | null
     }
   | { type: 'error'; message: string; fatal: boolean }
-  | { type: 'session.ended'; turns: number; shots: number }
+  | { type: 'audio.silent'; after_ms: number; level: number }
+  | { type: 'session.ended'; turns: number; shots: number; heard?: boolean }
 
 export type ServerEventOf<T extends ServerEvent['type']> = Extract<ServerEvent, { type: T }>
 
@@ -92,7 +98,7 @@ export function isCharacter(v: unknown): v is Character {
   return isObj(v) && isStr(v.id) && isStr(v.name) && isStr(v.description) && isStrOrNull(v.reference_url)
 }
 
-const JOB_KINDS: readonly string[] = ['generate_cast', 'generate_panel', 'pre_segment_panel', 'edit_panel']
+const JOB_KINDS: readonly string[] = ['generate_cast', 'generate_panel', 'pre_segment_panel', 'edit_panel', 'compose_panel', 'export_animatic']
 const JOB_STATUSES: readonly string[] = ['queued', 'running', 'succeeded', 'failed']
 
 function check(e: Json): boolean {
@@ -104,6 +110,7 @@ function check(e: Json): boolean {
     case 'turn.completed':
       return isTurn(e.turn)
     case 'shot.created':
+    case 'shot.updated':
       return isShot(e.shot)
     case 'shots.replaced':
       return isTurn(e.turn) && isStrArr(e.removed_shot_ids) && Array.isArray(e.shots) && e.shots.every(isShot)
@@ -118,12 +125,15 @@ function check(e: Json): boolean {
         JOB_STATUSES.includes(e.status) &&
         isStrOrNull(e.shot_id) &&
         isNumOrNull(e.revision) &&
-        isStrOrNull(e.message)
+        isStrOrNull(e.message) &&
+        (e.progress === undefined || isNumOrNull(e.progress))
       )
     case 'error':
       return isStr(e.message) && typeof e.fatal === 'boolean'
+    case 'audio.silent':
+      return isNum(e.after_ms) && isNum(e.level)
     case 'session.ended':
-      return isNum(e.turns) && isNum(e.shots)
+      return isNum(e.turns) && isNum(e.shots) && (e.heard === undefined || typeof e.heard === 'boolean')
     default:
       return false // unknown types are ignored, as the backend's own clients do
   }

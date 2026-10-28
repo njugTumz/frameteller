@@ -1,5 +1,5 @@
 // Writes dist/staticwebapp.config.json for Azure Static Web Apps: SPA fallback and security headers.
-// The CSP names the backend origin (REST, the session WebSocket and /media images), taken from
+// The CSP names the backend origin (REST, the session WebSocket, /media images and the animatic), taken from
 // VITE_API_BASE_URL, the same variable the build reads. Run after `npm run build`.
 import { writeFileSync } from 'node:fs'
 
@@ -19,7 +19,7 @@ const csp = [
   'font-src https://fonts.gstatic.com',
   `img-src 'self' data: blob: ${api.origin}`,
   `connect-src 'self' ${api.origin} ${ws}`,
-  "media-src 'self' blob:",
+  `media-src 'self' blob: ${api.origin}`, // the animatic player
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

@@ -22,7 +22,19 @@ export function shot(n: number, over: Partial<Shot> = {}): Shot {
 }
 
 export function panel(over: Partial<Panel> = {}): Panel {
-  return { revision: 1, status: 'ready', image_url: '/media/projects/p1/panels/s1/r1/image', width: 1920, height: 1280, masks: [], ...over }
+  return {
+    revision: 1,
+    shown_revision: 1,
+    status: 'ready',
+    image_url: '/media/projects/p1/panels/s1/r1/image',
+    base_image_url: '/media/projects/p1/panels/s1/r1/image',
+    width: 1920,
+    height: 1280,
+    masks: [],
+    layers: [],
+    outdated: false,
+    ...over,
+  }
 }
 
 export function character(id = 'mira', over: Partial<Character> = {}): Character {
@@ -30,7 +42,18 @@ export function character(id = 'mira', over: Partial<Character> = {}): Character
 }
 
 export function project(over: Partial<Project> = {}): Project {
-  return { id: 'p1', title: 'The Lantern Cat', style: 'pencil', cast: { status: 'draft', characters: [] }, turns: [], shots: [], ...over }
+  return {
+    id: 'p1',
+    title: 'The Lantern Cat',
+    style: 'pencil',
+    cast: { status: 'draft', characters: [] },
+    turns: [],
+    shots: [],
+    narrations: [],
+    animatic: null,
+    share_token: null,
+    ...over,
+  }
 }
 
 export const ev = (e: ServerEvent): ServerEvent => e

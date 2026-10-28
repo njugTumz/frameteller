@@ -1,5 +1,6 @@
 import { Button } from '../shared/ui/Button'
 import { StartPage } from './pages/StartPage'
+import { SharePage } from './pages/SharePage'
 import { StudioPage } from './pages/StudioPage'
 import { Notice } from '../shared/ui/Notice'
 import { navigate, parseRoute, usePathname } from './router'
@@ -30,7 +31,13 @@ export function App() {
         <>
           <TopBar>{themeSwitch}</TopBar>
           <main id="main" className="flex-1">
-            {route.name === 'start' ? <StartPage /> : <StudioPage key={route.projectId} projectId={route.projectId} />}
+            {route.name === 'start' ? (
+              <StartPage />
+            ) : route.name === 'share' ? (
+              <SharePage key={route.token} token={route.token} />
+            ) : (
+              <StudioPage key={route.projectId} projectId={route.projectId} />
+            )}
           </main>
         </>
       )}

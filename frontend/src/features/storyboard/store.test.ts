@@ -66,6 +66,46 @@ describe('reduceStoryboard', () => {
   })
 })
 
+describe('reveals, saved moves and exports', () => {
+  it('replaces a revealed shot, marks its panel out of date and refetches the cast', () => {
+    const before = withShots(shot(1, { panel: panel() }))
+    const after = reduceStoryboard(before, { type: 'shot.updated', shot: shot(1, { character_ids: ['pip'], action: 'Pip hides in the reeds.' }) })
+    expect(after.shots[0]).toMatchObject({ character_ids: ['pip'], action: 'Pip hides in the reeds.' })
+    expect(after.shots[0]?.panel).toMatchObject({ outdated: true, image_url: panel().image_url })
+    expect(after.stale).toBe(true)
+    const phase = panelPhase(after.shots[0] as ReturnType<typeof shot>, undefined, true)
+    expect(phase).toMatchObject({ kind: 'ready', outdated: true })
+  })
+
+  it('tracks compose jobs apart from panel jobs and refetches when one finishes', () => {
+    let s = reduceStoryboard(withShots(shot(1, { panel: panel() })), job('running', { kind: 'compose_panel' }))
+    expect(s.composing).toEqual({ s1: 'running' })
+    expect(s.jobs).toEqual({})
+    s = reduceStoryboard(s, job('succeeded', { kind: 'compose_panel' }))
+    expect(s.stale).toBe(true)
+    expect(loadProject(s, project({ shots: [shot(1, { panel: panel({ shown_revision: 2 }) })] })).composing).toEqual({})
+  })
+
+  it('follows the export progress and fetches the animatic when it is done', () => {
+    const exportJob = (status: 'running' | 'succeeded', progress: number | null) =>
+      ({ type: 'job.updated', kind: 'export_animatic', key: 'e', status, shot_id: null, revision: null, message: null, progress }) as const
+    let s = reduceStoryboard(initialStoryboard, exportJob('running', 0.25))
+    expect(s.exportJob).toEqual({ status: 'running', progress: 0.25, message: null })
+    s = reduceStoryboard(s, exportJob('succeeded', null))
+    expect(s.exportJob?.progress).toBe(0.25)
+    expect(s.stale).toBe(true)
+    const animatic = { url: '/media/projects/p1/exports/a.mp4', duration_ms: 12000, subtitles: false, voiced: true }
+    s = loadProject(s, project({ animatic, share_token: 'tok', narrations: [{ session: 't', duration_ms: 9000, url: '/media/x.wav' }] }))
+    expect(s).toMatchObject({ animatic, shareToken: 'tok' })
+    expect(s.narrations).toHaveLength(1)
+  })
+
+  it('shows the composite once there is one', () => {
+    const p = panel({ revision: 1, shown_revision: 2, image_url: '/media/c.webp', base_image_url: '/media/r1.webp' })
+    expect(panelPhase(shot(1, { panel: p }), undefined, true)).toMatchObject({ imageUrl: '/media/c.webp', revision: 2 })
+  })
+})
+
 describe('loadProject', () => {
   it('takes panels from the server and drops jobs the server has caught up with', () => {
     const s0 = { ...withShots(shot(1)), jobs: { s1: { kind: 'generate_panel' as const, status: 'succeeded' as const, revision: 1, message: null } }, stale: true }
@@ -92,7 +132,7 @@ describe('panelPhase', () => {
   it('shows drawing while a job runs or the panel is pending, then the image', () => {
     expect(panelPhase(shot(1), { kind: 'generate_panel', status: 'running', revision: 1, message: null }, true)).toEqual({ kind: 'drawing', what: 'draft' })
     expect(panelPhase(shot(1, { panel: panel({ status: 'pending', image_url: null }) }), undefined, true).kind).toBe('drawing')
-    expect(panelPhase(shot(1, { panel: panel() }), undefined, true)).toEqual({ kind: 'ready', imageUrl: '/media/projects/p1/panels/s1/r1/image', revision: 1 })
+    expect(panelPhase(shot(1, { panel: panel() }), undefined, true)).toEqual({ kind: 'ready', imageUrl: '/media/projects/p1/panels/s1/r1/image', revision: 1, outdated: false })
   })
 
   it('says an edit is a change', () => {

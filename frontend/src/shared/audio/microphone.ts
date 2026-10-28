@@ -50,14 +50,24 @@ export function micError(e: unknown): MicError {
 }
 
 /** Ask for the microphone and start streaming frames. Must be called from a click (browsers require a gesture). */
-export async function openMicrophone(handlers: MicHandlers, media: MediaDevices | undefined = navigator.mediaDevices): Promise<Microphone> {
+/** The constraints for one device, or the system default. */
+export function constraintsFor(deviceId?: string): MediaStreamConstraints {
+  if (!deviceId) return CONSTRAINTS
+  return { audio: { ...(CONSTRAINTS.audio as MediaTrackConstraints), deviceId: { exact: deviceId } } }
+}
+
+export async function openMicrophone(
+  handlers: MicHandlers,
+  media: MediaDevices | undefined = navigator.mediaDevices,
+  options: { deviceId?: string } = {},
+): Promise<Microphone> {
   if (!media?.getUserMedia || typeof AudioWorkletNode === 'undefined') {
     throw new MicError('unsupported', 'This browser cannot record audio here.')
   }
   const devices = media
   let stream: MediaStream
   try {
-    stream = await media.getUserMedia(CONSTRAINTS)
+    stream = await media.getUserMedia(constraintsFor(options.deviceId))
   } catch (e) {
     throw micError(e)
   }

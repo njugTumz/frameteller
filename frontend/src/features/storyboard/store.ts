@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Project, Shot } from '../../shared/api/types'
+import type { Animatic, Narration, Project, Shot } from '../../shared/api/types'
 import type { JobKind, JobStatus, ServerEvent } from '../../shared/events'
 
 export interface PanelJob {
@@ -11,6 +11,13 @@ export interface PanelJob {
 
 export type SyncStatus = 'loading' | 'ready' | 'missing' | 'unreachable'
 
+/** The animatic export job, from job.updated: progress is 0–1 while it runs. */
+export interface ExportJob {
+  status: JobStatus
+  progress: number | null
+  message: string | null
+}
+
 export interface StoryboardState {
   sync: SyncStatus
   projectId: string | null
@@ -21,6 +28,13 @@ export interface StoryboardState {
   jobs: Record<string, PanelJob>
   /** Shots this browser asked to draw, so a draft is requested once. */
   requested: Record<string, true>
+  /** Saved moves being composited on a clean plate (compose_panel), per shot (ADR 0010). */
+  composing: Record<string, JobStatus>
+  /** The latest animatic export job, if one ran in this visit. */
+  exportJob: ExportJob | null
+  animatic: Animatic | null
+  narrations: Narration[]
+  shareToken: string | null
   /** A job finished: the project must be fetched again for the new image and masks. */
   stale: boolean
   loaded: boolean
@@ -34,6 +48,11 @@ export const initialStoryboard: StoryboardState = {
   shots: [],
   jobs: {},
   requested: {},
+  composing: {},
+  exportJob: null,
+  animatic: null,
+  narrations: [],
+  shareToken: null,
   stale: false,
   loaded: false,
 }
@@ -68,6 +87,13 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent): St
   switch (event.type) {
     case 'shot.created':
       return { ...state, shots: upsertShot(state.shots, event.shot) }
+    case 'shot.updated': {
+      // A reveal changed who or what the shot shows: its panel is now out of date. The cast may have lost a
+      // guessed character, so the project is fetched again.
+      const old = state.shots.find((s) => s.id === event.shot.id)?.panel
+      const panel = old ? { ...old, outdated: true } : event.shot.panel
+      return { ...state, shots: upsertShot(state.shots, { ...event.shot, panel }), stale: true }
+    }
     case 'shots.replaced':
       return {
         ...state,
@@ -76,11 +102,18 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent): St
         requested: omit(state.requested, event.removed_shot_ids),
       }
     case 'job.updated': {
+      const done = event.status === 'succeeded' || event.status === 'failed'
+      if (event.kind === 'export_animatic') {
+        const exportJob: ExportJob = { status: event.status, progress: event.progress ?? state.exportJob?.progress ?? null, message: event.message }
+        return { ...state, exportJob, stale: state.stale || event.status === 'succeeded' }
+      }
       if (!event.shot_id) return state
+      if (event.kind === 'compose_panel') {
+        return { ...state, composing: { ...state.composing, [event.shot_id]: event.status }, stale: state.stale || done }
+      }
       if (event.kind === 'pre_segment_panel') return event.status === 'succeeded' ? { ...state, stale: true } : state
       if (!PANEL_JOBS.includes(event.kind)) return state
       const job: PanelJob = { kind: event.kind, status: event.status, revision: event.revision, message: event.message }
-      const done = event.status === 'succeeded' || event.status === 'failed'
       return { ...state, jobs: { ...state.jobs, [event.shot_id]: job }, stale: state.stale || done }
     }
     default:
@@ -105,6 +138,11 @@ export function loadProject(state: StoryboardState, project: Project): Storyboar
     style: project.style,
     shots: [...project.shots].sort(byNumber),
     jobs,
+    // A finished composite is in the project now; one still running keeps its badge.
+    composing: Object.fromEntries(Object.entries(state.composing).filter(([, status]) => status === 'queued' || status === 'running')),
+    animatic: project.animatic,
+    narrations: project.narrations,
+    shareToken: project.share_token,
     stale: false,
     loaded: true,
     sync: 'ready',
@@ -115,7 +153,7 @@ export type PanelPhase =
   | { kind: 'waiting-cast' }
   | { kind: 'queued' }
   | { kind: 'drawing'; what: 'draft' | 'final' | 'change' }
-  | { kind: 'ready'; imageUrl: string; revision: number }
+  | { kind: 'ready'; imageUrl: string; revision: number; outdated: boolean }
   | { kind: 'failed'; message: string }
   | { kind: 'not-drawn' }
 
@@ -127,7 +165,9 @@ export function panelPhase(shot: Shot, job: PanelJob | undefined, castReady: boo
     return { kind: 'drawing', what: job?.kind === 'edit_panel' ? 'change' : quality }
   }
   if (job?.status === 'failed') return { kind: 'failed', message: job.message ?? 'This panel could not be drawn.' }
-  if (panel?.status === 'ready' && panel.image_url) return { kind: 'ready', imageUrl: panel.image_url, revision: panel.revision }
+  if (panel?.status === 'ready' && panel.image_url) {
+    return { kind: 'ready', imageUrl: panel.image_url, revision: panel.shown_revision, outdated: panel.outdated }
+  }
   if (panel?.status === 'failed') return { kind: 'failed', message: 'This panel could not be drawn.' }
   return castReady ? { kind: 'not-drawn' } : { kind: 'waiting-cast' }
 }
@@ -137,6 +177,7 @@ interface StoryboardActions {
   load(project: Project): void
   markRequested(shotId: string, requested: boolean): void
   jobStarted(shotId: string, job: PanelJob): void
+  set(patch: Partial<StoryboardState>): void
   setSync(sync: SyncStatus): void
   reset(): void
 }
@@ -148,6 +189,7 @@ export const useStoryboardStore = create<StoryboardState & StoryboardActions>()(
   markRequested: (shotId, requested) =>
     set((s) => ({ requested: requested ? { ...s.requested, [shotId]: true } : omit(s.requested, [shotId]) })),
   jobStarted: (shotId, job) => set((s) => ({ jobs: { ...s.jobs, [shotId]: job } })),
+  set: (patch) => set(patch),
   setSync: (sync) => set({ sync }),
   reset: () => set(initialStoryboard),
 }))

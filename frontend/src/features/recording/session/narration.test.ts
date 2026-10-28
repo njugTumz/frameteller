@@ -6,7 +6,7 @@ import { MAX_BACKLOG_FRAMES, Narration, RECONNECTED } from './narration'
 
 function fakeMic() {
   const mic = { handlers: null as MicHandlers | null, closed: false }
-  const openMic = vi.fn(async (handlers: MicHandlers): Promise<Microphone> => {
+  const openMic = vi.fn(async (handlers: MicHandlers, _media?: MediaDevices, _options?: { deviceId?: string }): Promise<Microphone> => {
     mic.handlers = handlers
     return { label: 'Fake mic', close: async () => void (mic.closed = true) }
   })
@@ -38,7 +38,7 @@ describe('Narration', () => {
     await started(n)
     const socket = FakeSocket.latest()
     expect(socket.url).toBe('ws://localhost:8000/ws/projects/p1/session')
-    expect(socket.json[0]).toEqual({ mode: 'narrate', keywords: ['Mira', 'Grey Cat'] })
+    expect(socket.json[0]).toEqual({ mode: 'narrate', keywords: ['Mira', 'Grey Cat'], keep_audio: true })
     expect(useRecordingStore.getState().telling).toBe('live')
 
     mic.handlers?.onFrame(new ArrayBuffer(3840))
@@ -124,5 +124,29 @@ describe('Narration', () => {
     await flush()
     expect(FakeSocket.latest().json.slice(1)).toEqual([{ type: 'transcript.corrected', turn_id: 't-b1', text: 'Scene one.' }, { type: 'end' }])
     expect(useRecordingStore.getState().correcting).toEqual({ 't-b1': 'sending' })
+  })
+
+  it('keeps the recording only when the narrator agreed', async () => {
+    const { openMic } = fakeMic()
+    useRecordingStore.getState().set({ keepAudio: false })
+    const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    await started(n)
+    expect(FakeSocket.latest().json[0]).toMatchObject({ keep_audio: false })
+    expect(useRecordingStore.getState().micLabel).toBe('Fake mic')
+  })
+
+  it('switches to another microphone mid-session without a new session', async () => {
+    const { mic, openMic } = fakeMic()
+    const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    await started(n)
+    useRecordingStore.getState().apply({ type: 'audio.silent', after_ms: 8000, level: 0.001 })
+
+    await n.useMicrophone('usb-mic')
+
+    expect(openMic).toHaveBeenCalledTimes(2)
+    expect(openMic.mock.calls[1]?.[2]).toEqual({ deviceId: 'usb-mic' })
+    expect(mic.closed).toBe(true)
+    expect(FakeSocket.all).toHaveLength(1)
+    expect(useRecordingStore.getState()).toMatchObject({ deviceId: 'usb-mic', silent: false })
   })
 })

@@ -4,6 +4,7 @@ import { PanelCanvas } from '../../features/panel-editor/components/PanelCanvas'
 import { PanelEditor } from '../../features/panel-editor/components/PanelEditor'
 import { useDictation } from '../../features/panel-editor/hooks/useDictation'
 import { usePanelEditor } from '../../features/panel-editor/hooks/usePanelEditor'
+import { movesFromLayers, usePanelLayers } from '../../features/panel-editor/hooks/usePanelLayers'
 import { NO_MOVE, moveKey, useEditorStore } from '../../features/panel-editor/store'
 import { usePanelRender } from '../../features/storyboard/hooks/usePanelRender'
 import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
@@ -23,6 +24,8 @@ export function EditorZone({ projectId }: { projectId: string }) {
   const draw = usePanelRender(projectId)
   const actions = usePanelEditor(projectId, shot, queued, draw)
   const dictation = useDictation(projectId)
+  const layers = usePanelLayers(projectId, shot)
+  const composing = useStoryboardStore((s) => (editor.shotId ? s.composing[editor.shotId] : undefined))
   const revision = shot?.panel?.revision ?? null
 
   useEffect(() => {
@@ -35,7 +38,10 @@ export function EditorZone({ projectId }: { projectId: string }) {
   const panel = shot.panel
   const phase = panelPhase(shot, job, true)
   const size = panel.width && panel.height ? { width: panel.width, height: panel.height } : PANEL
-  const moves = editor.moves[moveKey(shot.id, revision)] ?? {}
+  // Saved layers first, then moves made here that the server has not confirmed yet.
+  const moves = Object.fromEntries(
+    Object.entries({ ...movesFromLayers(panel.layers), ...editor.moves[moveKey(shot.id, revision)] }).filter(([, m]) => m.dx !== 0 || m.dy !== 0 || m.scale !== 1),
+  )
   const known = new Map<string, Mask>(panel.masks.map((m) => [m.id, m]))
   if (editor.selection) known.set(editor.selection.mask.id, editor.selection.mask)
   const layer = (m: Mask) => ({ mask: m, cutoutSrc: mediaUrl(m.cutout_url), move: moves[m.id] ?? NO_MOVE })
@@ -58,17 +64,18 @@ export function EditorZone({ projectId }: { projectId: string }) {
         showBefore: editor.showBefore,
         beforeSrc: mediaUrl(editor.before?.imageUrl),
         editError: editor.editError,
+        preparing: composing === 'queued' || composing === 'running',
       }}
       canvas={
         <PanelCanvas
-          imageSrc={mediaUrl(panel.image_url) ?? ''}
+          imageSrc={mediaUrl(panel.base_image_url ?? panel.image_url) ?? ''}
           panelSize={size}
           moved={Object.keys(moves).flatMap((id) => (known.has(id) ? [layer(known.get(id) as Mask)] : []))}
           selected={selected}
           busy={editor.selecting}
           onPick={(point, preview) => void actions.select(point, preview, { masks: panel.masks, panel: size })}
           onSelectMask={selectMask}
-          onMove={(m, move) => editor.setMove(shot.id, revision, m.id, move)}
+          onMove={(m, move) => void layers.save(m.id, move)}
         />
       }
       editBox={
@@ -86,7 +93,7 @@ export function EditorZone({ projectId }: { projectId: string }) {
       }
       onClose={close}
       onSelectMask={selectMask}
-      onResetMoves={() => editor.resetMoves(shot.id, revision)}
+      onResetMoves={() => void layers.resetAll(Object.keys(moves))}
       onToggleBefore={() => editor.set({ showBefore: !editor.showBefore })}
       onDrawFinal={() => void actions.drawFinal()}
     />

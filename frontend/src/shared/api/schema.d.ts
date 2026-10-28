@@ -181,6 +181,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/exports/animatic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Animatic
+         * @description Queue the MP4 animatic. job.updated carries progress; the project's `animatic` holds the result.
+         */
+        post: operations["export_animatic_projects__project_id__exports_animatic_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/exports/storyboard.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storyboard Pdf
+         * @description The storyboard sheet: every shot with its panel, framing, action, dialogue and duration.
+         */
+        get: operations["storyboard_pdf_projects__project_id__exports_storyboard_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/narration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Narration
+         * @description Delete my recording: every kept narration of this project. A later animatic has no voice track.
+         */
+        delete: operations["delete_narration_projects__project_id__narration_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Project
+         * @description Turn on the read-only link. Calling it again returns the same link.
+         */
+        post: operations["share_project_projects__project_id__share_post"];
+        /**
+         * Revoke Share
+         * @description Turn the link off. Pages already open stop loading within a minute.
+         */
+        delete: operations["revoke_share_projects__project_id__share_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/shots/reorder": {
         parameters: {
             query?: never;
@@ -238,6 +322,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/shots/{n}/panel/layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Layer
+         * @description Save a move, resize or delete of a selected object. A compose_panel job applies it on a clean plate.
+         */
+        post: operations["save_layer_projects__project_id__shots__n__panel_layers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/shots/{n}/panel/select": {
         parameters: {
             query?: never;
@@ -278,10 +382,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shares/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Share */
+        get: operations["get_share_shares__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{token}/animatic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Shared Animatic */
+        get: operations["shared_animatic_shares__token__animatic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{token}/og.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Share Image
+         * @description The link preview: the title over the first six panels, 1200x630.
+         */
+        get: operations["share_image_shares__token__og_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{token}/panels/{n}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Shared Panel */
+        get: operations["shared_panel_shares__token__panels__n__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnimaticOut */
+        AnimaticOut: {
+            /** Duration Ms */
+            duration_ms: number;
+            /** Subtitles */
+            subtitles: boolean;
+            /**
+             * Url
+             * @description Plays inline; add ?download=1 to save it.
+             */
+            url: string;
+            /**
+             * Voiced
+             * @description False when no narration was kept: the animatic is silent.
+             */
+            voiced: boolean;
+        };
+        /** AnimaticRequest */
+        AnimaticRequest: {
+            /**
+             * Subtitles
+             * @description Burn the narration's words into the picture.
+             * @default false
+             */
+            subtitles: boolean;
+        };
         /** BoxOut */
         BoxOut: {
             /** Bottom */
@@ -375,6 +576,51 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** LayerOut */
+        LayerOut: {
+            /** Deleted */
+            deleted: boolean;
+            /** Dx */
+            dx: number;
+            /** Dy */
+            dy: number;
+            /** Object Id */
+            object_id: string;
+            /** Scale */
+            scale: number;
+        };
+        /**
+         * LayerRequest
+         * @description Move, resize or delete a selected object: its cut-out's top-left moves by (dx, dy) panel pixels and it
+         *     scales from that corner. dx = dy = 0 and scale = 1 moves it back home.
+         */
+        LayerRequest: {
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted: boolean;
+            /**
+             * Dx
+             * @default 0
+             */
+            dx: number;
+            /**
+             * Dy
+             * @default 0
+             */
+            dy: number;
+            /**
+             * Object Id
+             * @example character:mira
+             */
+            object_id: string;
+            /**
+             * Scale
+             * @default 1
+             */
+            scale: number;
+        };
         /** MaskOut */
         MaskOut: {
             box: components["schemas"]["BoxOut"];
@@ -387,12 +633,31 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** NarrationOut */
+        NarrationOut: {
+            /** Duration Ms */
+            duration_ms: number;
+            /** Session */
+            session: string;
+            /** Url */
+            url: string;
+        };
         /** PanelOut */
         PanelOut: {
+            /**
+             * Base Image Url
+             * @description The model render without layers; the editor draws on it.
+             */
+            base_image_url: string | null;
             /** Height */
             height: number | null;
-            /** Image Url */
+            /**
+             * Image Url
+             * @description The panel as shown: with its layers applied once composited.
+             */
             image_url: string | null;
+            /** Layers */
+            layers: components["schemas"]["LayerOut"][];
             /** Masks */
             masks: components["schemas"]["MaskOut"][];
             /**
@@ -400,8 +665,16 @@ export interface components {
              * @description The shot changed after this was drawn; draw it again.
              */
             outdated: boolean;
-            /** Revision */
+            /**
+             * Revision
+             * @description The model render the masks and layers belong to.
+             */
             revision: number;
+            /**
+             * Shown Revision
+             * @description What image_url shows: the composite of the layers, or the render.
+             */
+            shown_revision: number;
             /** Status */
             status: string;
             /** Width */
@@ -424,9 +697,21 @@ export interface components {
         };
         /** ProjectOut */
         ProjectOut: {
+            /** @description The latest exported animatic. */
+            animatic: components["schemas"]["AnimaticOut"] | null;
             cast: components["schemas"]["CastOut"];
             /** Id */
             id: string;
+            /**
+             * Narrations
+             * @description Kept recordings, one per live session, for the animatic.
+             */
+            narrations: components["schemas"]["NarrationOut"][];
+            /**
+             * Share Token
+             * @description The live share link's token: {api}/s/{token}. None when off.
+             */
+            share_token: string | null;
             /** Shots */
             shots: components["schemas"]["ShotOut"][];
             /**
@@ -472,6 +757,59 @@ export interface components {
             /** Cached */
             cached: boolean;
             mask: components["schemas"]["MaskOut"];
+        };
+        /** ShareOut */
+        ShareOut: {
+            /**
+             * Page Url
+             * @description The read-only page in the studio.
+             */
+            page_url: string;
+            /** Token */
+            token: string;
+            /**
+             * Url
+             * @description The link to post: it previews on X and sends browsers to the share page.
+             */
+            url: string;
+        };
+        /** SharedAnimaticOut */
+        SharedAnimaticOut: {
+            /** Duration Ms */
+            duration_ms: number;
+            /** Url */
+            url: string;
+        };
+        /**
+         * SharedProjectOut
+         * @description What a share link shows: read-only, with media under /shares/{token}/, never the project id.
+         */
+        SharedProjectOut: {
+            animatic: components["schemas"]["SharedAnimaticOut"] | null;
+            /** Shots */
+            shots: components["schemas"]["SharedShotOut"][];
+            /**
+             * Style
+             * @enum {string}
+             */
+            style: "pencil" | "paper_cutout";
+            /** Title */
+            title: string;
+        };
+        /** SharedShotOut */
+        SharedShotOut: {
+            /** Action */
+            action: string;
+            /** Dialogue */
+            dialogue: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Framing */
+            framing: string;
+            /** Image Url */
+            image_url: string | null;
+            /** Number */
+            number: number;
         };
         /** ShotOut */
         ShotOut: {
@@ -1027,6 +1365,235 @@ export interface operations {
             };
         };
     };
+    export_animatic_projects__project_id__exports_animatic_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnimaticRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storyboard_pdf_projects__project_id__exports_storyboard_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_narration_projects__project_id__narration_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_project_projects__project_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_share_projects__project_id__share_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reorder_shots_projects__project_id__shots_reorder_post: {
         parameters: {
             query?: never;
@@ -1197,6 +1764,69 @@ export interface operations {
             };
         };
     };
+    save_layer_projects__project_id__shots__n__panel_layers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                n: number;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LayerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketOut"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     select_object_projects__project_id__shots__n__panel_select_post: {
         parameters: {
             query?: never;
@@ -1284,6 +1914,161 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_share_shares__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shared_animatic_shares__token__animatic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_image_shares__token__og_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shared_panel_shares__token__panels__n__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

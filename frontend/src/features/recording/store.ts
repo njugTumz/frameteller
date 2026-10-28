@@ -29,6 +29,16 @@ export interface RecordingState {
   keywords: string[]
   /** A session socket is open, so job updates arrive as events (otherwise the storyboard polls). */
   connected: boolean
+  /** Send keep_audio: the narrator agreed to keep the recording for the animatic. */
+  keepAudio: boolean
+  /** The server heard 8 s of near-silence and no words (audio.silent): probably the wrong microphone. */
+  silent: boolean
+  /** The last session ended without a single word heard. */
+  heardNothing: boolean
+  /** The microphone in use, as the browser names it. */
+  micLabel: string
+  /** The microphone the narrator picked; null means the system default. */
+  deviceId: string | null
 }
 
 export const initialRecording: RecordingState = {
@@ -42,6 +52,11 @@ export const initialRecording: RecordingState = {
   notices: [],
   keywords: [],
   connected: false,
+  keepAudio: true,
+  silent: false,
+  heardNothing: false,
+  micLabel: '',
+  deviceId: null,
 }
 
 const MAX_NOTICES = 3
@@ -65,9 +80,11 @@ function without<T>(record: Record<string, T>, key: string): Record<string, T> {
 export function reduceRecording(state: RecordingState, event: ServerEvent): RecordingState {
   switch (event.type) {
     case 'session.started':
-      return { ...state, telling: state.telling === 'finishing' ? 'finishing' : 'live', problem: null }
+      return { ...state, telling: state.telling === 'finishing' ? 'finishing' : 'live', problem: null, heardNothing: false }
     case 'transcript.partial':
-      return { ...state, partial: event.text }
+      return { ...state, partial: event.text, silent: state.silent && !event.text.trim() }
+    case 'audio.silent':
+      return { ...state, silent: true }
     case 'turn.completed':
       return { ...state, turns: upsertTurn(state.turns, event.turn) }
     case 'shots.replaced':
@@ -80,7 +97,7 @@ export function reduceRecording(state: RecordingState, event: ServerEvent): Reco
       return { ...state, notices: withNotice(state.notices, event.message), correcting }
     }
     case 'session.ended':
-      return { ...state, telling: 'ended', partial: '', level: 0 }
+      return { ...state, telling: 'ended', partial: '', level: 0, silent: false, heardNothing: event.heard === false }
     default:
       return state
   }
@@ -97,6 +114,7 @@ interface RecordingActions {
   dismissNotice(message: string): void
   setKeywords(keywords: string[]): void
   setConnected(connected: boolean): void
+  set(patch: Partial<RecordingState>): void
   /** Load the turns of a project opened again. */
   loadTurns(turns: Turn[]): void
   reset(): void
@@ -114,6 +132,7 @@ export const useRecordingStore = create<RecordingState & RecordingActions>()((se
   dismissNotice: (message) => set((s) => ({ notices: s.notices.filter((n) => n !== message) })),
   setKeywords: (keywords) => set({ keywords }),
   setConnected: (connected) => set({ connected }),
+  set: (patch) => set(patch),
   loadTurns: (turns) => set({ turns }),
   reset: () => set(initialRecording),
 }))
