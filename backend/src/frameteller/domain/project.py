@@ -13,6 +13,7 @@ from frameteller.domain.errors import (
     UnknownShotError,
     UnknownTurnError,
 )
+from frameteller.domain.exports import AnimaticExport
 from frameteller.domain.media import MediaRef
 from frameteller.domain.narration import Narration
 from frameteller.domain.panels import Panel
@@ -31,6 +32,7 @@ class Project:
     shots: list[Shot] = field(default_factory=list)
     panels: dict[str, Panel] = field(default_factory=dict)
     narrations: dict[str, Narration] = field(default_factory=dict)  # by session tag, kept only with consent
+    animatic: AnimaticExport | None = None  # the latest export
 
     # ---- transcript and characters ----
 
@@ -126,6 +128,14 @@ class Project:
         refs = [n.recording for n in self.narrations.values()]
         self.narrations = {}
         return refs
+
+    # ---- exports ----
+
+    def record_animatic(self, export: AnimaticExport) -> MediaRef | None:
+        """Keep the latest animatic. Returns the one it replaces, for the caller to delete."""
+        previous = self.animatic.video if self.animatic and self.animatic.video != export.video else None
+        self.animatic = export
+        return previous
 
     # ---- shots ----
 

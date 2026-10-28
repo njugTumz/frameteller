@@ -8,7 +8,7 @@ from frameteller.application.use_cases.correct_transcript import CorrectTranscri
 from frameteller.application.use_cases.direct_turn import DirectedShots, DirectTurn
 from frameteller.application.use_cases.edit_panel_appearance import EditPanelAppearance
 from frameteller.application.use_cases.edit_panel_by_command import EditPanelByCommand
-from frameteller.application.use_cases.export_animatic import ExportAnimatic
+from frameteller.application.use_cases.export_animatic import ExportAnimatic, RequestAnimaticExport
 from frameteller.application.use_cases.generate_character_reference import GenerateCharacterReference
 from frameteller.application.use_cases.generate_panel import GeneratePanel
 from frameteller.application.use_cases.manage_cast import MergeCharacters, Merged, RemoveCharacter, RenameCharacter
@@ -56,6 +56,7 @@ __all__ = [
     "RemoveCharacter",
     "RenameCharacter",
     "ReorderShots",
+    "RequestAnimaticExport",
     "RequestCastReferences",
     "RequestPanelEdit",
     "RequestPanelRender",

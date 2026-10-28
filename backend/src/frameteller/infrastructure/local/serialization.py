@@ -7,6 +7,7 @@ import zlib
 from typing import Any
 
 from frameteller.domain import (
+    AnimaticExport,
     Box,
     CanvasTransform,
     CastStatus,
@@ -129,6 +130,16 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             {"session": n.session, "recording": n.recording.key, "duration_ms": n.duration_ms}
             for n in p.narrations.values()
         ],
+        "animatic": (
+            {
+                "video": p.animatic.video.key,
+                "duration_ms": p.animatic.duration_ms,
+                "subtitles": p.animatic.subtitles,
+                "voiced": p.animatic.voiced,
+            }
+            if p.animatic
+            else None
+        ),
     }
 
 
@@ -189,4 +200,9 @@ def project_from_dict(d: dict[str, Any]) -> Project:
             n["session"]: Narration(n["session"], MediaRef(n["recording"]), n["duration_ms"])
             for n in d.get("narrations", [])
         },
+        animatic=_animatic(d.get("animatic")),
     )
+
+
+def _animatic(d: dict[str, Any] | None) -> AnimaticExport | None:
+    return AnimaticExport(MediaRef(d["video"]), d["duration_ms"], d["subtitles"], d["voiced"]) if d else None

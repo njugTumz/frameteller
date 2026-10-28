@@ -23,6 +23,7 @@ from frameteller.application.ports import Quality, SpeechMode, SpeechOptions
 from frameteller.application.use_cases import Beat, CastReview, JobTicket, Selection, TranscriptCorrection
 from frameteller.application.use_cases.correct_transcript import MAX_TURN_CHARS
 from frameteller.domain import (
+    AnimaticExport,
     Box,
     CanvasTransform,
     Character,
@@ -98,6 +99,10 @@ class LayerRequest(BaseModel):
     dy: int = Field(default=0, ge=-20_000, le=20_000)
     scale: float = Field(default=1.0, ge=0.2, le=3.0)
     deleted: bool = False
+
+
+class AnimaticRequest(BaseModel):
+    subtitles: bool = Field(default=False, description="Burn the narration's words into the picture.")
 
 
 class ReorderRequest(BaseModel):
@@ -276,6 +281,17 @@ class NarrationOut(BaseModel):
     url: str
 
 
+class AnimaticOut(BaseModel):
+    url: str = Field(description="Plays inline; add ?download=1 to save it.")
+    duration_ms: int
+    subtitles: bool
+    voiced: bool = Field(description="False when no narration was kept: the animatic is silent.")
+
+    @classmethod
+    def of(cls, a: AnimaticExport) -> AnimaticOut:
+        return cls(url=f"/media/{a.video.key}", duration_ms=a.duration_ms, subtitles=a.subtitles, voiced=a.voiced)
+
+
 class ProjectOut(BaseModel):
     id: str
     title: str
@@ -284,6 +300,7 @@ class ProjectOut(BaseModel):
     turns: list[TurnOut]
     shots: list[ShotOut]
     narrations: list[NarrationOut] = Field(description="Kept recordings, one per live session, for the animatic.")
+    animatic: AnimaticOut | None = Field(description="The latest exported animatic.")
 
     @classmethod
     def of(cls, p: Project) -> ProjectOut:
@@ -300,6 +317,7 @@ class ProjectOut(BaseModel):
                 NarrationOut(session=n.session, duration_ms=n.duration_ms, url=f"/media/{n.recording.key}")
                 for n in p.narrations.values()
             ],
+            animatic=AnimaticOut.of(p.animatic) if p.animatic else None,
         )
 
 
@@ -378,7 +396,7 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
             }
         case CastProposed(characters):
             return {"type": "cast.proposed", "characters": [CharacterOut.of(c).model_dump() for c in characters]}
-        case JobUpdated(kind, key, status, shot_id, revision, message):
+        case JobUpdated(kind, key, status, shot_id, revision, message, progress):
             return {
                 "type": "job.updated",
                 "kind": kind,
@@ -387,6 +405,7 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
                 "shot_id": shot_id,
                 "revision": revision,
                 "message": message,
+                "progress": progress,
             }
         case SessionFailed(message, fatal):
             return error_message(message, fatal=fatal)

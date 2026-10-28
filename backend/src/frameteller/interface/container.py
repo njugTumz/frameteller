@@ -20,6 +20,7 @@ from frameteller.application.ports import (
     SegmentationPort,
     SpeechToTextPort,
     SpendLedger,
+    VideoRendererPort,
 )
 from frameteller.application.use_cases import (
     ApproveCast,
@@ -30,6 +31,7 @@ from frameteller.application.use_cases import (
     DirectTurn,
     EditPanelAppearance,
     EditPanelByCommand,
+    ExportAnimatic,
     FindShot,
     GenerateCastReferences,
     GenerateCharacterReference,
@@ -41,6 +43,7 @@ from frameteller.application.use_cases import (
     RemoveCharacter,
     RenameCharacter,
     ReorderShots,
+    RequestAnimaticExport,
     RequestCastReferences,
     RequestPanelEdit,
     RequestPanelRender,
@@ -51,6 +54,7 @@ from frameteller.application.use_cases import (
 from frameteller.infrastructure.azure import AzureBlobMediaStorage, BlobProjectRepository, BlobSpendLedger, blob_service
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.imaging.compositor import PillowCompositor
+from frameteller.infrastructure.imaging.ffmpeg_animatic import FfmpegVideoRenderer
 from frameteller.infrastructure.jobs import Handler, InProcessJobQueue, JobStatus
 from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
 from frameteller.infrastructure.meta import meta_client
@@ -83,6 +87,7 @@ class Container:
     request_render: RequestPanelRender
     request_edit: RequestPanelEdit
     select_object: SegmentObjectAtPoint
+    request_animatic: RequestAnimaticExport
     move_object: MovePanelObject
     reorder_shots: ReorderShots
     voice_session: RunVoiceSession
@@ -107,10 +112,12 @@ def wire(
     ids: IdGenerator | None = None,
     readiness: dict[str, ReadinessCheck] | None = None,
     compositor: CompositorPort | None = None,
+    renderer: VideoRendererPort | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
     compositor = compositor or PillowCompositor()  # local work, no network: tests use it too
+    renderer = renderer or FfmpegVideoRenderer()
     hub = EventHub()
     budget = LimitBudgetGuard(
         ledger,
@@ -159,6 +166,10 @@ def wire(
     handlers[job_kinds.COMPOSE_PANEL] = handler(
         lambda p: compose_panel.execute(p["project_id"], p["shot_id"], int(p["revision"]))
     )
+    export_animatic = ExportAnimatic(repo, storage, renderer, hub)
+    handlers[job_kinds.EXPORT_ANIMATIC] = handler(
+        lambda p: export_animatic.execute(p["project_id"], subtitles=bool(p["subtitles"]), job_key=p["job_key"])
+    )
     handlers[job_kinds.EDIT_PANEL] = handler(
         lambda p: edit_by_command.execute(p["project_id"], p["shot_id"], p["instruction"])
     )
@@ -184,6 +195,7 @@ def wire(
         request_edit=RequestPanelEdit(repo, queue),
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),
         move_object=MovePanelObject(repo, queue),
+        request_animatic=RequestAnimaticExport(repo, queue),
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
             speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids, repo, storage

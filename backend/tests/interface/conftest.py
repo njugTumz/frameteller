@@ -24,6 +24,7 @@ from tests.fakes import (
     FakeImageGeneration,
     FakeSegmentation,
     FakeSpeechToText,
+    FakeVideoRenderer,
     InMemoryMediaStorage,
     InMemoryProjectRepository,
     InMemorySpendLedger,
@@ -42,6 +43,7 @@ class Fakes:
     speech: FakeSpeechToText = field(default_factory=FakeSpeechToText)
     ledger: InMemorySpendLedger = field(default_factory=InMemorySpendLedger)
     compositor: FakeCompositor = field(default_factory=FakeCompositor)
+    renderer: FakeVideoRenderer = field(default_factory=FakeVideoRenderer)
     ready: bool = True
 
     def __post_init__(self) -> None:
@@ -85,6 +87,7 @@ def build(settings: Settings, f: Fakes) -> Container:
         ids=SequentialIds("id"),
         readiness={"storage": storage_check},
         compositor=f.compositor,
+        renderer=f.renderer,
     )
 
 

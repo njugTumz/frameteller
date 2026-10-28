@@ -4,7 +4,6 @@ from frameteller.application import costs
 from frameteller.application.errors import NothingToSegmentError
 from frameteller.application.ports import Segment
 from frameteller.application.use_cases import (
-    ExportAnimatic,
     GeneratePanel,
     MovePanelObject,
     PreSegmentPanel,
@@ -14,7 +13,6 @@ from frameteller.application.use_cases import (
 from frameteller.domain import MediaRef, PanelNotReadyError, Point, Size, UnknownObjectError
 from tests.application.conftest import World
 from tests.builders import bitmap
-from tests.fakes import FakeVideoRenderer
 
 MIRA_SEGMENT = Segment(
     bitmap(100, 100, 300, 400).box, bitmap(100, 100, 300, 400), "Mira", MediaRef("projects/p1/cut-mira.png")
@@ -136,32 +134,3 @@ async def test_move_unknown_object_fails(world: World) -> None:
     await render(world)
     with pytest.raises(UnknownObjectError):
         await MovePanelObject(world.repo, world.jobs).execute("p1", "s2", "character:ghost", dx=1)
-
-
-async def test_export_renders_every_panel_with_narration(world: World) -> None:
-    for shot_id in ("s1", "s2", "s3"):
-        await render(world, shot_id)
-    world.storage.files["audio/take.wav"] = (b"wav", "audio/wav")
-    renderer = FakeVideoRenderer()
-
-    ref = await ExportAnimatic(world.repo, world.storage, renderer).execute("p1", MediaRef("audio/take.wav"))
-
-    animatic, frames, narration = renderer.rendered[0]
-    assert [c.shot_id for c in animatic.clips] == ["s1", "s2", "s3"]
-    assert set(frames) == {"s1", "s2", "s3"}
-    assert narration == b"wav"
-    assert world.storage.files[ref.key] == (b"mp4", "video/mp4")
-
-
-async def test_export_without_narration(world: World) -> None:
-    for shot_id in ("s1", "s2", "s3"):
-        await render(world, shot_id)
-    renderer = FakeVideoRenderer()
-    await ExportAnimatic(world.repo, world.storage, renderer).execute("p1")
-    assert renderer.rendered[0][2] is None
-
-
-async def test_export_needs_every_panel(world: World) -> None:
-    await render(world, "s1")
-    with pytest.raises(PanelNotReadyError):
-        await ExportAnimatic(world.repo, world.storage, FakeVideoRenderer()).execute("p1")

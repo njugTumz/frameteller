@@ -31,7 +31,7 @@ MAX_AUDIO_BODY_BYTES = 44 + 48 * 30_000
 _AUDIO_BODY = re.compile(r"/dictation$")
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 # Endpoints that spend model credits get a tighter bucket.
-_COSTLY = re.compile(r"/(panel|panel/edit|panel/select|panel/layers|regenerate|merge|session|dictation)$")
+_COSTLY = re.compile(r"/(panel|panel/edit|panel/select|panel/layers|animatic|regenerate|merge|session|dictation)$")
 _UNLIMITED = {"/healthz", "/readyz"}
 
 

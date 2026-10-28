@@ -55,6 +55,7 @@ class JobUpdated:
     shot_id: str | None = None
     revision: int | None = None
     message: str | None = None  # user-facing, on failure
+    progress: float | None = None  # 0-1, for long jobs (the animatic export) while running
 
 
 @dataclass(frozen=True, slots=True)

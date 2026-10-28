@@ -6,7 +6,16 @@ import pytest
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.errors import BudgetExceededError, ProjectNotFoundError
 from frameteller.application.ports import UsageRecord
-from frameteller.domain import CanvasTransform, CleanPlate, MediaRef, ObjectMask, PanelStyle, Project, Size
+from frameteller.domain import (
+    AnimaticExport,
+    CanvasTransform,
+    CleanPlate,
+    MediaRef,
+    ObjectMask,
+    PanelStyle,
+    Project,
+    Size,
+)
 from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
 from tests.builders import bitmap, project
 from tests.fakes import FixedClock
@@ -35,6 +44,7 @@ async def test_repository_round_trips_a_full_project(tmp_path: Path) -> None:
     panel.cache_plate(1, CleanPlate(("character:mira",), MediaRef("panels/s2/r1/plates/a"), "resp_2"))
     panel.record_composite(1, MediaRef("panels/s2/r1/composites/b.webp"), Size(1920, 1280))
     p.reorder_shots(["s3", "s1", "s2"])
+    p.record_animatic(AnimaticExport(MediaRef("projects/p1/exports/animatic-x.mp4"), 12000, True, False))
 
     repo = JsonFileProjectRepository(tmp_path)
     await repo.save(p)

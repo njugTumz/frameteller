@@ -7,6 +7,7 @@ from fastapi import APIRouter, Path, Request, status
 from frameteller.application.use_cases import MAX_DICTATION_MS
 from frameteller.domain import InvalidValueError, Point, Size
 from frameteller.interface.dto import (
+    AnimaticRequest,
     CastApproval,
     CastReviewOut,
     CharacterMerge,
@@ -112,6 +113,14 @@ async def save_layer(project_id: ProjectId, n: ShotNumber, body: LayerRequest, c
         project_id, shot.id, body.object_id, dx=body.dx, dy=body.dy, scale=body.scale, deleted=body.deleted
     )
     return TicketOut.of(ticket)
+
+
+@router.post(
+    "/{project_id}/exports/animatic", status_code=status.HTTP_202_ACCEPTED, responses={409: {"model": ErrorOut}}
+)
+async def export_animatic(project_id: ProjectId, body: AnimaticRequest, c: Deps) -> TicketOut:
+    """Queue the MP4 animatic. job.updated carries progress; the project's `animatic` holds the result."""
+    return TicketOut.of(await c.request_animatic.execute(project_id, subtitles=body.subtitles))
 
 
 @router.post("/{project_id}/shots/reorder")

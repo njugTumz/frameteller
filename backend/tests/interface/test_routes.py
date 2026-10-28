@@ -265,3 +265,34 @@ async def test_layers_need_a_known_object_and_a_sane_scale(api: Api) -> None:
     assert unknown.status_code in (404, 422)
     huge = await api.client.post("/projects/p1/shots/1/panel/layers", json={"object_id": "x", "scale": 9})
     assert huge.status_code == 422
+
+
+async def test_export_animatic_then_play_seek_and_download_it(api: Api) -> None:
+    refused = await api.client.post("/projects/p1/exports/animatic", json={})
+    assert refused.status_code == 409  # no panels yet
+    for n in (1, 2, 3):
+        await api.client.post(f"/projects/p1/shots/{n}/panel", json={})
+    await api.settle()
+
+    r = await api.client.post("/projects/p1/exports/animatic", json={"subtitles": True})
+    assert r.status_code == 202
+    assert r.json()["kind"] == "export_animatic"
+    await api.settle()
+
+    animatic = (await api.client.get("/projects/p1")).json()["animatic"]
+    assert animatic["duration_ms"] == 12000
+    assert animatic["subtitles"] is True
+    assert animatic["voiced"] is False
+    whole = await api.client.get(animatic["url"])
+    assert whole.headers["content-type"] == "video/mp4"
+    assert whole.headers["accept-ranges"] == "bytes"
+    part = await api.client.get(animatic["url"], headers={"Range": "bytes=4-7"})
+    assert part.status_code == 206
+    assert part.content == b"ftyp"
+    assert part.headers["content-range"] == f"bytes 4-7/{len(whole.content)}"
+    tail = await api.client.get(animatic["url"], headers={"Range": "bytes=-4"})
+    assert tail.content == whole.content[-4:]
+    beyond = await api.client.get(animatic["url"], headers={"Range": "bytes=999-"})
+    assert beyond.status_code == 416
+    download = await api.client.get(animatic["url"] + "?download=1")
+    assert download.headers["content-disposition"].startswith('attachment; filename="animatic-')

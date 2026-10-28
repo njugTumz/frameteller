@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import copy
 from collections import defaultdict
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -19,6 +19,7 @@ from frameteller.application.ports import (
     EditIntent,
     ImageRequest,
     Job,
+    Progress,
     Quality,
     Segment,
     SpeechEvent,
@@ -239,11 +240,22 @@ class RecordingPublisher:
 
 class FakeVideoRenderer:
     def __init__(self) -> None:
-        self.rendered: list[tuple[Animatic, dict[str, bytes], bytes | None]] = []
+        self.rendered: list[tuple[Animatic, dict[str, bytes], dict[str, bytes], bool]] = []
 
-    async def render(self, animatic: Animatic, frames: dict[str, bytes], narration: bytes | None) -> bytes:
-        self.rendered.append((animatic, frames, narration))
-        return b"mp4"
+    async def render(
+        self,
+        animatic: Animatic,
+        frames: Mapping[str, bytes],
+        recordings: Mapping[str, bytes],
+        *,
+        subtitles: bool,
+        on_progress: Progress | None = None,
+    ) -> bytes:
+        self.rendered.append((animatic, dict(frames), dict(recordings), subtitles))
+        if on_progress is not None:
+            for done in (0.02, 0.3, 0.6, 1.0):
+                await on_progress(done)
+        return b"\x00\x00\x00\x18ftypmp42"
 
 
 class FixedClock:

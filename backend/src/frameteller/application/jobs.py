@@ -60,6 +60,16 @@ def compose_job(project_id: str, shot_id: str, base_revision: int, layers: str) 
     )
 
 
+def export_job(project_id: str, digest: str, subtitles: bool) -> Job:
+    """Render the animatic. Keyed on what it shows, so an unchanged storyboard exports once."""
+    key = f"{EXPORT_ANIMATIC}:{project_id}:{digest}"
+    return Job(
+        kind=EXPORT_ANIMATIC,
+        idempotency_key=key,
+        payload={"project_id": project_id, "subtitles": "1" if subtitles else "", "job_key": key},  # for progress
+    )
+
+
 def cast_job(project_id: str, character_ids: Sequence[str], nonce: str) -> Job:
     """Reference sheets for some characters. `nonce` separates a deliberate regenerate from a retry."""
     ids = sorted(set(character_ids))

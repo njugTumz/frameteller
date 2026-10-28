@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -247,8 +247,21 @@ class JobQueuePort(Protocol):
         ...
 
 
+Progress = Callable[[float], Awaitable[None]]
+
+
 class VideoRendererPort(Protocol):
-    async def render(self, animatic: Animatic, frames: dict[str, bytes], narration: bytes | None) -> bytes: ...
+    async def render(
+        self,
+        animatic: Animatic,
+        frames: Mapping[str, bytes],
+        recordings: Mapping[str, bytes],
+        *,
+        subtitles: bool,
+        on_progress: Progress | None = None,
+    ) -> bytes:
+        """The MP4 animatic. `frames` by shot id, `recordings` by media key; progress is 0-1 of the timeline."""
+        ...
 
 
 class CompositorPort(Protocol):

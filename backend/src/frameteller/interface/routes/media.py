@@ -44,7 +44,37 @@ async def get_media(key: str, request: Request, c: Deps) -> Response:
     except (FileNotFoundError, KeyError, ValueError, InvalidValueError):
         return error_response(404, "media_not_found", "No such file.")
     etag = '"' + hashlib.sha256(data).hexdigest()[:32] + '"'
-    headers = {"ETag": etag, "Cache-Control": cache_control(key), "X-Content-Type-Options": "nosniff"}
+    headers = {
+        "ETag": etag,
+        "Cache-Control": cache_control(key),
+        "X-Content-Type-Options": "nosniff",
+        "Accept-Ranges": "bytes",
+    }
+    if request.query_params.get("download"):
+        headers["Content-Disposition"] = f'attachment; filename="{key.rsplit("/", 1)[-1]}"'
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
-    return Response(data, media_type=content_type(data), headers=headers)
+    wanted = byte_range(request.headers.get("range"), len(data))
+    if wanted is None:
+        return Response(data, media_type=content_type(data), headers=headers)
+    start, end = wanted
+    if start >= len(data):
+        return Response(status_code=416, headers={**headers, "Content-Range": f"bytes */{len(data)}"})
+    headers["Content-Range"] = f"bytes {start}-{end}/{len(data)}"
+    return Response(data[start : end + 1], status_code=206, media_type=content_type(data), headers=headers)
+
+
+def byte_range(header: str | None, size: int) -> tuple[int, int] | None:
+    """One `bytes=a-b`, `bytes=a-` or `bytes=-n` range, as the video player asks to seek. Others: whole file."""
+    if not header or not header.startswith("bytes=") or "," in header:
+        return None
+    first, _, last = header[len("bytes=") :].strip().partition("-")
+    try:
+        if not first:  # the last n bytes
+            n = int(last)
+            return (max(0, size - n), size - 1) if n > 0 else None
+        start = int(first)
+        end = min(int(last), size - 1) if last else size - 1
+    except ValueError:
+        return None
+    return (start, end) if start <= end or start >= size else None

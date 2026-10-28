@@ -1,6 +1,48 @@
 {
   "components": {
     "schemas": {
+      "AnimaticOut": {
+        "properties": {
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "subtitles": {
+            "title": "Subtitles",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "Plays inline; add ?download=1 to save it.",
+            "title": "Url",
+            "type": "string"
+          },
+          "voiced": {
+            "description": "False when no narration was kept: the animatic is silent.",
+            "title": "Voiced",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url",
+          "duration_ms",
+          "subtitles",
+          "voiced"
+        ],
+        "title": "AnimaticOut",
+        "type": "object"
+      },
+      "AnimaticRequest": {
+        "properties": {
+          "subtitles": {
+            "default": false,
+            "description": "Burn the narration's words into the picture.",
+            "title": "Subtitles",
+            "type": "boolean"
+          }
+        },
+        "title": "AnimaticRequest",
+        "type": "object"
+      },
       "BoxOut": {
         "properties": {
           "bottom": {
@@ -506,6 +548,17 @@
       },
       "ProjectOut": {
         "properties": {
+          "animatic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnimaticOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest exported animatic."
+          },
           "cast": {
             "$ref": "#/components/schemas/CastOut"
           },
@@ -555,7 +608,8 @@
           "cast",
           "turns",
           "shots",
-          "narrations"
+          "narrations",
+          "animatic"
         ],
         "title": "ProjectOut",
         "type": "object"
@@ -1525,6 +1579,80 @@
           }
         },
         "summary": "Dictate",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/exports/animatic": {
+      "post": {
+        "description": "Queue the MP4 animatic. job.updated carries progress; the project's `animatic` holds the result.",
+        "operationId": "export_animatic_projects__project_id__exports_animatic_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimaticRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Animatic",
         "tags": [
           "projects"
         ]
