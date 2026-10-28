@@ -1,4 +1,4 @@
-// Frameteller backend: one resource group per environment (CLAUDE.md section 7).
+// Frameteller backend and studio frontend: one resource group per environment (CLAUDE.md section 7).
 // Deploy: az deployment group create -g rg-frameteller-<env> -f infra/main.bicep -p infra/parameters/<env>.bicepparam
 // MODEL_API_KEY and CONTAINER_IMAGE come from the deploying shell's environment (the pipeline), never from files.
 
@@ -19,6 +19,9 @@ param modelApiKey string
 
 @description('Comma-separated browser origins allowed for CORS and the live session WebSocket.')
 param allowedOrigins string
+
+@description('The studio frontend Static Web App.')
+param staticWebAppName string
 
 @description('Delete media blobs older than this many days; 0 keeps them.')
 @minValue(0)
@@ -74,6 +77,17 @@ module access 'modules/storage-access.bicep' = {
   }
 }
 
+module frontend 'modules/staticwebapp.bicep' = {
+  name: 'staticwebapp'
+  params: {
+    location: location
+    tags: tags
+    name: staticWebAppName
+  }
+}
+
 output appName string = app.outputs.name
 output appUrl string = 'https://${app.outputs.fqdn}'
 output storageAccountName string = storage.outputs.accountName
+output frontendName string = frontend.outputs.name
+output frontendUrl string = 'https://${frontend.outputs.hostname}'
