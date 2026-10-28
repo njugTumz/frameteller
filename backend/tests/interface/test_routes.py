@@ -16,10 +16,18 @@ async def test_create_and_get_a_project(api: Api) -> None:
     body = created.json()
     assert body["title"] == "The Lantern Cat"
     assert body["cast"] == {"status": "draft", "characters": []}
+    assert body["style"] == "pencil"
 
     got = await api.client.get(f"/projects/{body['id']}")
     assert got.status_code == 200
     assert got.json() == body
+
+
+async def test_a_project_keeps_its_style(api: Api) -> None:
+    created = await api.client.post("/projects", json={"title": "Paper", "style": "paper_cutout"})
+    assert created.json()["style"] == "paper_cutout"
+    assert (await api.client.get(f"/projects/{created.json()['id']}")).json()["style"] == "paper_cutout"
+    assert (await api.client.post("/projects", json={"style": "oil"})).status_code == 422
 
 
 async def test_unknown_project_is_404_with_a_user_message(api: Api) -> None:

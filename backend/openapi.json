@@ -304,6 +304,16 @@
       },
       "ProjectCreate": {
         "properties": {
+          "style": {
+            "default": "pencil",
+            "description": "How every panel is drawn.",
+            "enum": [
+              "pencil",
+              "paper_cutout"
+            ],
+            "title": "Style",
+            "type": "string"
+          },
           "title": {
             "default": "",
             "maxLength": 120,
@@ -330,6 +340,14 @@
             "title": "Shots",
             "type": "array"
           },
+          "style": {
+            "enum": [
+              "pencil",
+              "paper_cutout"
+            ],
+            "title": "Style",
+            "type": "string"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -345,6 +363,7 @@
         "required": [
           "id",
           "title",
+          "style",
           "cast",
           "turns",
           "shots"

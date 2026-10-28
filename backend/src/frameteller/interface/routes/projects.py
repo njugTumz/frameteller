@@ -32,7 +32,7 @@ CharacterId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_project(body: ProjectCreate, c: Deps) -> ProjectOut:
-    return ProjectOut.of(await c.create_project.execute(body.title))
+    return ProjectOut.of(await c.create_project.execute(body.title, body.as_style()))
 
 
 @router.get("/{project_id}")

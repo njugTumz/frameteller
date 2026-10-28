@@ -20,7 +20,7 @@ from frameteller.application.events import (
 from frameteller.application.ports import Quality, SpeechMode, SpeechOptions
 from frameteller.application.use_cases import Beat, CastReview, JobTicket, Selection, TranscriptCorrection
 from frameteller.application.use_cases.correct_transcript import MAX_TURN_CHARS
-from frameteller.domain import Box, Character, MediaRef, ObjectMask, Panel, Project, Shot, TranscriptTurn
+from frameteller.domain import Box, Character, MediaRef, ObjectMask, Panel, PanelStyle, Project, Shot, TranscriptTurn
 
 Id = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -34,6 +34,10 @@ def media_url(ref: MediaRef | None) -> str | None:
 
 class ProjectCreate(BaseModel):
     title: str = Field(default="", max_length=120)
+    style: Literal["pencil", "paper_cutout"] = Field(default="pencil", description="How every panel is drawn.")
+
+    def as_style(self) -> PanelStyle:
+        return PanelStyle(self.style)
 
 
 class CastApproval(BaseModel):
@@ -213,6 +217,7 @@ class TurnOut(BaseModel):
 class ProjectOut(BaseModel):
     id: str
     title: str
+    style: Literal["pencil", "paper_cutout"]
     cast: CastOut
     turns: list[TurnOut]
     shots: list[ShotOut]
@@ -222,6 +227,7 @@ class ProjectOut(BaseModel):
         return cls(
             id=p.id,
             title=p.title,
+            style=p.style.value,
             cast=CastOut(
                 status=p.bible.status.value, characters=[CharacterOut.of(c) for c in p.bible.characters.values()]
             ),
