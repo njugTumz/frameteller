@@ -26,8 +26,9 @@ Each turn has an id, start_ms, end_ms and text.
 Return:
 - new_characters: characters that appear in the turns but are not in the bible yet, including animals.
   id is a short lowercase slug (e.g. "mira"). canonical_description is ONE stable visual description used
-  to draw the character in every panel: age, build, face, hair, clothing with colours and distinctive
-  features. Be concrete. Never mention framing or actions. Never contradict the transcript.
+  to draw the character in every panel: species, age, build, face, hair or fur, and distinctive features.
+  Describe clothing and accessories only when the transcript mentions them; animals wear nothing unless the
+  transcript says so. Be concrete. Never mention framing or actions. Never contradict the transcript.
 - shots: one or more shots per turn, in story order.
   framing is one of wide, medium, close_up, over_shoulder, insert. Honour explicit cues such as "wide shot"
   or "close on". character_ids lists only characters visible in the shot, from the bible or new_characters.
@@ -39,7 +40,8 @@ Keep the story original. Do not add real people, brands or copyrighted character
 CHARACTERS_PROMPT = """You maintain the character bible for a storyboard.
 List every character in the transcript, including animals, that is not already in the bible.
 id is a short lowercase slug. canonical_description is one concrete, stable visual description:
-age, build, face, hair, clothing with colours and distinctive features."""
+species, age, build, face, hair or fur, and distinctive features. Describe clothing and accessories only
+when the transcript mentions them; animals wear nothing unless the transcript says so."""
 
 
 EDIT_PROMPT = """You route a storyboard artist's edit instruction for one panel into an appearance edit.

@@ -7,35 +7,46 @@ from collections.abc import Sequence
 from frameteller.domain import Character, PanelStyle, Shot
 
 STYLES = {
-    PanelStyle.PENCIL: "clean pencil storyboard sketch, light grey wash, one accent colour",
+    PanelStyle.PENCIL: "hand-drawn pencil storyboard sketch, clean graphite lines, light grey wash, one accent colour",
     PanelStyle.PAPER_CUTOUT: (
         "paper cutout animation: flat shapes cut from coloured craft paper, visible paper grain and torn edges, "
         "layered with soft drop shadows, simple backgrounds"
     ),
 }
+NOT_PHOTOREAL = "Never photorealistic, never a photograph or 3D render."
+ONLY_AS_DESCRIBED = (
+    "Show only what the description says: no clothing, accessories or props it does not mention. "
+    "An animal wears nothing unless the description says so."
+)
 
 
 def reference_prompt(c: Character, style: PanelStyle = PanelStyle.PENCIL) -> str:
-    prompt = (
+    """A neutral two-view sheet in the project's style. Panels copy their references' look, so the sheet sets it."""
+    return (
         f"Character reference sheet for an original character named {c.name}: {c.canonical_description}. "
         "Show the same character twice side by side: a front view and a three-quarter view, full body, "
-        "neutral standing pose, identical outfit and colours in both views. Plain light grey background, "
-        "no text, no props, no scenery."
+        "neutral standing pose, identical in both views. "
+        f"{ONLY_AS_DESCRIBED} Plain light grey background, no text, no scenery. "
+        f"Style: {STYLES[style]}. {NOT_PHOTOREAL}"
     )
-    # Pencil sheets keep the wording measured in the Day 2 spikes; other styles say how to draw the sheet,
-    # because panels copy their references' look.
-    return prompt if style is PanelStyle.PENCIL else f"{prompt} Style: {STYLES[style]}."
 
 
 def panel_prompt(shot: Shot, cast: Sequence[Character], style: PanelStyle = PanelStyle.PENCIL) -> str:
+    """`cast` is the shot's characters; those with sheets are attached as references in the same order."""
     who = "; ".join(f"{c.name}: {c.canonical_description}" for c in cast)
     lines = [
         f"Storyboard panel, {shot.framing.value.replace('_', ' ')} framing. Keep key action in the central 16:9 band.",
         f"Setting: {shot.setting}. Action: {shot.action}.",
     ]
     if who:
-        lines.append(f"Characters: {who}. Draw each exactly as in the attached reference sheets.")
-    lines.append(f"Style: {STYLES[style]}. No text, captions or panel borders.")
+        lines.append(f"Characters: {who}.")
+    if sheets := [c.name for c in cast if c.reference is not None]:
+        lines.append(
+            f"The attached reference sheets show, in order: {', '.join(sheets)}. Each character appears exactly as "
+            "in their reference sheet: same species, proportions, colours, markings and drawing style, with no "
+            "added clothing, accessories or change of style."
+        )
+    lines.append(f"Style: {STYLES[style]}. {NOT_PHOTOREAL} No text, captions or panel borders.")
     return " ".join(lines)
 
 

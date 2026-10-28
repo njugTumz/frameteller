@@ -1,7 +1,9 @@
+from dataclasses import replace
+
 import pytest
 
-from frameteller.application.prompts import edit_prompt, panel_prompt, reference_prompt
-from frameteller.domain import PanelStyle
+from frameteller.application.prompts import STYLES, edit_prompt, panel_prompt, reference_prompt
+from frameteller.domain import MediaRef, PanelStyle
 from tests.builders import CAT, MIRA, shot
 
 
@@ -40,16 +42,32 @@ def test_panel_prompt_includes_cast_and_framing() -> None:
     assert "medium framing" in prompt
     assert MIRA.canonical_description in prompt
     assert CAT.canonical_description in prompt
-    assert "reference sheets" in prompt
 
 
-def test_panel_prompt_without_cast() -> None:
+def test_panel_prompt_names_the_sheets_in_order_and_forbids_additions() -> None:
+    mira = replace(MIRA, reference=MediaRef("refs/mira.webp"))
+    cat = replace(CAT, reference=MediaRef("refs/cat.webp"))
+    prompt = panel_prompt(shot(1, "mira", "cat"), [mira, cat])
+    assert "reference sheets show, in order: Mira, Grey Cat" in prompt
+    assert "exactly as in their reference sheet" in prompt
+    assert "no added clothing, accessories or change of style" in prompt
+
+
+def test_panel_prompt_without_sheets_attaches_none() -> None:
     assert "reference sheets" not in panel_prompt(shot(1), [])
+    assert "reference sheets" not in panel_prompt(shot(1, "mira"), [MIRA])  # no sheet drawn yet
 
 
-def test_reference_prompt_names_the_character() -> None:
-    assert MIRA.canonical_description in reference_prompt(MIRA)
-    assert "Style:" not in reference_prompt(MIRA)  # pencil sheets keep the wording measured in the spikes
+@pytest.mark.parametrize("style", list(PanelStyle))
+def test_reference_sheets_use_the_project_style_and_only_the_description(style: PanelStyle) -> None:
+    prompt = reference_prompt(MIRA, style)
+    assert MIRA.canonical_description in prompt
+    assert f"Style: {STYLES[style]}" in prompt
+    assert "Never photorealistic" in prompt
+    assert "no clothing, accessories or props it does not mention" in prompt
+    assert "An animal wears nothing unless the description says so" in prompt
+    assert "outfit" not in prompt  # "identical outfit" put a sweater on a fox
+    assert "neutral standing pose" in prompt
 
 
 def test_paper_cutout_style_reaches_panels_and_reference_sheets() -> None:
@@ -58,6 +76,7 @@ def test_paper_cutout_style_reaches_panels_and_reference_sheets() -> None:
     assert "paper cutout" in cutout
     assert "pencil" not in cutout
     assert "paper cutout" in reference_prompt(MIRA, PanelStyle.PAPER_CUTOUT)
+    assert "pencil" not in reference_prompt(MIRA, PanelStyle.PAPER_CUTOUT)
 
 
 def test_concept_phrase_is_a_short_visual_noun_phrase() -> None:
