@@ -166,6 +166,8 @@ class FakeSpeechToText:
             yield event
 
     async def transcribe_file(self, wav: bytes, options: SpeechOptions) -> list[TranscriptTurn]:
+        self.audio.extend(wav)
+        self.options = options
         return list(self.turns)
 
 
