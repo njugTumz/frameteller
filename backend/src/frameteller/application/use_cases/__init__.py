@@ -10,6 +10,7 @@ from frameteller.application.use_cases.edit_panel_by_command import EditPanelByC
 from frameteller.application.use_cases.export_animatic import ExportAnimatic
 from frameteller.application.use_cases.generate_character_reference import GenerateCharacterReference
 from frameteller.application.use_cases.generate_panel import GeneratePanel
+from frameteller.application.use_cases.manage_cast import MergeCharacters, Merged, RemoveCharacter, RenameCharacter
 from frameteller.application.use_cases.move_panel_object import MovePanelObject
 from frameteller.application.use_cases.pre_segment_panel import PreSegmentPanel, character_mask_id
 from frameteller.application.use_cases.projects import CreateProject, FindShot, GetProject
@@ -44,8 +45,12 @@ __all__ = [
     "GeneratePanel",
     "GetProject",
     "JobTicket",
+    "MergeCharacters",
+    "Merged",
     "MovePanelObject",
     "PreSegmentPanel",
+    "RemoveCharacter",
+    "RenameCharacter",
     "ReorderShots",
     "RequestCastReferences",
     "RequestPanelEdit",

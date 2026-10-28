@@ -32,7 +32,10 @@ from frameteller.application.use_cases import (
     GenerateCharacterReference,
     GeneratePanel,
     GetProject,
+    MergeCharacters,
     PreSegmentPanel,
+    RemoveCharacter,
+    RenameCharacter,
     ReorderShots,
     RequestCastReferences,
     RequestPanelEdit,
@@ -69,6 +72,9 @@ class Container:
     find_shot: FindShot
     approve_cast: ApproveCast
     request_cast: RequestCastReferences
+    rename_character: RenameCharacter
+    remove_character: RemoveCharacter
+    merge_characters: MergeCharacters
     request_render: RequestPanelRender
     request_edit: RequestPanelEdit
     select_object: SegmentObjectAtPoint
@@ -158,6 +164,9 @@ def wire(
         find_shot=FindShot(repo),
         approve_cast=ApproveCast(repo, queue, ids),
         request_cast=request_cast,
+        rename_character=RenameCharacter(repo),
+        remove_character=RemoveCharacter(repo),
+        merge_characters=MergeCharacters(repo, queue),
         request_render=RequestPanelRender(repo, queue),
         request_edit=RequestPanelEdit(repo, queue),
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),

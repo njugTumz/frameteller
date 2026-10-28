@@ -9,6 +9,8 @@ from frameteller.domain import InvalidValueError, Point, Size
 from frameteller.interface.dto import (
     CastApproval,
     CastReviewOut,
+    CharacterMerge,
+    CharacterRename,
     DictationOut,
     EditRequest,
     ErrorOut,
@@ -51,6 +53,28 @@ async def approve_cast(project_id: ProjectId, body: CastApproval, c: Deps) -> Ca
 @router.post("/{project_id}/cast/{character_id}/regenerate", status_code=status.HTTP_202_ACCEPTED)
 async def regenerate_reference(project_id: ProjectId, character_id: CharacterId, c: Deps) -> TicketOut:
     return TicketOut.of(await c.request_cast.execute(project_id, [character_id]))
+
+
+@router.patch("/{project_id}/cast/{character_id}")
+async def rename_character(
+    project_id: ProjectId, character_id: CharacterId, body: CharacterRename, c: Deps
+) -> ProjectOut:
+    """Rename a character. Its sheet and the cast's approval stand."""
+    return ProjectOut.of(await c.rename_character.execute(project_id, character_id, body.name))
+
+
+@router.delete("/{project_id}/cast/{character_id}")
+async def remove_character(project_id: ProjectId, character_id: CharacterId, c: Deps) -> ProjectOut:
+    """Remove a character from the cast and its shots. Shots keep their action; their panels are outdated."""
+    return ProjectOut.of(await c.remove_character.execute(project_id, character_id))
+
+
+@router.post("/{project_id}/cast/{character_id}/merge")
+async def merge_character(
+    project_id: ProjectId, character_id: CharacterId, body: CharacterMerge, c: Deps
+) -> ProjectOut:
+    """Merge a character into another: its shots show the other, and their panels are redrawn as drafts."""
+    return ProjectOut.of((await c.merge_characters.execute(project_id, character_id, body.into)).project)
 
 
 @router.post(

@@ -98,6 +98,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/cast/{character_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Character
+         * @description Remove a character from the cast and its shots. Shots keep their action; their panels are outdated.
+         */
+        delete: operations["remove_character_projects__project_id__cast__character_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename Character
+         * @description Rename a character. Its sheet and the cast's approval stand.
+         */
+        patch: operations["rename_character_projects__project_id__cast__character_id__patch"];
+        trace?: never;
+    };
+    "/projects/{project_id}/cast/{character_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Character
+         * @description Merge a character into another: its shots show the other, and their panels are redrawn as drafts.
+         */
+        post: operations["merge_character_projects__project_id__cast__character_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/cast/{character_id}/regenerate": {
         parameters: {
             query?: never;
@@ -275,6 +319,14 @@ export interface components {
             /** Redrawing */
             redrawing: string[];
         };
+        /**
+         * CharacterMerge
+         * @description Merge this character into `into`: every shot of it shows `into` instead.
+         */
+        CharacterMerge: {
+            /** Into */
+            into: string;
+        };
         /** CharacterOut */
         CharacterOut: {
             /** Description */
@@ -285,6 +337,11 @@ export interface components {
             name: string;
             /** Reference Url */
             reference_url: string | null;
+        };
+        /** CharacterRename */
+        CharacterRename: {
+            /** Name */
+            name: string;
         };
         /**
          * DictationOut
@@ -338,6 +395,11 @@ export interface components {
             image_url: string | null;
             /** Masks */
             masks: components["schemas"]["MaskOut"][];
+            /**
+             * Outdated
+             * @description The shot changed after this was drawn; draw it again.
+             */
+            outdated: boolean;
             /** Revision */
             revision: number;
             /** Status */
@@ -664,6 +726,164 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CastReviewOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_character_projects__project_id__cast__character_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_character_projects__project_id__cast__character_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CharacterRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_character_projects__project_id__cast__character_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CharacterMerge"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
                 };
             };
             /** @description Not Found */

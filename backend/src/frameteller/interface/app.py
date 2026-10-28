@@ -55,7 +55,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         app.add_middleware(
             CORSMiddleware,
             allow_origins=config.origins,
-            allow_methods=["GET", "POST"],
+            allow_methods=["GET", "POST", "PATCH", "DELETE"],
             allow_headers=["Content-Type", "X-Request-ID"],
             expose_headers=["X-Request-ID"],
         )

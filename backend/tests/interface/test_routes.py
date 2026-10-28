@@ -189,3 +189,29 @@ async def test_unexpected_errors_are_json_500s(api: Api) -> None:
     assert r.status_code == 500
     assert r.json() == {"error": {"code": "error", "message": "Something went wrong. Please try again."}}
     assert "disk on fire" not in r.text
+
+
+async def test_rename_remove_and_merge_characters(api: Api) -> None:
+    renamed = await api.client.patch("/projects/p1/cast/cat", json={"name": "Pip"})
+    assert renamed.status_code == 200
+    assert {c["id"]: c["name"] for c in renamed.json()["cast"]["characters"]}["cat"] == "Pip"
+
+    await api.client.post("/projects/p1/shots/2/panel", json={"quality": "draft"})
+    await api.settle()
+    merged = await api.client.post("/projects/p1/cast/cat/merge", json={"into": "mira"})
+    assert merged.status_code == 200
+    body = merged.json()
+    assert [c["id"] for c in body["cast"]["characters"]] == ["mira"]
+    assert body["shots"][1]["character_ids"] == ["mira"]
+    assert body["shots"][1]["panel"]["outdated"] is True
+    await api.settle()
+    assert api.project().panels["s2"].revision == 2  # redrawn as a draft
+    assert not api.project().panels["s2"].outdated
+
+    assert (await api.client.post("/projects/p1/cast/mira/merge", json={"into": "mira"})).status_code == 422
+    assert (await api.client.post("/projects/p1/cast/mira/merge", json={"into": "owl"})).status_code == 404
+    removed = await api.client.delete("/projects/p1/cast/mira")
+    assert removed.status_code == 200
+    assert removed.json()["cast"] == {"status": "draft", "characters": []}
+    assert all(s["character_ids"] == [] for s in removed.json()["shots"])
+    assert (await api.client.delete("/projects/p1/cast/mira")).status_code == 404

@@ -105,6 +105,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
                     {"object_id": t.object_id, "dx": t.dx, "dy": t.dy, "scale": t.scale, "deleted": t.deleted}
                     for t in pn.transforms
                 ],
+                "outdated": pn.outdated,
             }
             for pn in p.panels.values()
         ],
@@ -129,6 +130,7 @@ def project_from_dict(d: dict[str, Any]) -> Project:
             size=Size(*pd["size"]) if pd["size"] else None,
             masks={m["id"]: _unmask(m) for m in pd["masks"]},
             transforms=[CanvasTransform(**t) for t in pd["transforms"]],
+            outdated=pd.get("outdated", False),
         )
     return Project(
         id=d["id"],

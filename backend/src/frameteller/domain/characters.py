@@ -51,6 +51,22 @@ class CharacterBible:
             self.characters[character.id] = character
             self.status = CastStatus.DRAFT
 
+    def rename(self, character_id: str, name: str) -> Character:
+        """A new name only: the sheet still shows the same character, so approval stands."""
+        renamed = replace(self.get(character_id), name=name.strip())
+        if not renamed.name:
+            raise InvalidValueError("a character needs a name")
+        self.characters[character_id] = renamed
+        return renamed
+
+    def remove(self, character_id: str) -> Character:
+        """Drop a character. The rest of the cast keeps its sheets and its approval."""
+        removed = self.get(character_id)
+        del self.characters[character_id]
+        if not self.characters:
+            self.status = CastStatus.DRAFT
+        return removed
+
     def set_reference(self, character_id: str, reference: MediaRef) -> None:
         self.characters[character_id] = replace(self.get(character_id), reference=reference)
         self.status = CastStatus.DRAFT

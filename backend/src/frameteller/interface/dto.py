@@ -46,6 +46,16 @@ class CastApproval(BaseModel):
     descriptions: dict[str, str] = Field(default_factory=dict, max_length=50)
 
 
+class CharacterRename(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+class CharacterMerge(BaseModel):
+    """Merge this character into `into`: every shot of it shows `into` instead."""
+
+    into: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+
+
 class RenderRequest(BaseModel):
     quality: Literal["draft", "final"] = "draft"
 
@@ -145,6 +155,7 @@ class PanelOut(BaseModel):
     width: int | None
     height: int | None
     masks: list[MaskOut]
+    outdated: bool = Field(description="The shot changed after this was drawn; draw it again.")
 
     @classmethod
     def of(cls, p: Panel) -> PanelOut:
@@ -155,6 +166,7 @@ class PanelOut(BaseModel):
             width=p.size.width if p.size else None,
             height=p.size.height if p.size else None,
             masks=[MaskOut.of(m) for m in p.masks.values()],
+            outdated=p.outdated,
         )
 
 

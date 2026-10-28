@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 
 from frameteller.domain.characters import Character, CharacterBible
@@ -54,6 +54,44 @@ class Project:
 
     def upsert_character(self, character: Character) -> None:
         self.bible.upsert(character)
+
+    def rename_character(self, character_id: str, name: str) -> Character:
+        return self.bible.rename(character_id, name)
+
+    def remove_character(self, character_id: str) -> list[Shot]:
+        """Remove a character from the cast and from every shot. The shots keep their action text.
+
+        Returns the shots that changed; their panels still show the character, so they are marked outdated.
+        """
+        self.bible.remove(character_id)
+        return self._recast(character_id, None)
+
+    def merge_character(self, character_id: str, into: str) -> list[Shot]:
+        """The same character was cast twice ("Ember" was Pip): every shot of `character_id` now shows `into`.
+
+        Returns the shots that changed, with their panels marked outdated.
+        """
+        if character_id == into:
+            raise InvalidValueError("a character cannot be merged into itself")
+        self.bible.get(into)
+        self.bible.remove(character_id)
+        return self._recast(character_id, into)
+
+    def _recast(self, old: str, new: str | None) -> list[Shot]:
+        changed = []
+        for i, s in enumerate(self.shots):
+            if old not in s.character_ids:
+                continue
+            ids = [new if c == old else c for c in s.character_ids if new is not None or c != old]
+            self.shots[i] = replace(s, character_ids=tuple(dict.fromkeys(c for c in ids if c is not None)))
+            changed.append(self.shots[i])
+        self._mark_outdated(s.id for s in changed)
+        return changed
+
+    def _mark_outdated(self, shot_ids: Iterable[str]) -> None:
+        for shot_id in shot_ids:
+            if (panel := self.panels.get(shot_id)) is not None and panel.revision > 0:
+                panel.outdated = True
 
     # ---- shots ----
 

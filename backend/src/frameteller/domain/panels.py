@@ -121,6 +121,7 @@ class Panel:
     size: Size | None = None
     masks: dict[str, ObjectMask] = field(default_factory=dict)
     transforms: list[CanvasTransform] = field(default_factory=list)
+    outdated: bool = False  # the shot changed after this was drawn (a reveal, a merge, a removed character)
 
     def record_render(self, revision: int, image: MediaRef, response_id: str, size: Size) -> None:
         """A new model render. Revisions only increase.
@@ -133,6 +134,7 @@ class Panel:
         self.revision, self.image, self.response_id, self.size = revision, image, response_id, size
         self.status = PanelStatus.READY
         self.masks = {}
+        self.outdated = False
 
     def mark_failed(self) -> None:
         self.status = PanelStatus.FAILED
