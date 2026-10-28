@@ -25,6 +25,7 @@ interface Mask { label: string; box: { left: number; top: number; right: number;
 type Panel = { width: number; height: number; masks: Mask[] } | null
 
 const timeline: { at_s: number; step: string }[] = []
+let projectId = ''
 let t0 = Date.now()
 const mark = (step: string) => {
   timeline.push({ at_s: Math.round((Date.now() - t0) / 100) / 10, step })
@@ -46,7 +47,7 @@ function recordSentAudio(page: Page) {
   return sent
 }
 
-test('narrate six paragraphs, approve the cast, get drafts and select an object', async ({ page, request }, info) => {
+test('narrate six paragraphs, approve the cast, get drafts and select an object', async ({ page, request }) => {
   const sent = recordSentAudio(page)
   const narration = readWav(liveWav)
   const durationMs = (narration.samples.length / narration.rate) * 1000
@@ -56,9 +57,10 @@ test('narrate six paragraphs, approve the cast, get drafts and select an object'
   await page.getByLabel(/Names in the story/).fill('Mira')
   await page.getByRole('button', { name: 'Open the studio' }).click()
   await expect(page).toHaveURL(/\/projects\/[0-9a-f]+$/)
-  const projectId = new URL(page.url()).pathname.split('/').at(-1) ?? ''
+  projectId = new URL(page.url()).pathname.split('/').at(-1) ?? ''
 
   t0 = Date.now()
+  mark(`project ${projectId}`)
   await page.getByRole('button', { name: 'Start telling' }).click()
   await expect(page.getByText('Listening.')).toBeVisible({ timeout: 30_000 }) // staging may be waking up
   mark('listening')
@@ -86,9 +88,13 @@ test('narrate six paragraphs, approve the cast, get drafts and select an object'
   mark(`${SHOTS} shot cards`)
   await expect(page.getByText('Done. Tell more any time.')).toBeVisible({ timeout: 60_000 })
 
-  await expect(page.getByTestId('character-card').first()).toBeVisible({ timeout: 60_000 })
-  mark('cast proposed')
-  await expect(page.getByRole('img', { name: 'Reference sheet for Mira' })).toBeVisible({ timeout: 180_000 })
+  // Names are whatever the transcriber heard ("Mira" once came back as "Mirror"), so wait for every sheet.
+  const characters = page.getByTestId('character-card')
+  await expect(characters.first()).toBeVisible({ timeout: 60_000 })
+  mark(`cast proposed: ${(await characters.getByRole('heading').allTextContents()).join(', ')}`)
+  await expect
+    .poll(async () => (await page.getByRole('img', { name: /^Reference sheet for / }).count()) - (await characters.count()), { timeout: 180_000 })
+    .toBe(0)
   const approve = page.getByRole('button', { name: 'Approve cast' })
   await expect(approve).toBeEnabled({ timeout: 180_000 })
   mark('cast sheets drawn')
@@ -138,17 +144,18 @@ test('narrate six paragraphs, approve the cast, get drafts and select an object'
   mark(`selected "${mask.label}" on panel 1`)
   await page.waitForTimeout(1500) // let the video show the outline
 
-  const spend = SPEND_LOG && existsSync(SPEND_LOG) ? spendFor(SPEND_LOG, projectId) : null
-  const report = { target: TARGET, project_id: projectId, timeline, spend }
-  writeFileSync(`${outDir}/frameteller-e2e-${TARGET}.json`, JSON.stringify(report, null, 2))
-  await info.attach('timeline', { body: JSON.stringify(report, null, 2), contentType: 'application/json' })
-  if (spend) console.log(`spend USD ${spend.total_usd} ${JSON.stringify(spend.by_model)}`)
 })
 
+// Pass or fail: the video, the timeline and (for a local backend) the spend go to spikes/out.
 test.afterEach(async ({ page }, info) => {
+  const name = `${outDir}/frameteller-e2e-${TARGET}${info.status === 'passed' ? '' : '-failed'}`
+  const spend = SPEND_LOG && existsSync(SPEND_LOG) && projectId ? spendFor(SPEND_LOG, projectId) : null
+  const report = { target: TARGET, status: info.status, project_id: projectId, timeline, spend }
+  writeFileSync(`${name}.json`, JSON.stringify(report, null, 2))
+  if (spend) console.log(`spend USD ${spend.total_usd} ${JSON.stringify(spend.by_model)}`)
   const video = page.video()
   await page.close()
-  if (video) await video.saveAs(`${outDir}/frameteller-e2e-${TARGET}${info.status === 'passed' ? '' : '-failed'}.webm`)
+  if (video) await video.saveAs(`${name}.webm`)
 })
 
 function concat(chunks: Uint8Array[]): Uint8Array {
