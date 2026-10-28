@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-28T03:31:44Z",
+  "updated_at": "2026-10-28T07:26:48Z",
   "items": [
+    {
+      "date": "2026-10-28",
+      "status": "shipped",
+      "title": "Talk for a minute, get an animatic",
+      "body": "You can now talk through a scene for a minute and download an animatic of the storyboard, timed to your words and voiced by your own narration."
+    },
     {
       "date": "2026-10-28",
       "status": "shipped",
