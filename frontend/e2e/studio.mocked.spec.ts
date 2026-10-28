@@ -116,11 +116,13 @@ test('narrate, cut two shots, approve the cast, see drafts, and select an object
   // Audio: 80 ms frames of 24 kHz mono s16le (3,840 bytes), at real-time pace.
   // (Machines without a sound card take a second or so to start the audio clock.)
   await expect.poll(() => backend.frames.length, { timeout: 10_000 }).toBeGreaterThan(25)
-  const frames = backend.frames
-  expect(frames.every((f) => f.bytes === 3840)).toBe(true)
-  const lastSecond = frames.filter((f) => f.at > Date.now() - 1000).length
-  expect(lastSecond).toBeGreaterThanOrEqual(9)
-  expect(lastSecond).toBeLessThanOrEqual(16)
+  // Pace over a fresh window: the audio held while the session connected arrives in one burst first.
+  const before = backend.frames.length
+  await page.waitForTimeout(2000)
+  const perSecond = (backend.frames.length - before) / 2
+  expect(backend.frames.every((f) => f.bytes === 3840)).toBe(true)
+  expect(perSecond).toBeGreaterThanOrEqual(10)
+  expect(perSecond).toBeLessThanOrEqual(15)
 
   await page.keyboard.press('Space')
   await expect(page.getByTestId('shot-card')).toHaveCount(1)
