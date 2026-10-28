@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { defineConfig } from '@playwright/test'
 
 /**
@@ -8,11 +9,15 @@ import { defineConfig } from '@playwright/test'
  */
 const live = process.env.E2E_LIVE === '1'
 const appUrl = process.env.E2E_APP_URL
-const wav = process.env.E2E_WAV ?? `${process.cwd()}/../spikes/fixtures/narration.wav`
+// Absolute and normalised: Chromium plays nothing (silently) from a fake-capture path with '..' in it.
+export const sourceWav = resolve(process.env.E2E_WAV ?? '../spikes/fixtures/narration.wav')
+export const outDir = resolve('../spikes/out') // gitignored: videos, timelines, the padded narration
+export const liveWav = `${outDir}/e2e/narration-padded.wav`
 
 export default defineConfig({
   testDir: 'e2e',
   testMatch: live ? /live\.spec\.ts/ : /mocked\.spec\.ts/,
+  globalSetup: live ? './e2e/live.setup.ts' : undefined,
   timeout: live ? 6 * 60_000 : 60_000,
   retries: 0,
   workers: 1,
@@ -28,7 +33,7 @@ export default defineConfig({
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
         // %noloop: play the narration once, then silence.
-        ...(live ? [`--use-file-for-fake-audio-capture=${wav}%noloop`] : []),
+        ...(live ? [`--use-file-for-fake-audio-capture=${liveWav}%noloop`] : []),
         '--autoplay-policy=no-user-gesture-required',
         // Machines without a sound card (CI, servers) stall Chromium's audio clock: no worklet would run.
         '--disable-features=AudioServiceSandbox,AudioServiceOutOfProcess',
