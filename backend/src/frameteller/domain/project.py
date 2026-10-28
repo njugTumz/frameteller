@@ -77,6 +77,26 @@ class Project:
         self.bible.remove(character_id)
         return self._recast(character_id, into)
 
+    def revise_shot(self, shot_id: str, character_ids: tuple[str, ...], action: str) -> Shot:
+        """A later turn revealed who or what was in this shot. Its panel shows the old guess: outdated."""
+        self.bible.require(character_ids)
+        if not action.strip():
+            raise InvalidValueError("a revised shot needs an action")
+        i = next((i for i, s in enumerate(self.shots) if s.id == shot_id), None)
+        if i is None:
+            raise UnknownShotError(f"no shot {shot_id!r}")
+        self.shots[i] = replace(self.shots[i], character_ids=tuple(dict.fromkeys(character_ids)), action=action.strip())
+        self._mark_outdated([shot_id])
+        return self.shots[i]
+
+    def drop_unused_characters(self, character_ids: Iterable[str]) -> list[str]:
+        """Remove those of `character_ids` that no shot shows any more (a guess a reveal replaced)."""
+        used = {c for s in self.shots for c in s.character_ids}
+        dropped = [c for c in dict.fromkeys(character_ids) if c in self.bible and c not in used]
+        for c in dropped:
+            self.bible.remove(c)
+        return dropped
+
     def _recast(self, old: str, new: str | None) -> list[Shot]:
         changed = []
         for i, s in enumerate(self.shots):

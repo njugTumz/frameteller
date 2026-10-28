@@ -14,6 +14,7 @@ from frameteller.application.events import (
     SessionFailed,
     ShotCreated,
     ShotsReplaced,
+    ShotUpdated,
     TranscriptUpdated,
     TurnFinished,
 )
@@ -312,6 +313,8 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
             return {"type": "turn.completed", "turn": TurnOut.of(turn).model_dump()}
         case ShotCreated(shot):
             return {"type": "shot.created", "shot": ShotOut.of(shot).model_dump()}
+        case ShotUpdated(shot):
+            return {"type": "shot.updated", "shot": ShotOut.of(shot).model_dump()}
         case ShotsReplaced(turn, removed, shots):
             return {
                 "type": "shots.replaced",

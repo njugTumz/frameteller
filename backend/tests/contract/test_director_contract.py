@@ -145,3 +145,47 @@ async def test_edit_instruction_is_routed_to_target_parts_and_change(
     assert sent["reasoning_effort"] == "minimal"
     assert sent["messages"][2]["content"].endswith("Instruction: her coat is red now")
     assert "mira" in sent["messages"][1]["content"]
+
+
+async def test_a_reveal_revises_one_of_the_last_three_shots(
+    client_for: Client, caller: ModelCaller, settings: Settings
+) -> None:
+    p = project(approved=True, shots=4)  # shots 2-4 are revisable, shot 1 is not
+    turn = TranscriptTurn("t5", "It was the cat all along.", 16000, 20000)
+    p.add_turn(turn)
+
+    def answer(number: int) -> dict[str, Any]:
+        return with_content(
+            json.dumps(
+                {
+                    "new_characters": [],
+                    "shots": [
+                        {
+                            "framing": "medium",
+                            "character_ids": ["cat"],
+                            "setting": "alley",
+                            "action": "The cat purrs",
+                            "dialogue": "",
+                            "source_turn_ids": ["t5"],
+                        }
+                    ],
+                    "updated_shots": [{"number": number, "character_ids": ["cat"], "action": "The cat hides"}],
+                }
+            )
+        )
+
+    transport, seen = replay([answer(1), answer(3)])
+    out = await MetaSparkDirectorAdapter(client_for(transport), caller, settings).direct_turn(turn, p)
+
+    assert len(seen) == 2  # shot 1 is too old: retried with the error
+    assert "shot 1 is not one of the last shots [2, 3, 4]" in seen[1].content.decode()
+    assert [(r.shot_id, r.character_ids, r.action) for r in out.revisions] == [("s3", ("cat",), "The cat hides")]
+    assert "updated_shots" in body(seen[0])["response_format"]["json_schema"]["schema"]["properties"]
+
+
+async def test_older_answers_without_updated_shots_still_parse(
+    client_for: Client, caller: ModelCaller, settings: Settings
+) -> None:
+    transport, _ = replay("director_turn")
+    out = await MetaSparkDirectorAdapter(client_for(transport), caller, settings).direct_turn(TURN_4, story())
+    assert out.revisions == ()

@@ -25,6 +25,13 @@ class ShotCreated:
 
 
 @dataclass(frozen=True, slots=True)
+class ShotUpdated:
+    """A later turn revealed who or what an earlier shot showed. Its panel is outdated until redrawn."""
+
+    shot: Shot
+
+
+@dataclass(frozen=True, slots=True)
 class ShotsReplaced:
     """A corrected turn was re-directed: `shots` (renumbered) took the place of `removed_shot_ids`."""
 
@@ -68,6 +75,7 @@ ProjectEvent = (
     TranscriptUpdated
     | TurnFinished
     | ShotCreated
+    | ShotUpdated
     | ShotsReplaced
     | CastProposed
     | JobUpdated

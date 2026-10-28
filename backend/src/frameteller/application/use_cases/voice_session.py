@@ -6,7 +6,14 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from frameteller.application.errors import ApplicationError
-from frameteller.application.events import SessionEnded, SessionFailed, ShotCreated, TranscriptUpdated, TurnFinished
+from frameteller.application.events import (
+    SessionEnded,
+    SessionFailed,
+    ShotCreated,
+    ShotUpdated,
+    TranscriptUpdated,
+    TurnFinished,
+)
 from frameteller.application.ports import (
     AudioProgress,
     EventPublisher,
@@ -199,6 +206,8 @@ class RunVoiceSession:
                         await self._correct.execute(project_id, item.turn_id, item.text)
                         continue
                     directed = await self._direct.execute(project_id, item)
+                    for shot in directed.revised:
+                        await self._events.publish(project_id, ShotUpdated(shot))
                     for shot in directed.shots:
                         counts["shots"] += 1
                         await self._events.publish(project_id, ShotCreated(shot))

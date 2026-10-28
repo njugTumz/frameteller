@@ -3,14 +3,18 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from frameteller.application.ports import DirectorPort, IdGenerator, ProjectRepository, ShotDraft
+from frameteller.application.ports import DirectorPort, IdGenerator, ProjectRepository, ShotDraft, ShotRevision
 from frameteller.domain import Character, Project, Shot, TranscriptTurn, split_duration
+
+REVEAL_WINDOW = 3  # a reveal may revise at most this many of the latest shots
 
 
 @dataclass(frozen=True, slots=True)
 class DirectedShots:
     shots: tuple[Shot, ...]
     new_characters: tuple[Character, ...]
+    revised: tuple[Shot, ...] = ()  # earlier shots a reveal changed; their panels are outdated
+    dropped_character_ids: tuple[str, ...] = ()  # guesses the reveal replaced, no longer in any shot
 
 
 def shots_for_turn(drafts: Sequence[ShotDraft], turn: TranscriptTurn, ids: IdGenerator, first: int) -> list[Shot]:
@@ -41,8 +45,23 @@ def add_new_characters(project: Project, candidates: Sequence[Character]) -> tup
     return new
 
 
+def apply_revisions(project: Project, revisions: Sequence[ShotRevision]) -> tuple[list[Shot], list[str]]:
+    """Revise the latest shots a reveal names ("something small and orange" was Pip), then drop guesses left unused.
+
+    Only the last REVEAL_WINDOW shots can change; revisions of older shots are ignored.
+    """
+    window = {s.id for s in project.shots[-REVEAL_WINDOW:]}
+    revised: list[Shot] = []
+    before: set[str] = set()
+    for r in revisions:
+        if r.shot_id in window:
+            before.update(project.shot(r.shot_id).character_ids)
+            revised.append(project.revise_shot(r.shot_id, r.character_ids, r.action))
+    return revised, project.drop_unused_characters(sorted(before))
+
+
 class DirectTurn:
-    """Direct one finished transcript turn into shots (ADR 0002)."""
+    """Direct one finished transcript turn into shots (ADR 0002), revising earlier shots a reveal explains."""
 
     def __init__(self, repo: ProjectRepository, director: DirectorPort, ids: IdGenerator) -> None:
         self._repo, self._director, self._ids = repo, director, ids
@@ -55,8 +74,9 @@ class DirectTurn:
         def apply(project: Project) -> DirectedShots:
             project.add_turn(turn)
             new = add_new_characters(project, directed.new_characters)
+            revised, dropped = apply_revisions(project, directed.revisions)
             shots = shots_for_turn(directed.shots, turn, self._ids, len(project.shots) + 1)
             project.append_shots(shots)
-            return DirectedShots(tuple(shots), new)
+            return DirectedShots(tuple(shots), new, tuple(revised), tuple(dropped))
 
         return await self._repo.update(project_id, apply)

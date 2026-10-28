@@ -40,9 +40,19 @@ class ShotDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class ShotRevision:
+    """A reveal: a later turn says who or what an earlier, vaguely described shot showed."""
+
+    shot_id: str
+    character_ids: tuple[str, ...]
+    action: str
+
+
+@dataclass(frozen=True, slots=True)
 class DirectedTurn:
     new_characters: tuple[Character, ...]
     shots: tuple[ShotDraft, ...]
+    revisions: tuple[ShotRevision, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

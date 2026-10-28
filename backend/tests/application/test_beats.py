@@ -19,7 +19,7 @@ from frameteller.application.use_cases import (
     RunVoiceSession,
     TranscriptCorrection,
 )
-from frameteller.domain import Character, Framing, MediaRef, Shot, Size, TranscriptTurn
+from frameteller.domain import Character, Framing, MediaRef, Project, Shot, Size, TranscriptTurn
 from tests.builders import project
 from tests.fakes import (
     LISTEN,
@@ -44,8 +44,10 @@ def one_shot(action: str = "Mira walks") -> DirectedTurn:
 
 
 class Session:
-    def __init__(self, speech: ScriptedSpeech, director: FakeDirector, shots: int = 0) -> None:
-        self.repo = InMemoryProjectRepository(project(shots=shots))
+    def __init__(
+        self, speech: ScriptedSpeech, director: FakeDirector, shots: int = 0, story: Project | None = None
+    ) -> None:
+        self.repo = InMemoryProjectRepository(story or project(shots=shots))
         self.events, self.jobs = RecordingPublisher(), InMemoryJobQueue()
         self.director = director
         cast = RequestCastReferences(self.repo, self.jobs, SequentialIds("n"))

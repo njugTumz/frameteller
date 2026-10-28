@@ -11,7 +11,8 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, ValidationError
 
 from frameteller.application.errors import InvalidModelOutputError
-from frameteller.application.ports import DirectedTurn, EditIntent, ShotDraft
+from frameteller.application.ports import DirectedTurn, EditIntent, ShotDraft, ShotRevision
+from frameteller.application.use_cases.direct_turn import REVEAL_WINDOW
 from frameteller.domain import Character, Framing, InvalidValueError, Project, Shot, TranscriptTurn
 from frameteller.infrastructure.config import Effort, Settings
 from frameteller.infrastructure.pricing import token_cost
@@ -35,6 +36,11 @@ Return:
   setting is where and when, action is what we see, dialogue is the spoken words or "" if none.
   source_turn_ids lists the turn ids the shot comes from.
 A turn with no story content (hesitation, a correction to the operator) may produce no shots.
+Never invent a character, name or species the narration does not state. Something described vaguely
+("something small and orange") is not a character yet: keep it vague in the action, with no character for it.
+- updated_shots: when this turn reveals who or what an earlier vague or wrongly guessed thing was, revise
+  those of the last 3 shots so far: their number, their full character_ids and their action rewritten with
+  the reveal. Return [] when nothing is revealed. Never revise older shots.
 Keep the story original. Do not add real people, brands or copyrighted characters."""
 
 CHARACTERS_PROMPT = """You maintain the character bible for a storyboard.
@@ -69,9 +75,16 @@ class ShotOut(BaseModel):
     source_turn_ids: list[str] = Field(min_length=1)
 
 
+class UpdatedShotOut(BaseModel):
+    number: int = Field(ge=1)
+    character_ids: list[str]
+    action: str = Field(min_length=1)
+
+
 class DirectorOutput(BaseModel):
     new_characters: list[CharacterOut]
     shots: list[ShotOut]
+    updated_shots: list[UpdatedShotOut] = Field(default_factory=list, max_length=3)
 
 
 class CharactersOutput(BaseModel):
@@ -138,6 +151,7 @@ class MetaSparkDirectorAdapter:
         ]
         allowed_turns = {t.id for t in turns}
         known = set(project.bible.characters)
+        revisable = {s.number for s in project.shots[-REVEAL_WINDOW:]}
 
         def check(out: DirectorOutput) -> list[str]:
             errors = []
@@ -147,6 +161,11 @@ class MetaSparkDirectorAdapter:
                     errors.append(f"shot {n}: character_ids {sorted(unknown)} are not in the bible or new_characters")
                 if bad := set(s.source_turn_ids) - allowed_turns:
                     errors.append(f"shot {n}: source_turn_ids {sorted(bad)} are not among {sorted(allowed_turns)}")
+            for u in out.updated_shots:
+                if u.number not in revisable:
+                    errors.append(f"updated_shots: shot {u.number} is not one of the last shots {sorted(revisable)}")
+                if unknown := set(u.character_ids) - cast:
+                    errors.append(f"updated shot {u.number}: character_ids {sorted(unknown)} are unknown")
             return errors
 
         return await self._parse(messages, DirectorOutput, effort, operation, check)
@@ -221,7 +240,13 @@ class MetaSparkDirectorAdapter:
                     duration_ms=max(1, duration),
                 )
             )
-        return DirectedTurn(characters, tuple(drafts))
+        by_number = {s.number: s.id for s in project.shots}
+        revisions = tuple(
+            ShotRevision(by_number[u.number], tuple(u.character_ids), u.action.strip())
+            for u in out.updated_shots
+            if u.number in by_number
+        )
+        return DirectedTurn(characters, tuple(drafts), revisions)
 
 
 def _character(c: CharacterOut) -> Character:
