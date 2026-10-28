@@ -3,7 +3,15 @@ import pytest
 from frameteller.application import costs
 from frameteller.application.jobs import PRE_SEGMENT_PANEL
 from frameteller.application.use_cases import EditPanelAppearance, GenerateCharacterReference, GeneratePanel
-from frameteller.domain import CastNotApprovedError, CastStatus, MediaRef, PanelNotReadyError, PanelStatus, Size
+from frameteller.domain import (
+    CastNotApprovedError,
+    CastStatus,
+    MediaRef,
+    PanelNotReadyError,
+    PanelStatus,
+    PanelStyle,
+    Size,
+)
 from tests.application.conftest import World
 
 
@@ -92,3 +100,11 @@ async def test_edit_needs_a_ready_panel(world: World) -> None:
 async def test_edit_is_blocked_while_cast_is_draft(draft_world: World) -> None:
     with pytest.raises(CastNotApprovedError):
         await edit(draft_world).execute("p1", "s1", "raincoat", ["hood"], "make it red")
+
+
+async def test_panels_and_reference_sheets_follow_the_project_style(world: World) -> None:
+    await world.repo.update("p1", lambda p: setattr(p, "style", PanelStyle.PAPER_CUTOUT))
+    await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
+    await world.repo.update("p1", lambda p: p.bible.approve())
+    await generate(world).execute("p1", "s2", revision=1)
+    assert all("paper cutout" in r.prompt for r in world.images.generated)

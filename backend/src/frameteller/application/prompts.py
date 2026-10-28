@@ -4,21 +4,30 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from frameteller.domain import Character, Shot
+from frameteller.domain import Character, PanelStyle, Shot
 
-PANEL_STYLE = "clean pencil storyboard sketch, light grey wash, one accent colour"
+STYLES = {
+    PanelStyle.PENCIL: "clean pencil storyboard sketch, light grey wash, one accent colour",
+    PanelStyle.PAPER_CUTOUT: (
+        "paper cutout animation: flat shapes cut from coloured craft paper, visible paper grain and torn edges, "
+        "layered with soft drop shadows, simple backgrounds"
+    ),
+}
 
 
-def reference_prompt(c: Character) -> str:
-    return (
+def reference_prompt(c: Character, style: PanelStyle = PanelStyle.PENCIL) -> str:
+    prompt = (
         f"Character reference sheet for an original character named {c.name}: {c.canonical_description}. "
         "Show the same character twice side by side: a front view and a three-quarter view, full body, "
         "neutral standing pose, identical outfit and colours in both views. Plain light grey background, "
         "no text, no props, no scenery."
     )
+    # Pencil sheets keep the wording measured in the Day 2 spikes; other styles say how to draw the sheet,
+    # because panels copy their references' look.
+    return prompt if style is PanelStyle.PENCIL else f"{prompt} Style: {STYLES[style]}."
 
 
-def panel_prompt(shot: Shot, cast: Sequence[Character]) -> str:
+def panel_prompt(shot: Shot, cast: Sequence[Character], style: PanelStyle = PanelStyle.PENCIL) -> str:
     who = "; ".join(f"{c.name}: {c.canonical_description}" for c in cast)
     lines = [
         f"Storyboard panel, {shot.framing.value.replace('_', ' ')} framing. Keep key action in the central 16:9 band.",
@@ -26,7 +35,7 @@ def panel_prompt(shot: Shot, cast: Sequence[Character]) -> str:
     ]
     if who:
         lines.append(f"Characters: {who}. Draw each exactly as in the attached reference sheets.")
-    lines.append(f"Style: {PANEL_STYLE}. No text, captions or panel borders.")
+    lines.append(f"Style: {STYLES[style]}. No text, captions or panel borders.")
     return " ".join(lines)
 
 

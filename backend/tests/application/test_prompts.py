@@ -1,6 +1,7 @@
 import pytest
 
 from frameteller.application.prompts import edit_prompt, panel_prompt, reference_prompt
+from frameteller.domain import PanelStyle
 from tests.builders import CAT, MIRA, shot
 
 
@@ -48,6 +49,15 @@ def test_panel_prompt_without_cast() -> None:
 
 def test_reference_prompt_names_the_character() -> None:
     assert MIRA.canonical_description in reference_prompt(MIRA)
+    assert "Style:" not in reference_prompt(MIRA)  # pencil sheets keep the wording measured in the spikes
+
+
+def test_paper_cutout_style_reaches_panels_and_reference_sheets() -> None:
+    assert "pencil storyboard sketch" in panel_prompt(shot(1), [])
+    cutout = panel_prompt(shot(1), [], PanelStyle.PAPER_CUTOUT)
+    assert "paper cutout" in cutout
+    assert "pencil" not in cutout
+    assert "paper cutout" in reference_prompt(MIRA, PanelStyle.PAPER_CUTOUT)
 
 
 def test_concept_phrase_is_a_short_visual_noun_phrase() -> None:

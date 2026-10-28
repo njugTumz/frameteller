@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from frameteller.application.ports import IdGenerator, ProjectRepository
-from frameteller.domain import Project, Shot, UnknownShotError
+from frameteller.domain import PanelStyle, Project, Shot, UnknownShotError
 
 
 class CreateProject:
     def __init__(self, repo: ProjectRepository, ids: IdGenerator) -> None:
         self._repo, self._ids = repo, ids
 
-    async def execute(self, title: str = "") -> Project:
-        project = Project(id=self._ids.new_id(), title=title.strip())
+    async def execute(self, title: str = "", style: PanelStyle = PanelStyle.PENCIL) -> Project:
+        project = Project(id=self._ids.new_id(), title=title.strip(), style=style)
         await self._repo.save(project)
         return project
 

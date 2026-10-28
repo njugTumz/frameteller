@@ -18,10 +18,11 @@ class GenerateCharacterReference:
         self._repo, self._images, self._budget = repo, images, budget
 
     async def execute(self, project_id: str, character_id: str) -> Character:
-        drawn = (await self._repo.get(project_id)).bible.get(character_id)
+        snapshot = await self._repo.get(project_id)
+        drawn = snapshot.bible.get(character_id)
         await self._budget.charge(project_id, costs.IMAGE, f"reference {character_id}")
         stored = await self._images.generate(
-            ImageRequest(reference_prompt(drawn), "high", "square"),
+            ImageRequest(reference_prompt(drawn, snapshot.style), "high", "square"),
             store_as=f"projects/{project_id}/characters/{character_id}/reference",
         )
 

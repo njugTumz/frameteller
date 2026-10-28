@@ -18,6 +18,7 @@ from frameteller.domain import (
     ObjectMask,
     Panel,
     PanelStatus,
+    PanelStyle,
     Project,
     Shot,
     Size,
@@ -67,6 +68,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
         "schema": SCHEMA_VERSION,
         "id": p.id,
         "title": p.title,
+        "style": p.style.value,
         "cast_status": p.bible.status.value,
         "characters": [
             {"id": c.id, "name": c.name, "description": c.canonical_description, "reference": _ref(c.reference)}
@@ -131,6 +133,7 @@ def project_from_dict(d: dict[str, Any]) -> Project:
     return Project(
         id=d["id"],
         title=d["title"],
+        style=PanelStyle(d.get("style", PanelStyle.PENCIL.value)),  # projects saved before styles are pencil
         bible=bible,
         turns=[TranscriptTurn(t["id"], t["text"], t["start_ms"], t["end_ms"], t["speaker"]) for t in d["turns"]],
         shots=[

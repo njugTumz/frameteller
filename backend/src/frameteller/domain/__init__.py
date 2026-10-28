@@ -19,6 +19,7 @@ from frameteller.domain.media import MediaRef
 from frameteller.domain.panels import Box, CanvasTransform, MaskBitmap, ObjectMask, Panel, PanelStatus, Point, Size
 from frameteller.domain.project import Project
 from frameteller.domain.shots import Framing, Shot
+from frameteller.domain.style import PanelStyle
 from frameteller.domain.timing import MIN_SHOT_MS, split_duration
 from frameteller.domain.transcript import TranscriptTurn
 
@@ -42,6 +43,7 @@ __all__ = [
     "Panel",
     "PanelNotReadyError",
     "PanelStatus",
+    "PanelStyle",
     "Point",
     "Project",
     "RevisionOrderError",

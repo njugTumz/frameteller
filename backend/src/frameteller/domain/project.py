@@ -15,6 +15,7 @@ from frameteller.domain.errors import (
 )
 from frameteller.domain.panels import Panel
 from frameteller.domain.shots import Shot
+from frameteller.domain.style import PanelStyle
 from frameteller.domain.transcript import TranscriptTurn
 
 
@@ -22,6 +23,7 @@ from frameteller.domain.transcript import TranscriptTurn
 class Project:
     id: str
     title: str = ""
+    style: PanelStyle = PanelStyle.PENCIL
     bible: CharacterBible = field(default_factory=CharacterBible)
     turns: list[TranscriptTurn] = field(default_factory=list)
     shots: list[Shot] = field(default_factory=list)
