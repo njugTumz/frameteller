@@ -10,6 +10,7 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-28 · muse-voice-transcribe-1.0 · issue · With `keywords: ["Mira"]` set in the handshake, one staging run of the same narration transcribed the first "Mira" as "Mirror" (later ones were right), so the director cast a character called Mirror. We expected keywords to bias proper nouns more strongly. Users can fix the word in the studio, which re-directs that beat.
 - 2026-10-27 · muse-voice-transcribe-1.0 · idea · A sentence's last word reaches the cumulative partial up to ~240 ms of audio after the speaker pauses, so cutting the transcript at a user's "next shot" key press needs a grace period. Word-level timestamps (even on partials) would make that exact.
 - 2026-10-27 · muse-voice-transcribe-1.0 · issue · `POST /v1/asr/transcribe` returns 400 "You must specify the 'audioEncoding' field", but the docs' example omits it and the error does not list values. `WAV` works; `PCM_24KHZ` gives 400 "Malformed request".
 - 2026-10-27 · muse-voice-transcribe-1.0 · issue · In `DIARIZATION` mode the `speaker` event carries `label` and no `turnId`, unlike other turn events. Turns complete only on a speaker change or end of stream, so one narrator gets a single 42 s turn.
