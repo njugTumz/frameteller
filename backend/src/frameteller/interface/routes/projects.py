@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Request, status
+from fastapi import APIRouter, Path, Request, Response, status
 
 from frameteller.application.use_cases import MAX_DICTATION_MS
 from frameteller.domain import InvalidValueError, Point, Size
@@ -121,6 +121,18 @@ async def save_layer(project_id: ProjectId, n: ShotNumber, body: LayerRequest, c
 async def export_animatic(project_id: ProjectId, body: AnimaticRequest, c: Deps) -> TicketOut:
     """Queue the MP4 animatic. job.updated carries progress; the project's `animatic` holds the result."""
     return TicketOut.of(await c.request_animatic.execute(project_id, subtitles=body.subtitles))
+
+
+@router.get(
+    "/{project_id}/exports/storyboard.pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}, 409: {"model": ErrorOut}},
+)
+async def storyboard_pdf(project_id: ProjectId, c: Deps) -> Response:
+    """The storyboard sheet: every shot with its panel, framing, action, dialogue and duration."""
+    pdf = await c.storyboard_pdf.execute(project_id)
+    headers = {"Content-Disposition": 'attachment; filename="storyboard.pdf"', "Cache-Control": "no-store"}
+    return Response(pdf, media_type="application/pdf", headers=headers)
 
 
 @router.post("/{project_id}/shots/reorder")

@@ -32,6 +32,7 @@ from frameteller.application.use_cases import (
     EditPanelAppearance,
     EditPanelByCommand,
     ExportAnimatic,
+    ExportStoryboardPdf,
     FindShot,
     GenerateCastReferences,
     GenerateCharacterReference,
@@ -55,6 +56,7 @@ from frameteller.infrastructure.azure import AzureBlobMediaStorage, BlobProjectR
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.imaging.compositor import PillowCompositor
 from frameteller.infrastructure.imaging.ffmpeg_animatic import FfmpegVideoRenderer
+from frameteller.infrastructure.imaging.storyboard_pdf import PillowStoryboardSheet
 from frameteller.infrastructure.jobs import Handler, InProcessJobQueue, JobStatus
 from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
 from frameteller.infrastructure.meta import meta_client
@@ -88,6 +90,7 @@ class Container:
     request_edit: RequestPanelEdit
     select_object: SegmentObjectAtPoint
     request_animatic: RequestAnimaticExport
+    storyboard_pdf: ExportStoryboardPdf
     move_object: MovePanelObject
     reorder_shots: ReorderShots
     voice_session: RunVoiceSession
@@ -196,6 +199,7 @@ def wire(
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),
         move_object=MovePanelObject(repo, queue),
         request_animatic=RequestAnimaticExport(repo, queue),
+        storyboard_pdf=ExportStoryboardPdf(repo, storage, PillowStoryboardSheet()),
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
             speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids, repo, storage

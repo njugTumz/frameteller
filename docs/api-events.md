@@ -104,4 +104,5 @@ Before closing with a 44xx code, the server sends a fatal `error` with a user-fa
 | `POST /projects/{id}/shots/{n}/panel/select` `{x, y, preview_width, preview_height}` | The mask under the click. `cached: true` means no SAM call was needed. |
 | `POST /projects/{id}/shots/{n}/panel/layers` `{object_id, dx, dy, scale, deleted}` | 202 `compose_panel` ticket. The panel's `image_url` then shows the object at its new place on a clean plate; `base_image_url` stays the model render. |
 | `POST /projects/{id}/exports/animatic` `{subtitles}` | 202 `export_animatic` ticket. When it succeeds, `GET /projects/{id}` has `animatic: {url, duration_ms, subtitles, voiced}`. The URL plays inline (it answers `Range` requests); `?download=1` saves it. |
+| `GET /projects/{id}/exports/storyboard.pdf` | The storyboard sheet (A4 landscape, six shots a page): panel, shot number, framing, action, dialogue and duration. Undrawn shots print as "Not drawn yet". |
 | `POST /projects/{id}/dictation` (body: WAV, mono 16-bit, 16 or 24 kHz, at most 30 s) | `{text}`: a spoken edit instruction, transcribed for the user to check before sending it to `.../panel/edit`. Nothing is directed. |

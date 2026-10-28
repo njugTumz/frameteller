@@ -296,3 +296,11 @@ async def test_export_animatic_then_play_seek_and_download_it(api: Api) -> None:
     assert beyond.status_code == 416
     download = await api.client.get(animatic["url"] + "?download=1")
     assert download.headers["content-disposition"].startswith('attachment; filename="animatic-')
+
+
+async def test_storyboard_pdf_downloads(api: Api) -> None:
+    r = await api.client.get("/projects/p1/exports/storyboard.pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.headers["content-disposition"] == 'attachment; filename="storyboard.pdf"'
+    assert r.content.startswith(b"%PDF")

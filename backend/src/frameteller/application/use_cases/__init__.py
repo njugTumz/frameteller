@@ -9,6 +9,7 @@ from frameteller.application.use_cases.direct_turn import DirectedShots, DirectT
 from frameteller.application.use_cases.edit_panel_appearance import EditPanelAppearance
 from frameteller.application.use_cases.edit_panel_by_command import EditPanelByCommand
 from frameteller.application.use_cases.export_animatic import ExportAnimatic, RequestAnimaticExport
+from frameteller.application.use_cases.export_storyboard_pdf import ExportStoryboardPdf
 from frameteller.application.use_cases.generate_character_reference import GenerateCharacterReference
 from frameteller.application.use_cases.generate_panel import GeneratePanel
 from frameteller.application.use_cases.manage_cast import MergeCharacters, Merged, RemoveCharacter, RenameCharacter
@@ -43,6 +44,7 @@ __all__ = [
     "EditPanelAppearance",
     "EditPanelByCommand",
     "ExportAnimatic",
+    "ExportStoryboardPdf",
     "FindShot",
     "GenerateCastReferences",
     "GenerateCharacterReference",

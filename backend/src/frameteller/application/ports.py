@@ -264,6 +264,24 @@ class VideoRendererPort(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class SheetRow:
+    """One shot on the storyboard sheet. `image` is None when its panel is not drawn yet."""
+
+    number: int
+    framing: str
+    action: str
+    dialogue: str
+    duration_ms: int
+    image: bytes | None
+
+
+class StoryboardSheetPort(Protocol):
+    async def render(self, title: str, rows: Sequence[SheetRow]) -> bytes:
+        """A printable PDF: the panels in a grid, each with its shot number, framing, action, dialogue and time."""
+        ...
+
+
 class CompositorPort(Protocol):
     async def compose(self, background: bytes, layers: Sequence[CutoutLayer], size: Size) -> bytes:
         """Paste the layers in order on the background, resized to `size`. Returns a WebP image."""

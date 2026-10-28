@@ -1658,6 +1658,66 @@
         ]
       }
     },
+    "/projects/{project_id}/exports/storyboard.pdf": {
+      "get": {
+        "description": "The storyboard sheet: every shot with its panel, framing, action, dialogue and duration.",
+        "operationId": "storyboard_pdf_projects__project_id__exports_storyboard_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Storyboard Pdf",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/projects/{project_id}/narration": {
       "delete": {
         "description": "Delete my recording: every kept narration of this project. A later animatic has no voice track.",
