@@ -67,7 +67,7 @@ async def test_narration_becomes_partials_turns_shots_and_a_proposed_cast(api: A
     [owl] = by_type["cast.proposed"]["characters"]
     assert owl["id"] == "owl"
     assert owl["reference_url"] == "/media/projects/p1/characters/owl/reference"
-    assert by_type["session.ended"] == {"type": "session.ended", "turns": 1, "shots": 1}
+    assert by_type["session.ended"] == {"type": "session.ended", "turns": 1, "shots": 1, "heard": True}
     while not any(e["type"] == "job.updated" and e["status"] == "succeeded" for e in events):
         events.append(await ws.receive())  # type: ignore[arg-type]
     jobs = [(e["kind"], e["status"]) for e in events if e["type"] == "job.updated"]
@@ -193,7 +193,7 @@ async def test_direction_failure_is_reported_and_the_session_goes_on(
 
     message = "The director got confused by that line. Try saying it again."
     assert [e for e in events if e["type"] == "error"] == [{"type": "error", "message": message, "fatal": False}]
-    assert events[-1] == {"type": "session.ended", "turns": 1, "shots": 0}
+    assert events[-1] == {"type": "session.ended", "turns": 1, "shots": 0, "heard": True}
     await ws.finish()
 
 

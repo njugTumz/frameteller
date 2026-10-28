@@ -66,9 +66,18 @@ class SessionFailed:
 
 
 @dataclass(frozen=True, slots=True)
+class NoSpeechHeard:
+    """Seconds of near-silent audio and no words yet: the microphone is probably muted or the wrong one."""
+
+    after_ms: int
+    level: float  # the loudest 80 ms so far, as RMS from 0 to 1
+
+
+@dataclass(frozen=True, slots=True)
 class SessionEnded:
     turns: int
     shots: int
+    heard: bool = True  # False when no words were heard at all
 
 
 ProjectEvent = (
@@ -80,5 +89,6 @@ ProjectEvent = (
     | CastProposed
     | JobUpdated
     | SessionFailed
+    | NoSpeechHeard
     | SessionEnded
 )

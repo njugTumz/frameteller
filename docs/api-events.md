@@ -38,7 +38,8 @@ Every server message is JSON with a `type`.
 | `cast.proposed` | `characters: [{id, name, description, reference_url}]` | New characters with freshly drawn reference sheets. Show them, then `POST /projects/{id}/cast/approve`. |
 | `job.updated` | `kind, key, status, shot_id, revision, message` | Background work: `kind` is `generate_cast`, `generate_panel`, `pre_segment_panel` or `edit_panel`; `status` is `queued`, `running`, `succeeded` or `failed`. `message` is user-facing, on failure. |
 | `error` | `message, fatal` | Something went wrong. `fatal: false` means the session carries on (for example, one turn could not be directed). `fatal: true` means it has ended. |
-| `session.ended` | `turns, shots` | The narration is fully transcribed and directed. |
+| `audio.silent` | `after_ms, level` | Sent at most once, at the start: 8 s of audio arrived with no words and nothing louder than about -46 dBFS (`level` is the loudest 80 ms as RMS, 0–1). The microphone is probably muted or the wrong device. Say so and offer a device picker; reconnect with the new device. |
+| `session.ended` | `turns, shots, heard` | The narration is fully transcribed and directed. `heard: false` means no words were heard at all: say so rather than "done". |
 
 After `session.ended` the socket **stays open** so `cast.proposed` and `job.updated` keep arriving, including for renders started over REST. Close it when you are done. It closes by itself after 15 idle minutes. A new narration on the same project can start on a new socket as soon as `session.ended` arrives.
 

@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import math
+import sys
+from array import array
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from frameteller.application.errors import ApplicationError
 from frameteller.application.events import (
+    NoSpeechHeard,
     SessionEnded,
     SessionFailed,
     ShotCreated,
@@ -36,6 +40,41 @@ AUDIO_BUFFER_FRAMES = 256  # about 20 s of 80 ms frames waiting for the transcri
 # A beat closes once the transcriber has processed this much audio past it (ADR 0008). The last word before a
 # pause reached the transcript up to 240 ms after the pause; the next sentence's first word, 840 ms or more.
 BEAT_GRACE_MS = 500
+SILENCE_WARNING_MS = 8000  # audio received with no words and no level before we say we can't hear the narrator
+SILENT_LEVEL = 0.005  # RMS of full scale (about -46 dBFS): a muted or wrong microphone, not a quiet room
+BYTES_PER_MS = 48  # PCM s16le mono 24 kHz
+
+
+def pcm_level(chunk: bytes) -> float:
+    """RMS of 16-bit little-endian PCM, from 0 (silence) to 1 (full scale)."""
+    samples = array("h", chunk[: len(chunk) - len(chunk) % 2])
+    if sys.byteorder == "big":  # pragma: no cover
+        samples.byteswap()
+    if not samples:
+        return 0.0
+    return math.sqrt(sum(s * s for s in samples) / len(samples)) / 32768
+
+
+class _Silence:
+    """Says once, near the start, that the narrator can't be heard: near-silent audio and no words yet."""
+
+    def __init__(self) -> None:
+        self.received_ms = 0
+        self.loudest = 0.0
+        self.done = False
+
+    def hear(self, chunk: bytes, words_heard: bool) -> NoSpeechHeard | None:
+        if self.done:
+            return None
+        if words_heard:
+            self.done = True
+            return None
+        self.received_ms += len(chunk) // BYTES_PER_MS
+        self.loudest = max(self.loudest, pcm_level(chunk))
+        if self.received_ms < SILENCE_WARNING_MS:
+            return None
+        self.done = True
+        return NoSpeechHeard(self.received_ms, round(self.loudest, 4)) if self.loudest < SILENT_LEVEL else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,10 +218,14 @@ class RunVoiceSession:
             while beats and (processed_ms is None or processed_ms >= beats[0] + BEAT_GRACE_MS):
                 await close_beat(beats.pop(0))
 
+        silence = _Silence()
+
         async def read_client() -> None:
             nonlocal beat_mode
             try:
                 async for item in client:
+                    if isinstance(item, bytes) and (quiet := silence.hear(item, heard.heard_any)):
+                        await self._events.publish(project_id, quiet)
                     if isinstance(item, Beat):
                         beat_mode = True
                         beats.append(item.at_ms)
@@ -258,6 +301,6 @@ class RunVoiceSession:
                 await asyncio.gather(reader, return_exceptions=True)
         work.put_nowait(None)
         await director  # finish directing what was said before the stream ended
-        ended = SessionEnded(counts["turns"], counts["shots"])
+        ended = SessionEnded(counts["turns"], counts["shots"], heard.heard_any)
         await self._events.publish(project_id, ended)
         return ended

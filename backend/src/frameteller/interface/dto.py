@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from frameteller.application.events import (
     CastProposed,
     JobUpdated,
+    NoSpeechHeard,
     ProjectEvent,
     SessionEnded,
     SessionFailed,
@@ -336,8 +337,10 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
             }
         case SessionFailed(message, fatal):
             return error_message(message, fatal=fatal)
-        case SessionEnded(turns, shots):
-            return {"type": "session.ended", "turns": turns, "shots": shots}
+        case NoSpeechHeard(after_ms, level):
+            return {"type": "audio.silent", "after_ms": after_ms, "level": level}
+        case SessionEnded(turns, shots, heard):
+            return {"type": "session.ended", "turns": turns, "shots": shots, "heard": heard}
 
 
 def error_message(message: str, *, fatal: bool = False) -> dict[str, Any]:
