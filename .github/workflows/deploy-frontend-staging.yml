@@ -1,0 +1,112 @@
+name: Deploy frontend to staging
+
+# Builds the studio and uploads it to the staging Static Web App (infra/modules/staticwebapp.bicep).
+# Azure auth is OIDC. The SWA deployment token is read at deploy time through RBAC, masked, and never stored.
+# VITE_API_BASE_URL is a staging environment variable (not a secret: it is baked into the public bundle).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend-staging.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-frontend-staging
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: rg-frameteller-staging
+  STATIC_WEB_APP: swa-frameteller-app-staging
+
+jobs:
+  deploy:
+    name: Build and deploy the studio
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: ${{ steps.site.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write # OIDC token for azure/login
+    env:
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Backend URL is set
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then
+            echo "::error::Set the staging variable: gh variable set VITE_API_BASE_URL --env staging --body https://<backend host>"
+            exit 1
+          fi
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build && npm run swa:config
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Static Web App and its deployment token
+        id: site
+        run: |
+          host=$(az staticwebapp show -n "$STATIC_WEB_APP" -g "$RESOURCE_GROUP" --query defaultHostname -o tsv) || {
+            echo "::error::$STATIC_WEB_APP not found in $RESOURCE_GROUP. The Deploy staging workflow creates it from infra/."
+            exit 1
+          }
+          token=$(az staticwebapp secrets list -n "$STATIC_WEB_APP" -g "$RESOURCE_GROUP" --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+          echo "url=https://$host" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to the Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.site.outputs.token }}
+          action: upload
+          app_location: frontend/dist
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: The studio answers with its security headers
+        env:
+          URL: ${{ steps.site.outputs.url }}
+        run: |
+          for path in / /projects/0123456789abcdef; do # the second checks the SPA fallback
+            for attempt in $(seq 12); do
+              code=$(curl -s -o /dev/null -D /tmp/headers -w '%{http_code}' --max-time 20 "$URL$path" || true)
+              [ "$code" = "200" ] && break
+              echo "$path: HTTP $code (attempt $attempt), retrying"
+              sleep 10
+            done
+            echo "$path: HTTP $code"
+            [ "$code" = "200" ] || exit 1
+          done
+          grep -i '^content-security-policy:' /tmp/headers | grep -q "$VITE_API_BASE_URL" || {
+            echo "::error::The CSP does not name $VITE_API_BASE_URL"
+            exit 1
+          }
