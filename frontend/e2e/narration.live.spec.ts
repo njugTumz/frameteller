@@ -4,8 +4,10 @@ import { liveWav, outDir, sourceWav } from '../playwright.config'
 import { alignSent, BEATS_MS, BYTES_PER_MS, envelope, LEAD_MS, pcm, readWav } from './narration'
 
 /**
- * Opt-in (E2E_LIVE=1), spends Meta credits (about USD 0.10-0.15): the real backend and models, narrating
- * spikes/fixtures/narration.wav through Chromium's fake microphone with a beat at each paragraph.
+ * Opt-in (E2E_LIVE=1), spends Meta credits (about USD 0.15-0.20): the real backend and models, narrating
+ * spikes/fixtures/narration.wav through Chromium's fake microphone with a beat at each paragraph. Then it
+ * moves an object (one clean plate), exports the animatic, downloads it and the storyboard PDF to spikes/out,
+ * and makes a share link.
  *
  *   E2E_API_URL   the backend the app talks to (default http://localhost:8000), for project reads
  *   E2E_APP_URL   a running app (staging); otherwise the config builds and previews the local app
@@ -26,6 +28,7 @@ type Panel = { width: number; height: number; masks: Mask[] } | null
 
 const timeline: { at_s: number; step: string }[] = []
 let projectId = ''
+const outputs: Record<string, string> = {}
 let t0 = Date.now()
 const mark = (step: string) => {
   timeline.push({ at_s: Math.round((Date.now() - t0) / 100) / 10, step })
@@ -144,13 +147,55 @@ test('narrate six paragraphs, approve the cast, get drafts and select an object'
   mark(`selected "${mask.label}" on panel 1`)
   await page.waitForTimeout(1500) // let the video show the outline
 
+  // Move it: saved as a layer and composited on a clean plate (one Muse Image edit).
+  await canvas.focus()
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect(page.getByText('Preparing the background…')).toBeVisible({ timeout: 10_000 })
+  mark('move saved; preparing the background')
+  await expect(page.getByText('Preparing the background…')).toHaveCount(0, { timeout: 180_000 })
+  mark('clean plate and composite ready')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('img', { name: /^Shot 1:/ })).toHaveAttribute('src', /\/composites\//, { timeout: 30_000 })
+
+  // Export the animatic with the narrator's voice and subtitles.
+  await page.getByLabel('Burn in subtitles').check()
+  await page.getByRole('button', { name: 'Export animatic' }).click()
+  mark('export animatic')
+  await expect(page.getByTestId('animatic-player')).toBeVisible({ timeout: 360_000 }) // about 90 s on staging
+  mark('animatic ready')
+  const project = (await (await request.get(`${API}/projects/${projectId}`)).json()) as { animatic: { url: string; duration_ms: number; voiced: boolean } }
+  mark(`animatic ${project.animatic.duration_ms} ms, voiced ${project.animatic.voiced}`)
+  mkdirSync(outDir, { recursive: true })
+  outputs.mp4 = `${outDir}/frameteller-e2e-${TARGET}.mp4`
+  writeFileSync(outputs.mp4, await (await request.get(`${API}${project.animatic.url}`)).body())
+  outputs.pdf = `${outDir}/frameteller-e2e-${TARGET}-storyboard.pdf`
+  const pdf = await request.get(`${API}/projects/${projectId}/exports/storyboard.pdf`)
+  expect(pdf.headers()['content-type']).toBe('application/pdf')
+  writeFileSync(outputs.pdf, await pdf.body())
+  mark('saved the MP4 and the PDF')
+  await page.getByTestId('animatic-player').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(1500)
+
+  // Share it: the stub previews on X; the page is read-only.
+  await page.getByRole('button', { name: 'Create a share link' }).click()
+  const link = await page.getByLabel('Share link').inputValue()
+  outputs.share = link
+  const stub = await (await request.get(link, { maxRedirects: 0 })).text()
+  expect(stub).toContain('og:image')
+  mark(`share link ${link}`)
+  const token = link.split('/').at(-1) ?? ''
+  await page.goto(`/s/${token}`)
+  await expect(page.getByTestId('shared-shot')).toHaveCount(SHOTS)
+  await expect(page.getByTestId('shared-animatic')).toBeVisible()
+  mark('share page shows the panels and the animatic')
+  await page.waitForTimeout(1500)
 })
 
 // Pass or fail: the video, the timeline and (for a local backend) the spend go to spikes/out.
 test.afterEach(async ({ page }, info) => {
   const name = `${outDir}/frameteller-e2e-${TARGET}${info.status === 'passed' ? '' : '-failed'}`
   const spend = SPEND_LOG && existsSync(SPEND_LOG) && projectId ? spendFor(SPEND_LOG, projectId) : null
-  const report = { target: TARGET, status: info.status, project_id: projectId, timeline, spend }
+  const report = { target: TARGET, status: info.status, project_id: projectId, timeline, spend, outputs }
   writeFileSync(`${name}.json`, JSON.stringify(report, null, 2))
   if (spend) console.log(`spend USD ${spend.total_usd} ${JSON.stringify(spend.by_model)}`)
   const video = page.video()

@@ -18,7 +18,7 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: live ? /live\.spec\.ts/ : /mocked\.spec\.ts/,
   globalSetup: live ? './e2e/live.setup.ts' : undefined,
-  timeout: live ? 6 * 60_000 : 60_000,
+  timeout: live ? 15 * 60_000 : 60_000,
   retries: 0,
   workers: 1,
   reporter: [['list']],
