@@ -95,12 +95,12 @@ async def test_beats_cut_shots_at_the_words_heard_so_far_and_the_audio_position(
     )
 
     assert s.turns() == [
-        ("s1-b1", "Night in the alley tonight", 400, 4000),  # closed once the transcript caught up
-        ("s1-b2", "she hears a sound", 4000, 9200),  # split inside one transcriber turn
-        ("s1-b3", "Close on the crate a cat", 9200, 12000),  # the last stretch runs to the end of the speech
+        ("s1-b1", "Night in the alley tonight", 500, 4000),  # from the first speech, not the beat at 400
+        ("s1-b2", "she hears a sound", 4000, 9200),  # split inside one transcriber turn: speech never stopped
+        ("s1-b3", "Close on the crate a cat", 9500, 12000),  # the pause after the beat at 9200 is trimmed
     ]
     assert director.calls == ["b1", "b2", "b3"]  # the transcriber's own turns were never directed
-    assert [s.duration_ms for s in s.shots()] == [3600, 5200, 2800]
+    assert [s.duration_ms for s in s.shots()] == [3500, 5200, 2500]
     assert (ended.turns, ended.shots) == (3, 3)
     assert [e.turn.id for e in s.events.of(TurnFinished) if isinstance(e, TurnFinished)] == ["s1-b1", "s1-b2", "s1-b3"]
     # The live line holds only the words not yet in a beat, so the UI never shows a word twice.
@@ -137,10 +137,41 @@ async def test_a_later_speech_complete_never_directs_the_same_audio_twice() -> N
     assert director.texts == ["An owl lands", "It hoots", "twice"]
     assert s.turns() == [
         ("s1-0", "An owl lands", 0, 2000),
-        ("s1-b1", "It hoots", 2000, 4000),
+        ("s1-b1", "It hoots", 2500, 4000),  # spoken from 2500: the pause after the first turn is trimmed
         ("s1-b2", "twice", 4000, 5000),
     ]
     assert len(s.events.of(ShotCreated)) == 3
+
+
+async def test_a_long_silence_before_the_first_words_is_not_part_of_the_shot() -> None:
+    """A narrator pressed beat at 66 s, then said nothing until 105 s: the first shot lasted 49 s."""
+    speech = ScriptedSpeech(
+        [
+            LISTEN,
+            LISTEN,
+            AudioProgress(66_600),  # the beat at 66 s closes with nothing said
+            TurnStarted("0", 105_000),
+            PartialTranscript("A tiny lighthouse on a rock"),
+            LISTEN,
+            LISTEN,
+            TurnEnded("0", 114_000),
+            TurnCompleted(TranscriptTurn("0", "A tiny lighthouse on a rock", 105_000, 114_000)),
+            AudioProgress(115_600),  # closes the beat at 115 s
+            TurnStarted("1", 116_000),
+            PartialTranscript("Inside an old woman"),
+            TurnEnded("1", 120_000),
+            LISTEN,
+        ]
+    )
+    director = FakeDirector({"b1": one_shot(), "b2": one_shot()})
+    s = Session(speech, director)
+
+    await s.run.execute(
+        "p1", speech.paced(CHUNK, Beat(66_000), CHUNK, CHUNK, Beat(115_000), CHUNK, CHUNK), SpeechOptions()
+    )
+
+    assert [(t[2], t[3]) for t in s.turns()] == [(105_000, 115_000), (116_000, 120_000)]
+    assert [shot.duration_ms for shot in s.shots()] == [10_000, 4_000]
 
 
 async def test_without_beats_the_transcriber_turns_cut_the_shots() -> None:

@@ -26,7 +26,13 @@ The narrator knows where a shot starts. One key press (or a button) is a far mor
   - With the grace period, all six paragraphs split exactly. Each beat closes about 0.8 s after it was sent.
 - Words are matched to beats by position in the running transcript: words of finished transcriber turns, followed by the current cumulative partial.
 - When the stream ends, waiting beats close in order. The last stretch runs to the end of the speech.
-- Beat stretches are contiguous from the first beat to the end, so panel timing stays in step with the narration track.
+- ~~Beat stretches are contiguous from the first beat to the end.~~ Amended 2026-10-28: a stretch starts at its first speech, not at the previous beat (see below).
+
+**Amendment (2026-10-28): leading silence is trimmed.** A narrator pressed beat at 66 s and started talking much later, and the first shot lasted 49 s.
+- A stretch now starts where its first words were spoken: the transcriber's `speechStart` for the turn they came from. It never starts before the previous boundary.
+- If that transcriber turn began before the boundary (one long sentence across a beat), the words start at the boundary, because speech never stopped.
+- Adapters without `speechStart` fall back to the boundary, as before.
+- Stretches are no longer contiguous. The animatic cuts the narration recording to the same segments, so picture and voice stay in sync ([ADR 0011](0011-animatic-export.md)).
 
 **Endpointing is the fallback.** Until the first beat, each transcriber turn (`speechComplete`) is directed as before. From the first beat on, transcriber turns only add words to the transcript; they never create shots. A `speechComplete` that arrives after a beat therefore cannot direct the same audio twice.
 

@@ -16,6 +16,7 @@ from frameteller.application.ports import (
     SpeechToTextPort,
     TurnCompleted,
     TurnEnded,
+    TurnStarted,
 )
 from frameteller.application.use_cases.correct_transcript import CorrectTranscript
 from frameteller.application.use_cases.direct_turn import DirectTurn
@@ -57,6 +58,10 @@ class _Heard:
     Partials are cumulative per transcriber turn, so the words of finished turns are kept and the current partial
     is appended. Closing a beat takes the words since the previous boundary. Beats are matched to the transcript by
     word position, so later rewording inside a closed beat cannot move words into the next one.
+
+    A stretch starts where its first words were spoken (the transcriber's speechStart), not at the previous
+    boundary: silence before them is trimmed, so a shot never lasts through a long pause before the narrator
+    starts. A transcriber turn that began before the boundary is still going, so its words start at the boundary.
     """
 
     def __init__(self) -> None:
@@ -65,26 +70,44 @@ class _Heard:
         self.cursor = 0  # words before this index already belong to a directed turn
         self.cut_ms = 0  # the audio position of the last boundary
         self.speech_end_ms = 0
+        self.speech_start_ms: int | None = None  # the latest transcriber turn's speechStart
+        self.first_speech_ms: int | None = None  # where the open stretch's first words were spoken
+
+    def hear_speech_start(self, start_ms: int) -> None:
+        self.speech_start_ms = start_ms
+
+    def _note_first_words(self) -> None:
+        if self.first_speech_ms is None and len(self.done) + len(self.partial) > self.cursor:
+            self.first_speech_ms = max(self.cut_ms, self.speech_start_ms or 0)
+
+    @property
+    def heard_any(self) -> bool:
+        return bool(self.done or self.partial)
 
     def hear_partial(self, text: str) -> None:
         self.partial = text.split()
+        self._note_first_words()
 
     def finish_turn(self, text: str) -> None:
         final = text.split()
         # The final text normally matches the last partial; keep whichever has more words so positions hold.
         self.done += final if len(final) >= len(self.partial) else self.partial
         self.partial = []
+        self._note_first_words()
 
     def pending(self) -> str:
         """The words heard since the last boundary: the live line the narrator sees."""
         return " ".join((self.done + self.partial)[self.cursor :])
 
     def cut(self, at_ms: int) -> tuple[str, int, int]:
-        """Close the stretch since the last boundary: (its text, start ms, end ms)."""
+        """Close the stretch since the last boundary: (its text, start ms, end ms), leading silence trimmed."""
         words = self.done + self.partial
         text = " ".join(words[self.cursor :])
         self.cursor = max(self.cursor, len(words))
-        start, self.cut_ms = self.cut_ms, max(self.cut_ms, at_ms)
+        start = self.cut_ms if self.first_speech_ms is None else self.first_speech_ms
+        self.cut_ms = max(self.cut_ms, at_ms)
+        self.first_speech_ms = None
+        start = min(start, self.cut_ms)
         return text, start, max(at_ms, start)
 
 
@@ -196,6 +219,8 @@ class RunVoiceSession:
                     await self._events.publish(project_id, TranscriptUpdated(heard.pending()))
                 elif isinstance(event, AudioProgress):
                     await close_beats_heard(event.processed_ms)
+                elif isinstance(event, TurnStarted):
+                    heard.hear_speech_start(event.start_ms)
                 elif isinstance(event, TurnEnded):
                     heard.speech_end_ms = max(heard.speech_end_ms, event.end_ms)
                 elif isinstance(event, TurnCompleted):
