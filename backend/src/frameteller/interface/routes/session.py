@@ -171,7 +171,9 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
         try:
             await _send(ws, {"type": "session.started", "mode": start.mode})
             try:
-                await c.voice_session.execute(project_id, audio.frames(), start.as_options())
+                await c.voice_session.execute(
+                    project_id, audio.frames(), start.as_options(), keep_audio=start.keep_audio
+                )
             except ApplicationError as e:
                 await _send(ws, error_message(e.user_message, fatal=True))
             except Exception:

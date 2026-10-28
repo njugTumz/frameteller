@@ -102,6 +102,9 @@ class InMemoryMediaStorage:
     async def get(self, ref: MediaRef) -> bytes:
         return self.files[ref.key][0]
 
+    async def delete(self, ref: MediaRef) -> None:
+        self.files.pop(ref.key, None)
+
 
 class FakeImageGeneration:
     """Stores a tiny fake image under `store_as`, like the real adapter does with model output."""

@@ -25,6 +25,7 @@ from tests.fakes import (
     LISTEN,
     FakeDirector,
     InMemoryJobQueue,
+    InMemoryMediaStorage,
     InMemoryProjectRepository,
     RecordingPublisher,
     ScriptedSpeech,
@@ -49,6 +50,7 @@ class Session:
     ) -> None:
         self.repo = InMemoryProjectRepository(story or project(shots=shots))
         self.events, self.jobs = RecordingPublisher(), InMemoryJobQueue()
+        self.storage = InMemoryMediaStorage()
         self.director = director
         cast = RequestCastReferences(self.repo, self.jobs, SequentialIds("n"))
         self.run = RunVoiceSession(
@@ -58,6 +60,8 @@ class Session:
             cast,
             self.events,
             SequentialIds("s"),
+            self.repo,
+            self.storage,
         )
 
     def turns(self) -> list[tuple[str, str, int, int]]:

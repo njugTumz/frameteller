@@ -213,6 +213,10 @@ class MediaStoragePort(Protocol):
 
     async def get(self, ref: MediaRef) -> bytes: ...
 
+    async def delete(self, ref: MediaRef) -> None:
+        """Remove a stored file. Deleting one that is already gone is not an error."""
+        ...
+
 
 class ProjectRepository(Protocol):
     async def get(self, project_id: str) -> Project: ...

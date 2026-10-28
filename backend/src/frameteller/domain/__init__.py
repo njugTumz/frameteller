@@ -16,6 +16,7 @@ from frameteller.domain.errors import (
     UnknownTurnError,
 )
 from frameteller.domain.media import MediaRef
+from frameteller.domain.narration import Narration, session_of
 from frameteller.domain.panels import Box, CanvasTransform, MaskBitmap, ObjectMask, Panel, PanelStatus, Point, Size
 from frameteller.domain.project import Project
 from frameteller.domain.shots import Framing, Shot
@@ -39,6 +40,7 @@ __all__ = [
     "MaskBitmap",
     "MediaRef",
     "MissingReferenceError",
+    "Narration",
     "ObjectMask",
     "Panel",
     "PanelNotReadyError",
@@ -55,5 +57,6 @@ __all__ = [
     "UnknownObjectError",
     "UnknownShotError",
     "UnknownTurnError",
+    "session_of",
     "split_duration",
 ]

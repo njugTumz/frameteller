@@ -13,6 +13,8 @@ from frameteller.domain.errors import (
     UnknownShotError,
     UnknownTurnError,
 )
+from frameteller.domain.media import MediaRef
+from frameteller.domain.narration import Narration
 from frameteller.domain.panels import Panel
 from frameteller.domain.shots import Shot
 from frameteller.domain.style import PanelStyle
@@ -28,6 +30,7 @@ class Project:
     turns: list[TranscriptTurn] = field(default_factory=list)
     shots: list[Shot] = field(default_factory=list)
     panels: dict[str, Panel] = field(default_factory=dict)
+    narrations: dict[str, Narration] = field(default_factory=dict)  # by session tag, kept only with consent
 
     # ---- transcript and characters ----
 
@@ -112,6 +115,17 @@ class Project:
         for shot_id in shot_ids:
             if (panel := self.panels.get(shot_id)) is not None and panel.revision > 0:
                 panel.outdated = True
+
+    # ---- the narrator's recording ----
+
+    def keep_narration(self, narration: Narration) -> None:
+        self.narrations[narration.session] = narration
+
+    def forget_narrations(self) -> list[MediaRef]:
+        """Drop every recording; returns them so the caller can delete the files."""
+        refs = [n.recording for n in self.narrations.values()]
+        self.narrations = {}
+        return refs
 
     # ---- shots ----
 

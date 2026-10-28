@@ -12,6 +12,7 @@ from frameteller.application.use_cases.generate_character_reference import Gener
 from frameteller.application.use_cases.generate_panel import GeneratePanel
 from frameteller.application.use_cases.manage_cast import MergeCharacters, Merged, RemoveCharacter, RenameCharacter
 from frameteller.application.use_cases.move_panel_object import MovePanelObject
+from frameteller.application.use_cases.narration import DeleteNarration
 from frameteller.application.use_cases.pre_segment_panel import PreSegmentPanel, character_mask_id
 from frameteller.application.use_cases.projects import CreateProject, FindShot, GetProject
 from frameteller.application.use_cases.reorder_shots import ReorderShots
@@ -34,6 +35,7 @@ __all__ = [
     "ClientInput",
     "CorrectTranscript",
     "CreateProject",
+    "DeleteNarration",
     "DirectTurn",
     "DirectedShots",
     "EditPanelAppearance",

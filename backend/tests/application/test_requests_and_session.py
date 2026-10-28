@@ -55,6 +55,7 @@ from tests.fakes import (
     FakeDirector,
     FakeSpeechToText,
     InMemoryJobQueue,
+    InMemoryMediaStorage,
     InMemoryProjectRepository,
     RecordingPublisher,
     SequentialIds,
@@ -268,6 +269,8 @@ def session(repo: InMemoryProjectRepository, speech: FakeSpeechToText, director:
         cast,
         events,
         SequentialIds("s"),  # the session tag: turn ids become "s1-..."
+        repo,
+        InMemoryMediaStorage(),
     )
     return run, events, jobs
 

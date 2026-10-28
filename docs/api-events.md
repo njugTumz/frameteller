@@ -12,7 +12,7 @@ One live session per project at a time. Browsers must connect from an origin in 
 
 | Message | When | Shape |
 |---|---|---|
-| Start | First message, within 10 s | JSON `{"mode": "narrate" \| "co_direct", "keywords": ["Mira", ...]}` |
+| Start | First message, within 10 s | JSON `{"mode": "narrate" \| "co_direct", "keywords": ["Mira", ...], "keep_audio": true}` |
 | Audio | Then, repeatedly | **Binary** frames of raw PCM, signed 16-bit little-endian, mono, **24 kHz**. Even length, at most 32,768 bytes (about 0.34 s). Send at real-time pace. |
 | Beat | When a new shot starts | JSON `{"type": "beat"}`. See [Beats](#beats). |
 | Correction | Any time, also after `session.ended` | JSON `{"type": "transcript.corrected", "turn_id": "55a635ca-b1", "text": "Scene one. Night. ..."}`. `text` is 1–2,000 characters. |
@@ -20,6 +20,7 @@ One live session per project at a time. Browsers must connect from an origin in 
 
 - `mode` is fixed for the session. `narrate` uses low-latency turn endpointing; `co_direct` adds speaker labels (`A`, `B`) but only closes a turn when the speaker changes or the stream ends. In our measurement, one narrator gave a single 42-second turn (see the [findings](spikes/2026-10-28-findings.md)).
 - `keywords` (at most 50, each trimmed to 40 characters) bias recognition towards character and place names.
+- `keep_audio` (default `false`): only with the narrator's consent. The server keeps the session's audio as a WAV (`narrations` on the project) for the animatic's voice track. It is never logged; `DELETE /projects/{id}/narration` deletes it, and in staging it expires after 30 days.
 - Invalid frames and unknown JSON messages are dropped. The server reports each kind once with a non-fatal `error`.
 - A session stops by itself after **55 minutes** of audio.
 

@@ -24,6 +24,7 @@ from frameteller.application.use_cases import (
     ApproveCast,
     CorrectTranscript,
     CreateProject,
+    DeleteNarration,
     DirectTurn,
     EditPanelAppearance,
     EditPanelByCommand,
@@ -82,6 +83,7 @@ class Container:
     voice_session: RunVoiceSession
     correct_transcript: CorrectTranscript
     transcribe_instruction: TranscribeInstruction
+    delete_narration: DeleteNarration
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
 
@@ -172,10 +174,11 @@ def wire(
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
-            speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids
+            speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids, repo, storage
         ),
         correct_transcript=correct_transcript,
         transcribe_instruction=TranscribeInstruction(repo, speech),
+        delete_narration=DeleteNarration(repo, storage),
         readiness=readiness or {},
     )
 

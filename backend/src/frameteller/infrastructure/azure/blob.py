@@ -70,6 +70,15 @@ class AzureBlobMediaStorage:
 
         return await asyncio.to_thread(download)
 
+    async def delete(self, ref: MediaRef) -> None:
+        blob = self._container.get_blob_client(check_key(ref.key))
+
+        def remove() -> None:
+            with contextlib.suppress(ResourceNotFoundError):
+                blob.delete_blob()
+
+        await asyncio.to_thread(remove)
+
     async def check_writable(self) -> None:
         """Readiness probe: write and delete a tiny blob. Raises if the identity or network cannot."""
         blob = self._container.get_blob_client(".ready")

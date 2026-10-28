@@ -87,6 +87,7 @@ class SessionStart(BaseModel):
 
     mode: Literal["narrate", "co_direct"] = "narrate"
     keywords: list[str] = Field(default_factory=list, max_length=50)
+    keep_audio: bool = Field(default=False, description="The narrator agreed to keep the recording for the animatic.")
 
     def as_options(self) -> SpeechOptions:
         mode = SpeechMode.CO_DIRECTION if self.mode == "co_direct" else SpeechMode.NARRATION
@@ -228,6 +229,12 @@ class TurnOut(BaseModel):
         return cls(id=t.id, text=t.text, start_ms=t.start_ms, end_ms=t.end_ms, speaker=t.speaker)
 
 
+class NarrationOut(BaseModel):
+    session: str
+    duration_ms: int
+    url: str
+
+
 class ProjectOut(BaseModel):
     id: str
     title: str
@@ -235,6 +242,7 @@ class ProjectOut(BaseModel):
     cast: CastOut
     turns: list[TurnOut]
     shots: list[ShotOut]
+    narrations: list[NarrationOut] = Field(description="Kept recordings, one per live session, for the animatic.")
 
     @classmethod
     def of(cls, p: Project) -> ProjectOut:
@@ -247,6 +255,10 @@ class ProjectOut(BaseModel):
             ),
             turns=[TurnOut.of(t) for t in p.turns],
             shots=[ShotOut.of(s, p.panels.get(s.id)) for s in p.shots],
+            narrations=[
+                NarrationOut(session=n.session, duration_ms=n.duration_ms, url=f"/media/{n.recording.key}")
+                for n in p.narrations.values()
+            ],
         )
 
 

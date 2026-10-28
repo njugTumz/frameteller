@@ -15,6 +15,7 @@ from frameteller.domain import (
     Framing,
     MaskBitmap,
     MediaRef,
+    Narration,
     ObjectMask,
     Panel,
     PanelStatus,
@@ -109,6 +110,10 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             }
             for pn in p.panels.values()
         ],
+        "narrations": [
+            {"session": n.session, "recording": n.recording.key, "duration_ms": n.duration_ms}
+            for n in p.narrations.values()
+        ],
     }
 
 
@@ -153,4 +158,8 @@ def project_from_dict(d: dict[str, Any]) -> Project:
             for s in d["shots"]
         ],
         panels=panels,
+        narrations={
+            n["session"]: Narration(n["session"], MediaRef(n["recording"]), n["duration_ms"])
+            for n in d.get("narrations", [])
+        },
     )

@@ -215,3 +215,20 @@ async def test_rename_remove_and_merge_characters(api: Api) -> None:
     assert removed.json()["cast"] == {"status": "draft", "characters": []}
     assert all(s["character_ids"] == [] for s in removed.json()["shots"])
     assert (await api.client.delete("/projects/p1/cast/mira")).status_code == 404
+
+
+async def test_delete_my_recording(api: Api) -> None:
+    from frameteller.domain import Narration
+
+    p = api.project()
+    p.keep_narration(Narration("s1", MediaRef("projects/p1/narration/s1.wav"), 5000))
+    await api.fakes.repo.save(p)
+    api.fakes.storage.files["projects/p1/narration/s1.wav"] = (b"RIFF\x00\x00\x00\x00WAVE", "audio/wav")
+    body = (await api.client.get("/projects/p1")).json()
+    assert body["narrations"] == [{"session": "s1", "duration_ms": 5000, "url": "/media/projects/p1/narration/s1.wav"}]
+    assert (await api.client.get(body["narrations"][0]["url"])).headers["content-type"] == "audio/wav"
+
+    deleted = await api.client.delete("/projects/p1/narration")
+    assert deleted.status_code == 200
+    assert deleted.json()["narrations"] == []
+    assert "projects/p1/narration/s1.wav" not in api.fakes.storage.files

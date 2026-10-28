@@ -257,3 +257,21 @@ async def test_beats_cut_shots_and_corrections_redirect_them(fakes: Fakes, make_
     assert error is not None
     assert error["type"] == "error"
     await ws.finish()
+
+
+async def test_the_recording_is_kept_when_the_client_asks(api: Api) -> None:
+    scripted(api)
+    ws = WsClient(api.app, PATH)
+    assert await ws.connect()
+    await ws.send_json({"mode": "narrate", "keep_audio": True})
+    for _ in range(2):
+        await ws.send_bytes(FRAME)
+    await ws.send_json({"type": "end"})
+    await ws.until("session.ended")
+    await ws.finish()
+
+    [narration] = api.project().narrations.values()
+    assert narration.duration_ms == 160
+    data, kind = api.fakes.storage.files[narration.recording.key]
+    assert kind == "audio/wav"
+    assert data[44:] == FRAME * 2

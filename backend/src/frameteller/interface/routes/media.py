@@ -20,6 +20,8 @@ _SIGNATURES = [
 def content_type(data: bytes) -> str:
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "image/webp"
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        return "audio/wav"
     if data[4:8] == b"ftyp":
         return "video/mp4"
     return next((t for sig, t in _SIGNATURES if data.startswith(sig)), "application/octet-stream")

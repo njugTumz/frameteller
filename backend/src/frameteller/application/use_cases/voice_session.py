@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import math
 import sys
 from array import array
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+from frameteller.application.audio import BYTES_PER_MS, wav_bytes
 from frameteller.application.errors import ApplicationError
 from frameteller.application.events import (
     NoSpeechHeard,
@@ -22,7 +24,9 @@ from frameteller.application.ports import (
     AudioProgress,
     EventPublisher,
     IdGenerator,
+    MediaStoragePort,
     PartialTranscript,
+    ProjectRepository,
     SpeechOptions,
     SpeechToTextPort,
     TurnCompleted,
@@ -32,7 +36,9 @@ from frameteller.application.ports import (
 from frameteller.application.use_cases.correct_transcript import CorrectTranscript
 from frameteller.application.use_cases.direct_turn import DirectTurn
 from frameteller.application.use_cases.requests import RequestCastReferences
-from frameteller.domain import DomainError, TranscriptTurn
+from frameteller.domain import DomainError, Narration, TranscriptTurn
+
+log = logging.getLogger("frameteller.session")
 
 DIRECTION_FAILED = "The director couldn't place that line. Try saying it again."
 CORRECTION_FAILED = "We couldn't apply that correction. Check the turn and try again."
@@ -42,7 +48,8 @@ AUDIO_BUFFER_FRAMES = 256  # about 20 s of 80 ms frames waiting for the transcri
 BEAT_GRACE_MS = 500
 SILENCE_WARNING_MS = 8000  # audio received with no words and no level before we say we can't hear the narrator
 SILENT_LEVEL = 0.005  # RMS of full scale (about -46 dBFS): a muted or wrong microphone, not a quiet room
-BYTES_PER_MS = 48  # PCM s16le mono 24 kHz
+MAX_KEPT_MS = 30 * 60 * 1000  # the narration kept for the animatic stops here (about 86 MB of PCM)
+KEEP_FAILED = "We couldn't keep your recording, so the animatic will be silent. Your shots are safe."
 
 
 def pcm_level(chunk: bytes) -> float:
@@ -181,13 +188,22 @@ class RunVoiceSession:
         cast: RequestCastReferences,
         events: EventPublisher,
         ids: IdGenerator,
+        repo: ProjectRepository,
+        storage: MediaStoragePort,
     ) -> None:
         self._speech, self._direct, self._correct = speech, direct, correct
         self._cast, self._events, self._ids = cast, events, ids
+        self._repo, self._storage = repo, storage
 
     async def execute(
-        self, project_id: str, client: AsyncIterator[ClientInput], options: SpeechOptions
+        self,
+        project_id: str,
+        client: AsyncIterator[ClientInput],
+        options: SpeechOptions,
+        *,
+        keep_audio: bool = False,
     ) -> SessionEnded:
+        """`keep_audio`: the narrator agreed to keep their recording for the animatic. Never logged."""
         # Turn ids are per session; the tag keeps a second narration in the same project from reusing them.
         tag = self._ids.new_id()[:8]
         work: asyncio.Queue[TranscriptTurn | TranscriptCorrection | None] = asyncio.Queue()
@@ -219,6 +235,7 @@ class RunVoiceSession:
                 await close_beat(beats.pop(0))
 
         silence = _Silence()
+        kept: bytearray | None = bytearray() if keep_audio else None
 
         async def read_client() -> None:
             nonlocal beat_mode
@@ -226,6 +243,8 @@ class RunVoiceSession:
                 async for item in client:
                     if isinstance(item, bytes) and (quiet := silence.hear(item, heard.heard_any)):
                         await self._events.publish(project_id, quiet)
+                    if isinstance(item, bytes) and kept is not None and len(kept) < MAX_KEPT_MS * BYTES_PER_MS:
+                        kept.extend(item)
                     if isinstance(item, Beat):
                         beat_mode = True
                         beats.append(item.at_ms)
@@ -301,6 +320,18 @@ class RunVoiceSession:
                 await asyncio.gather(reader, return_exceptions=True)
         work.put_nowait(None)
         await director  # finish directing what was said before the stream ended
+        if kept:
+            await self._keep(project_id, tag, bytes(kept))
         ended = SessionEnded(counts["turns"], counts["shots"], heard.heard_any)
         await self._events.publish(project_id, ended)
         return ended
+
+    async def _keep(self, project_id: str, tag: str, pcm: bytes) -> None:
+        """Store the session's audio as WAV; turn times are positions in it. A failure costs only the voice track."""
+        try:
+            ref = await self._storage.put(f"projects/{project_id}/narration/{tag}.wav", wav_bytes(pcm), "audio/wav")
+            narration = Narration(tag, ref, len(pcm) // BYTES_PER_MS)
+            await self._repo.update(project_id, lambda p: p.keep_narration(narration))
+        except Exception:
+            log.warning("could not keep the narration", extra={"bytes": len(pcm)})
+            await self._events.publish(project_id, SessionFailed(KEEP_FAILED))

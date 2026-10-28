@@ -106,6 +106,12 @@ async def reorder_shots(project_id: ProjectId, body: ReorderRequest, c: Deps) ->
     return ShotsOut(shots=[ShotOut.of(s) for s in await c.reorder_shots.execute(project_id, body.shot_ids)])
 
 
+@router.delete("/{project_id}/narration")
+async def delete_narration(project_id: ProjectId, c: Deps) -> ProjectOut:
+    """Delete my recording: every kept narration of this project. A later animatic has no voice track."""
+    return ProjectOut.of(await c.delete_narration.execute(project_id))
+
+
 _WAV_BODY = {"required": True, "content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}}}
 _WAV_HEADER_BYTES = 44
 
