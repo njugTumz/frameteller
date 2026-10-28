@@ -23,7 +23,9 @@ Built for indie filmmakers, YouTubers, animators, comic and game writers, and ad
 | Draw | `muse-image-1.0` | Generates a reference sheet per character, then every panel from those references so characters stay consistent. |
 | Select | `sam-3.1` | Segments a clicked object so it can be moved, swapped or edited in isolation. |
 
-The animatic is rendered with ffmpeg: each panel's duration comes from the transcript turn timestamps, and your recording is the narration track.
+The animatic is rendered with ffmpeg: each panel shows for its shot's spoken time (leading silence trimmed), and your own recording, kept only if you agree, is cut into the same segments so picture and voice stay in sync. Gentle camera moves by framing, short crossfades, optional subtitles, a title card and an end card ([ADR 0011](docs/adr/0011-animatic-export.md)).
+
+Moving or resizing an object is saved on the panel: the first move asks Muse Image for a clean plate (the picture with only that object removed), and the server composites the SAM cut-out onto it at its new place ([ADR 0010](docs/adr/0010-clean-plates.md)). You can also download a storyboard sheet as a PDF and share a read-only link whose preview shows on X.
 
 ## Architecture
 
@@ -45,10 +47,10 @@ See [docs/architecture.md](docs/architecture.md) and the decision records in [do
 `frontend/` is React 19, Vite, TypeScript (strict) and Tailwind, laid out as CLAUDE.md section 6 describes:
 
 - `app/` composes: the router, theme, top bar, the Start and Studio pages, and `app/studio/`, which fans session events out to the feature stores.
-- `features/` holds one folder per feature: `start`, `recording`, `storyboard`, `cast` and `panel-editor`. Each has `store.ts` (a pure reducer in a Zustand store), `api.ts` (backend calls), `hooks/` (orchestration) and `components/` (rendering only). An ESLint rule stops components importing `api.ts`, the client, the session or the audio code.
+- `features/` holds one folder per feature: `start`, `recording`, `storyboard`, `cast`, `panel-editor`, `export` and `share`. Each has `store.ts` (a pure reducer in a Zustand store), `api.ts` (backend calls), `hooks/` (orchestration) and `components/` (rendering only). An ESLint rule stops components importing `api.ts`, the client, the session or the audio code.
 - `shared/` holds the typed REST client generated from `backend/openapi.json` (`openapi-typescript` and `openapi-fetch`), the WebSocket event types from [docs/api-events.md](docs/api-events.md) with a runtime guard, the audio pipeline and UI primitives.
 - **Audio:** `getUserMedia` feeds an AudioWorklet that mixes to mono, downsamples to 24 kHz and sends 80 ms frames of 16-bit PCM (3,840 bytes) over the session WebSocket as they are captured, which is real-time pace. Up to 2 s is held while the session connects. A dropped socket reconnects into a new session and says so.
-- **Panel editor:** a react-konva canvas. A click calls `.../panel/select` with preview coordinates and outlines the returned mask. Masks cached on the panel answer instantly. The selected cut-out can be dragged and resized on the canvas, or changed by a typed or spoken instruction, which is transcribed by `POST /projects/{id}/dictation`. Moves are kept in the browser for now.
+- **Panel editor:** a react-konva canvas. A click calls `.../panel/select` with preview coordinates and outlines the returned mask. Masks cached on the panel answer instantly. The selected cut-out can be dragged and resized on the canvas, or changed by a typed or spoken instruction, which is transcribed by `POST /projects/{id}/dictation`. A move is saved as a layer (`POST .../panel/layers`) and the storyboard shows the server's composite once it is ready ("Preparing the background…" meanwhile).
 - The only build-time setting is `VITE_API_BASE_URL`, which is public, not a secret. The browser talks only to our backend, never to Meta.
 
 ## Deployment
@@ -188,6 +190,14 @@ Everything in this repository was built during the event. The commit history is 
 - [x] Narrator beats and transcript corrections on the live session ([ADR 0008](docs/adr/0008-reliable-beats.md))
 - [x] Azure staging: Blob Storage adapters, Bicep, OIDC deploy pipeline, live at the staging URL above
 - [x] The studio: speak a story, cut shots with "Next shot", approve the cast, watch drafts arrive, and click an object in a panel to select, move or change it, on staging with CI and Playwright tests
+- [x] Reference sheets drawn in the project's style, with only the clothing the description names
+- [x] Cast management: rename, remove and merge characters; merged shots are redrawn as drafts
+- [x] Reveals: a later beat can re-cast up to the last three shots (`shot.updated`), and the panel is marked for redraw
+- [x] Shot timing from the first speech after the previous beat; a "We can't hear you" warning with a microphone picker
+- [x] Kept narration with consent (WAV, deletable, 30-day lifecycle on staging)
+- [x] Saved moves on clean plates, composited server-side ([ADR 0010](docs/adr/0010-clean-plates.md))
+- [x] Animatic MP4 export voiced by the narrator, with progress and an inline player ([ADR 0011](docs/adr/0011-animatic-export.md))
+- [x] Storyboard sheet PDF, and revocable read-only share links that preview on X
 - [ ] TODO: list features as they ship
 
 ## License
