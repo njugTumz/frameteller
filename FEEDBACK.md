@@ -10,6 +10,9 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-28 · muse-image-1.0 · good · "Remove the girl, keep everything else identical" as a Responses edit gave a usable clean plate for moving her: layout and style held, and the plate plus our composite was ready 51 s after the move on staging, for $0.01.
+- 2026-10-28 · muse-image-1.0 · issue · A reference sheet for an animal (a small fox) came back wearing the green sweater that only the other character's description named, and one panel added a blue vest. Stating "only the clothing the description names; animals wear nothing unless described" in both prompts fixed it in our lighthouse run (Pip bare in all four of his panels).
+- 2026-10-28 · muse-spark-1.3 · good · Given the last three shots and a later beat that revealed "something small and orange" was the fox, structured output re-cast the earlier shot to Pip in one call instead of inventing a new character, with no extra prompting beyond the schema field.
 - 2026-10-28 · muse-voice-transcribe-1.0 · issue · With `keywords: ["Mira"]` set in the handshake, one staging run of the same narration transcribed the first "Mira" as "Mirror" (later ones were right), so the director cast a character called Mirror. We expected keywords to bias proper nouns more strongly. Users can fix the word in the studio, which re-directs that beat.
 - 2026-10-27 · muse-voice-transcribe-1.0 · idea · A sentence's last word reaches the cumulative partial up to ~240 ms of audio after the speaker pauses, so cutting the transcript at a user's "next shot" key press needs a grace period. Word-level timestamps (even on partials) would make that exact.
 - 2026-10-27 · muse-voice-transcribe-1.0 · issue · `POST /v1/asr/transcribe` returns 400 "You must specify the 'audioEncoding' field", but the docs' example omits it and the error does not list values. `WAV` works; `PCM_24KHZ` gives 400 "Malformed request".
