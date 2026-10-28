@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "swa:config": "node scripts/swa-config.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b",
