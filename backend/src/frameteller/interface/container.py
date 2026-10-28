@@ -39,6 +39,7 @@ from frameteller.application.use_cases import (
     RequestPanelRender,
     RunVoiceSession,
     SegmentObjectAtPoint,
+    TranscribeInstruction,
 )
 from frameteller.infrastructure.azure import AzureBlobMediaStorage, BlobProjectRepository, BlobSpendLedger, blob_service
 from frameteller.infrastructure.config import Settings
@@ -74,6 +75,7 @@ class Container:
     reorder_shots: ReorderShots
     voice_session: RunVoiceSession
     correct_transcript: CorrectTranscript
+    transcribe_instruction: TranscribeInstruction
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
 
@@ -164,6 +166,7 @@ def wire(
             speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids
         ),
         correct_transcript=correct_transcript,
+        transcribe_instruction=TranscribeInstruction(repo, speech),
         readiness=readiness or {},
     )
 

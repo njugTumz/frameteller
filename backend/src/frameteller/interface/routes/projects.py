@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, status
+from fastapi import APIRouter, Path, Request, status
 
-from frameteller.domain import Point, Size
+from frameteller.application.use_cases import MAX_DICTATION_MS
+from frameteller.domain import InvalidValueError, Point, Size
 from frameteller.interface.dto import (
     CastApproval,
     CastReviewOut,
+    DictationOut,
     EditRequest,
     ErrorOut,
     ProjectCreate,
@@ -78,3 +80,25 @@ async def select_object(project_id: ProjectId, n: ShotNumber, body: SelectReques
 @router.post("/{project_id}/shots/reorder")
 async def reorder_shots(project_id: ProjectId, body: ReorderRequest, c: Deps) -> ShotsOut:
     return ShotsOut(shots=[ShotOut.of(s) for s in await c.reorder_shots.execute(project_id, body.shot_ids)])
+
+
+_WAV_BODY = {"required": True, "content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}}}
+_WAV_HEADER_BYTES = 44
+
+
+@router.post(
+    "/{project_id}/dictation",
+    responses={413: {"model": ErrorOut}, 422: {"model": ErrorOut}},
+    openapi_extra={"requestBody": _WAV_BODY},
+)
+async def dictate(project_id: ProjectId, request: Request, c: Deps) -> DictationOut:
+    """Transcribe a spoken edit instruction: a WAV body, mono 16-bit at 16 or 24 kHz, at most 30 s.
+
+    Returns the text for the user to check; nothing is edited until they send it to .../panel/edit.
+    """
+    wav = await request.body()
+    if len(wav) <= _WAV_HEADER_BYTES or wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
+        raise InvalidValueError("Send the recording as a WAV file: mono, 16-bit, 16 or 24 kHz.")
+    if len(wav) > _WAV_HEADER_BYTES + 48 * MAX_DICTATION_MS:
+        raise InvalidValueError(f"Keep spoken instructions under {MAX_DICTATION_MS // 1000} seconds.")
+    return DictationOut(text=await c.transcribe_instruction.execute(project_id, wav))

@@ -133,6 +133,20 @@
         "title": "CharacterOut",
         "type": "object"
       },
+      "DictationOut": {
+        "description": "What was said, for the user to check before it is sent as an edit.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "DictationOut",
+        "type": "object"
+      },
       "EditRequest": {
         "properties": {
           "instruction": {
@@ -1011,6 +1025,91 @@
           }
         },
         "summary": "Regenerate Reference",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/dictation": {
+      "post": {
+        "description": "Transcribe a spoken edit instruction: a WAV body, mono 16-bit at 16 or 24 kHz, at most 30 s.\n\nReturns the text for the user to check; nothing is edited until they send it to .../panel/edit.",
+        "operationId": "dictate_projects__project_id__dictation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "audio/wav": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DictationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Dictate",
         "tags": [
           "projects"
         ]

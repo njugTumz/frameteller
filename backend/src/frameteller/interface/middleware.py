@@ -26,9 +26,12 @@ ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 log = logging.getLogger("frameteller.access")
 
 MAX_BODY_BYTES = 64 * 1024
+# Spoken edit instructions: up to 30 s of 24 kHz mono 16-bit WAV.
+MAX_AUDIO_BODY_BYTES = 44 + 48 * 30_000
+_AUDIO_BODY = re.compile(r"/dictation$")
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 # Endpoints that spend model credits get a tighter bucket.
-_COSTLY = re.compile(r"/(panel|panel/edit|panel/select|regenerate|session)$")
+_COSTLY = re.compile(r"/(panel|panel/edit|panel/select|regenerate|session|dictation)$")
 _UNLIMITED = {"/healthz", "/readyz"}
 
 
@@ -94,28 +97,29 @@ class RequestContextMiddleware:
 
 
 class BodyLimitMiddleware:
-    """Refuse request bodies over MAX_BODY_BYTES, whether or not Content-Length is sent."""
+    """Refuse request bodies over MAX_BODY_BYTES (MAX_AUDIO_BODY_BYTES for dictation), chunked or not."""
 
-    def __init__(self, app: ASGIApp, max_bytes: int = MAX_BODY_BYTES) -> None:
-        self.app, self.max_bytes = app, max_bytes
+    def __init__(self, app: ASGIApp, max_bytes: int = MAX_BODY_BYTES, audio_bytes: int = MAX_AUDIO_BODY_BYTES) -> None:
+        self.app, self.max_bytes, self.audio_bytes = app, max_bytes, audio_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["method"] in ("GET", "HEAD", "OPTIONS"):
             await self.app(scope, receive, send)
             return
+        limit = self.audio_bytes if _AUDIO_BODY.search(scope["path"]) else self.max_bytes
         length = _header(scope, b"content-length")
-        if length is not None and (not length.isdigit() or int(length) > self.max_bytes):
-            await self._too_large(send)
+        if length is not None and (not length.isdigit() or int(length) > limit):
+            await self._too_large(send, limit)
             return
-        # Buffer up to the limit (64 KB), so a chunked body cannot grow past it.
+        # Buffer up to the limit, so a chunked body cannot grow past it.
         chunks, size = [], 0
         while True:
             message = await receive()
             if message["type"] != "http.request":
                 break
             size += len(message.get("body", b""))
-            if size > self.max_bytes:
-                await self._too_large(send)
+            if size > limit:
+                await self._too_large(send, limit)
                 return
             chunks.append(message.get("body", b""))
             if not message.get("more_body"):
@@ -132,8 +136,8 @@ class BodyLimitMiddleware:
 
         await self.app(scope, replay, send)
 
-    async def _too_large(self, send: Send) -> None:
-        body = {"error": {"code": "too_large", "message": f"Request bodies are limited to {self.max_bytes} bytes."}}
+    async def _too_large(self, send: Send, limit: int) -> None:
+        body = {"error": {"code": "too_large", "message": f"Request bodies are limited to {limit} bytes."}}
         await _send_json(send, 413, body, [])
 
 

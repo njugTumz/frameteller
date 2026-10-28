@@ -99,3 +99,4 @@ Before closing with a 44xx code, the server sends a fatal `error` with a user-fa
 | `POST /projects/{id}/shots/{n}/panel` `{quality: "draft" \| "final"}` | 202 job ticket; follow `job.updated`. |
 | `POST /projects/{id}/shots/{n}/panel/edit` `{instruction}` | 202 job ticket. |
 | `POST /projects/{id}/shots/{n}/panel/select` `{x, y, preview_width, preview_height}` | The mask under the click. `cached: true` means no SAM call was needed. |
+| `POST /projects/{id}/dictation` (body: WAV, mono 16-bit, 16 or 24 kHz, at most 30 s) | `{text}`: a spoken edit instruction, transcribed for the user to check before sending it to `.../panel/edit`. Nothing is directed. |

@@ -269,6 +269,12 @@ class SelectionOut(BaseModel):
         return cls(cached=s.cached, mask=MaskOut.of(s.mask))
 
 
+class DictationOut(BaseModel):
+    """What was said, for the user to check before it is sent as an edit."""
+
+    text: str
+
+
 class ShotsOut(BaseModel):
     shots: list[ShotOut]
 
