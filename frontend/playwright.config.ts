@@ -36,6 +36,7 @@ export default defineConfig({
         ...(live ? [`--use-file-for-fake-audio-capture=${liveWav}%noloop`] : []),
         '--autoplay-policy=no-user-gesture-required',
         // Machines without a sound card (CI, servers) stall Chromium's audio clock: no worklet would run.
+        // They also need a sound server (CI starts PulseAudio), or the fake microphone runs faster than real time.
         '--disable-features=AudioServiceSandbox,AudioServiceOutOfProcess',
         '--alsa-output-device=null',
       ],

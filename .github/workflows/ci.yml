@@ -155,6 +155,12 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      # Without a sound server, Chromium's fake microphone runs many times faster than real time.
+      - name: Start a PulseAudio server
+        run: |
+          sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+
       # The live suite (E2E_LIVE=1) spends Meta credits and needs the narration recording: never in CI.
       - name: Playwright (mocked)
         run: npx playwright test
