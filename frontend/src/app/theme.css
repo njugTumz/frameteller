@@ -1,1 +1,183 @@
 @import 'tailwindcss';
+
+/* Storyboard desk: the marketing page's identity (marketing/index.html), shared token for token. */
+:root {
+  --paper: #eef3f8;
+  --sheet: #f8fafc;
+  --ink: #1c2430;
+  --muted: #556173;
+  --blue: #4f8fd0;
+  --blue-ink: #1f5fa8;
+  --wash: #d3e3f3;
+  --marker: #f2c230;
+  --marker-ink: #1c2430;
+  --rule: #c3d3e4;
+  --focus: #1f5fa8;
+  --danger: #a3341f;
+  --danger-wash: #f6e1dc;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #121821;
+    --sheet: #18202b;
+    --ink: #e6edf5;
+    --muted: #9aa8b9;
+    --blue: #7fb2e8;
+    --blue-ink: #a9cdf2;
+    --wash: #1f2c3b;
+    --rule: #2c3b4d;
+    --focus: #a9cdf2;
+    --danger: #f19a86;
+    --danger-wash: #3a2320;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #121821;
+  --sheet: #18202b;
+  --ink: #e6edf5;
+  --muted: #9aa8b9;
+  --blue: #7fb2e8;
+  --blue-ink: #a9cdf2;
+  --wash: #1f2c3b;
+  --rule: #2c3b4d;
+  --focus: #a9cdf2;
+  --danger: #f19a86;
+  --danger-wash: #3a2320;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: 'Archivo', system-ui, sans-serif;
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-blue: var(--blue);
+  --color-blue-ink: var(--blue-ink);
+  --color-wash: var(--wash);
+  --color-marker: var(--marker);
+  --color-marker-ink: var(--marker-ink);
+  --color-rule: var(--rule);
+  --color-focus: var(--focus);
+  --color-danger: var(--danger);
+  --color-danger-wash: var(--danger-wash);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-variation-settings: 'wdth' 100;
+    line-height: 1.5;
+    /* Storyboard paper: a faint non-photo-blue grid */
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--wash) 1px, transparent 1px), linear-gradient(90deg, var(--wash) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
+  }
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  button:not(:disabled),
+  [role='button'] {
+    cursor: pointer;
+  }
+}
+
+@utility wide {
+  font-variation-settings: 'wdth' 118;
+}
+
+@utility widest {
+  font-variation-settings: 'wdth' 125;
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A storyboard frame: ink border, sheet inside. */
+@utility frame {
+  border: 2px solid var(--ink);
+  background: var(--sheet);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Pencil lines being drawn while a panel renders. */
+@keyframes sketch {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes pulse-dot {
+  70% {
+    box-shadow: 0 0 0 10px rgb(242 194 48 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(242 194 48 / 0);
+  }
+}
+@keyframes press {
+  from {
+    transform: scale(0.96);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sketching path {
+  stroke-dasharray: 1;
+  animation: sketch 1.6s ease-in-out infinite alternate;
+}
+.live-dot {
+  animation: pulse-dot 2s infinite;
+}
+.arrive {
+  animation: arrive 0.35s ease-out both;
+}
+.pressed {
+  animation: press 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sketching path {
+    animation: none;
+    stroke-dasharray: none;
+  }
+  .live-dot,
+  .arrive,
+  .pressed {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
