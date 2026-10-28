@@ -4,6 +4,12 @@ import type { ProblemKind, RecordingState, useRecordingStore } from '../store'
 import { SessionSocket, closeMessage, sessionUrl, type SocketFactory } from './sessionSocket'
 
 const RECONNECT_DELAYS_MS = [500, 1500, 4000]
+/**
+ * Audio captured while the socket connects (or reconnects) is held and sent once the session starts, so the
+ * first words are not lost. At most 2 s: the backend already sends its own handshake backlog to the
+ * transcriber in one go, and the transcriber rejects streams that run far ahead of real time.
+ */
+export const MAX_BACKLOG_FRAMES = 25
 const FINAL_CODES = [4400, 4404, 4409]
 
 const MIC_PROBLEMS: Record<MicError['problem'], ProblemKind> = {
@@ -38,6 +44,8 @@ export interface NarrationHandlers {
 export class Narration {
   private mic: Microphone | null = null
   private socket: SocketSession | null = null
+  private streaming = false
+  private backlog: ArrayBuffer[] = []
   private disposed = false
   private readonly deps: NarrationDeps
   private readonly projectId: string
@@ -79,6 +87,7 @@ export class Narration {
         onClose: ({ code, expected }) => {
           if (this.socket !== s) return
           this.socket = null
+          this.streaming = false
           this.state.setConnected(false)
           if (!expected && !this.disposed) onDrop(code)
         },
@@ -88,12 +97,21 @@ export class Narration {
     this.socket = s
     await s.ready
     this.state.setConnected(true)
+    for (const frame of this.backlog.splice(0)) s.sendAudio(frame)
+    this.streaming = true
     return s
+  }
+
+  private frame(pcm: ArrayBuffer): void {
+    if (this.streaming && this.socket?.sendAudio(pcm)) return
+    this.backlog.push(pcm)
+    if (this.backlog.length > MAX_BACKLOG_FRAMES) this.backlog.shift()
   }
 
   private stopMic(): void {
     void this.mic?.close()
     this.mic = null
+    this.backlog = []
     this.state.setLevel(0)
   }
 
@@ -136,7 +154,7 @@ export class Narration {
     this.state.setTelling('mic')
     try {
       this.mic = await (this.deps.openMic ?? openMicrophone)({
-        onFrame: (pcm) => this.socket?.sendAudio(pcm),
+        onFrame: (pcm) => this.frame(pcm),
         onLevel: (level) => this.state.setLevel(level),
         onLost: (error) => this.micLost(error),
         onSwitched: (label) => this.state.notice(`Now recording from ${label}.`),
@@ -150,6 +168,7 @@ export class Narration {
     this.state.setTelling('connecting')
     try {
       this.socket?.close() // one kept open after a previous session.ended
+      this.streaming = false
       await this.connect((code) => void this.reconnect(code))
       this.state.setTelling('live')
     } catch (e) {

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeSocket } from '../../../test/fakeSocket'
 import { MicError, type MicHandlers, type Microphone } from '../../../shared/audio/microphone'
 import { useRecordingStore } from '../store'
-import { Narration, RECONNECTED } from './narration'
+import { MAX_BACKLOG_FRAMES, Narration, RECONNECTED } from './narration'
 
 function fakeMic() {
   const mic = { handlers: null as MicHandlers | null, closed: false }
@@ -50,6 +50,22 @@ describe('Narration', () => {
     socket.emit({ type: 'transcript.partial', text: 'Night' })
     expect(useRecordingStore.getState().partial).toBe('Night')
     expect(events).toEqual(['session.started', 'transcript.partial'])
+  })
+
+  it('keeps audio captured while connecting and sends it first, up to 2 s', async () => {
+    const { mic, openMic } = fakeMic()
+    const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    const starting = n.start()
+    await flush()
+    for (let i = 0; i < MAX_BACKLOG_FRAMES + 5; i++) mic.handlers?.onFrame(new Uint8Array([i % 256, 0]).buffer)
+    const socket = FakeSocket.latest()
+    expect(socket.binary).toHaveLength(0)
+    socket.start()
+    await starting
+    expect(socket.binary).toHaveLength(MAX_BACKLOG_FRAMES)
+    expect(new Uint8Array(socket.binary[0] ?? new ArrayBuffer(1))[0]).toBe(5) // the oldest frames were dropped, the latest kept
+    mic.handlers?.onFrame(new ArrayBuffer(2))
+    expect(socket.binary).toHaveLength(MAX_BACKLOG_FRAMES + 1)
   })
 
   it('ends the stream on stop, keeps the socket for job updates, and finishes on session.ended', async () => {
