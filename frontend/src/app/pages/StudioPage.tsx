@@ -1,48 +1,41 @@
-import { useCallback, useEffect } from 'react'
-import { useBeatShortcut } from '../../features/recording/hooks/useBeatShortcut'
-import { useNarration } from '../../features/recording/hooks/useNarration'
+import { useCallback, useEffect, useMemo } from 'react'
+import { castReadyFor, useCastStore } from '../../features/cast/store'
 import { Notices, ProblemNotice } from '../../features/recording/components/ProblemNotice'
 import { TellingControls } from '../../features/recording/components/TellingControls'
 import { TranscriptRail } from '../../features/recording/components/TranscriptRail'
+import { useBeatShortcut } from '../../features/recording/hooks/useBeatShortcut'
+import { useNarration } from '../../features/recording/hooks/useNarration'
 import { useRecordingStore } from '../../features/recording/store'
 import { ShotCard } from '../../features/storyboard/components/ShotCard'
 import { StoryboardGrid } from '../../features/storyboard/components/StoryboardGrid'
 import { useAutoDraft } from '../../features/storyboard/hooks/useAutoDraft'
+import { usePanelRender } from '../../features/storyboard/hooks/usePanelRender'
 import { useProjectSync } from '../../features/storyboard/hooks/useProjectSync'
 import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
-import type { Project, Shot } from '../../shared/api/types'
 import { mediaUrl } from '../../shared/api/client'
-import type { ServerEvent } from '../../shared/events'
+import type { Shot } from '../../shared/api/types'
 import { loadNames } from '../../shared/keywords'
-
-const NO_KEYWORDS: readonly string[] = []
-
-/** Fan one server event out to every feature store. */
-function dispatch(e: ServerEvent): void {
-  useStoryboardStore.getState().apply(e)
-}
-
-function loaded(p: Project): void {
-  const r = useRecordingStore.getState()
-  if (r.turns.length === 0) r.loadTurns(p.turns)
-}
-
-const notYet = (_s: Shot) => false
+import { CastZone } from '../studio/CastZone'
+import { dispatchEvent, projectLoaded, resetStudio } from '../studio/dispatch'
 
 export function StudioPage({ projectId }: { projectId: string }) {
   const r = useRecordingStore()
   const board = useStoryboardStore()
-  const sync = useProjectSync(projectId, r.connected, loaded)
-  const narration = useNarration(projectId, NO_KEYWORDS, dispatch)
+  const cast = useCastStore()
+  const castNames = useMemo(() => cast.characters.map((c) => c.name), [cast.characters])
+  const sync = useProjectSync(projectId, r.connected, projectLoaded)
+  const narration = useNarration(projectId, castNames, dispatchEvent)
   const beat = useCallback(() => void narration.beat(), [narration])
   useBeatShortcut(r.telling === 'live', beat)
-  useAutoDraft(projectId, notYet)
+
+  const canDraw = useCallback((shot: Shot) => castReadyFor(cast, shot), [cast])
+  useAutoDraft(projectId, canDraw)
+  const draw = usePanelRender(projectId)
+  const nameOf = (id: string) => cast.characters.find((c) => c.id === id)?.name ?? id
 
   useEffect(() => {
-    useStoryboardStore.getState().reset()
-    const s = useRecordingStore.getState()
-    s.reset()
-    s.setKeywords(loadNames(projectId))
+    resetStudio()
+    useRecordingStore.getState().setKeywords(loadNames(projectId))
   }, [projectId])
 
   return (
@@ -55,18 +48,19 @@ export function StudioPage({ projectId }: { projectId: string }) {
       </aside>
       <div className="flex min-w-0 flex-col gap-6">
         {sync.status === 'loading' && <p className="m-0 text-muted">Opening the storyboard…</p>}
+        <CastZone projectId={projectId} />
         <StoryboardGrid count={board.shots.length} telling={r.telling === 'live'}>
           {board.shots.map((shot) => {
-            const phase = panelPhase(shot, board.jobs[shot.id], false)
+            const phase = panelPhase(shot, board.jobs[shot.id], castReadyFor(cast, shot))
             return (
               <ShotCard
                 key={shot.id}
                 shot={shot}
                 phase={phase}
                 imageSrc={phase.kind === 'ready' ? mediaUrl(phase.imageUrl) : null}
-                names={shot.character_ids}
+                names={shot.character_ids.map(nameOf)}
                 onOpen={() => undefined}
-                onRetry={() => undefined}
+                onRetry={() => void draw(shot, 'draft')}
               />
             )
           })}
