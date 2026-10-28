@@ -304,3 +304,40 @@ async def test_storyboard_pdf_downloads(api: Api) -> None:
     assert r.headers["content-type"] == "application/pdf"
     assert r.headers["content-disposition"] == 'attachment; filename="storyboard.pdf"'
     assert r.content.startswith(b"%PDF")
+
+
+async def test_share_link_previews_on_x_and_shows_a_read_only_storyboard(make_api: Callable[..., Api]) -> None:
+    api = make_api(allowed_origins="https://studio.example,http://localhost:5173")
+    await api.client.post("/projects/p1/shots/1/panel", json={})
+    await api.settle()
+
+    shared = await api.client.post("/projects/p1/share")
+    assert shared.status_code == 200
+    link = shared.json()
+    token = link["token"]
+    assert link["url"].endswith(f"/s/{token}")
+    assert link["page_url"] == f"https://studio.example/s/{token}"
+    assert (await api.client.get("/projects/p1")).json()["share_token"] == token
+
+    stub = await api.client.get(f"/s/{token}")
+    assert stub.status_code == 200
+    assert '<meta property="og:title" content="The Lantern Cat">' in stub.text
+    assert f'/shares/{token}/og.png"' in stub.text
+    assert f'content="0;url=https://studio.example/s/{token}"' in stub.text
+    assert "p1" not in stub.text.replace(f"/s/{token}", "")  # never the project id
+
+    page = (await api.client.get(f"/shares/{token}")).json()
+    assert page["title"] == "The Lantern Cat"
+    assert [s["image_url"] for s in page["shots"]] == [f"/shares/{token}/panels/1", None, None]
+    assert page["animatic"] is None
+    assert "p1" not in str(page)
+    assert (await api.client.get(f"/shares/{token}/panels/1")).status_code == 200
+    assert (await api.client.get(f"/shares/{token}/panels/2")).status_code == 404
+    og = await api.client.get(f"/shares/{token}/og.png")
+    assert og.headers["content-type"] == "image/png"
+
+    assert (await api.client.delete("/projects/p1/share")).status_code == 204
+    assert (await api.client.get(f"/shares/{token}")).status_code == 404
+    gone = await api.client.get(f"/s/{token}")
+    assert gone.status_code == 404
+    assert "url=https://studio.example/s/" in gone.text  # the share page explains

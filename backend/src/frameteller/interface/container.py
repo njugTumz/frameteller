@@ -18,6 +18,7 @@ from frameteller.application.ports import (
     MediaStoragePort,
     ProjectRepository,
     SegmentationPort,
+    ShareIndex,
     SpeechToTextPort,
     SpendLedger,
     VideoRendererPort,
@@ -40,6 +41,7 @@ from frameteller.application.use_cases import (
     GetProject,
     MergeCharacters,
     MovePanelObject,
+    OpenShare,
     PreSegmentPanel,
     RemoveCharacter,
     RenameCharacter,
@@ -48,17 +50,32 @@ from frameteller.application.use_cases import (
     RequestCastReferences,
     RequestPanelEdit,
     RequestPanelRender,
+    RevokeShare,
     RunVoiceSession,
     SegmentObjectAtPoint,
+    SharePreview,
+    ShareProject,
     TranscribeInstruction,
 )
-from frameteller.infrastructure.azure import AzureBlobMediaStorage, BlobProjectRepository, BlobSpendLedger, blob_service
+from frameteller.infrastructure.azure import (
+    AzureBlobMediaStorage,
+    BlobProjectRepository,
+    BlobShareIndex,
+    BlobSpendLedger,
+    blob_service,
+)
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.imaging.compositor import PillowCompositor
 from frameteller.infrastructure.imaging.ffmpeg_animatic import FfmpegVideoRenderer
+from frameteller.infrastructure.imaging.share_preview import PillowSharePreview
 from frameteller.infrastructure.imaging.storyboard_pdf import PillowStoryboardSheet
 from frameteller.infrastructure.jobs import Handler, InProcessJobQueue, JobStatus
-from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
+from frameteller.infrastructure.local import (
+    FileShareIndex,
+    FileSpendLedger,
+    JsonFileProjectRepository,
+    LocalFileMediaStorage,
+)
 from frameteller.infrastructure.meta import meta_client
 from frameteller.infrastructure.meta.director import MetaSparkDirectorAdapter
 from frameteller.infrastructure.meta.image import MetaImageAdapter
@@ -91,6 +108,10 @@ class Container:
     select_object: SegmentObjectAtPoint
     request_animatic: RequestAnimaticExport
     storyboard_pdf: ExportStoryboardPdf
+    share_project: ShareProject
+    revoke_share: RevokeShare
+    open_share: OpenShare
+    share_preview: SharePreview
     move_object: MovePanelObject
     reorder_shots: ReorderShots
     voice_session: RunVoiceSession
@@ -116,6 +137,7 @@ def wire(
     readiness: dict[str, ReadinessCheck] | None = None,
     compositor: CompositorPort | None = None,
     renderer: VideoRendererPort | None = None,
+    shares: ShareIndex,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
@@ -181,6 +203,7 @@ def wire(
     )
 
     correct_transcript = CorrectTranscript(repo, director, ids, request_cast, hub)
+    open_share = OpenShare(repo, shares)
     return Container(
         settings=settings,
         storage=storage,
@@ -200,6 +223,10 @@ def wire(
         move_object=MovePanelObject(repo, queue),
         request_animatic=RequestAnimaticExport(repo, queue),
         storyboard_pdf=ExportStoryboardPdf(repo, storage, PillowStoryboardSheet()),
+        share_project=ShareProject(repo, shares, ids),
+        revoke_share=RevokeShare(repo, shares),
+        open_share=open_share,
+        share_preview=SharePreview(open_share, storage, PillowSharePreview()),
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
             speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids, repo, storage
@@ -221,11 +248,13 @@ def build_container(settings: Settings) -> Container:
         projects = service.get_container_client(settings.azure_projects_container)
         storage: MediaStoragePort = blob_media
         repo, ledger, check = BlobProjectRepository(projects), BlobSpendLedger(projects), blob_media.check_writable
+        shares: ShareIndex = BlobShareIndex(projects)
     else:
         root = settings.local_storage_dir
         local_media = LocalFileMediaStorage(root)
         storage = local_media
         repo, ledger, check = JsonFileProjectRepository(root), FileSpendLedger(root), local_media.check_writable
+        shares = FileShareIndex(root)
     caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s))
     client = meta_client(settings)
     return wire(
@@ -238,4 +267,5 @@ def build_container(settings: Settings) -> Container:
         speech=MetaVoiceTranscribeAdapter(caller, settings),
         ledger=ledger,
         readiness={"storage": check},
+        shares=shares,
     )

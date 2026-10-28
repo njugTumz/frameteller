@@ -106,3 +106,16 @@ Before closing with a 44xx code, the server sends a fatal `error` with a user-fa
 | `POST /projects/{id}/exports/animatic` `{subtitles}` | 202 `export_animatic` ticket. When it succeeds, `GET /projects/{id}` has `animatic: {url, duration_ms, subtitles, voiced}`. The URL plays inline (it answers `Range` requests); `?download=1` saves it. |
 | `GET /projects/{id}/exports/storyboard.pdf` | The storyboard sheet (A4 landscape, six shots a page): panel, shot number, framing, action, dialogue and duration. Undrawn shots print as "Not drawn yet". |
 | `POST /projects/{id}/dictation` (body: WAV, mono 16-bit, 16 or 24 kHz, at most 30 s) | `{text}`: a spoken edit instruction, transcribed for the user to check before sending it to `.../panel/edit`. Nothing is directed. |
+
+## Share links
+
+A share link is read-only, unguessable and revocable. It never contains or reveals the project id: the project id is all it takes to edit a project.
+
+| Endpoint | Returns |
+|---|---|
+| `POST /projects/{id}/share` | `{token, url, page_url}`. Post `url` (`{api}/s/{token}`): it previews on X and redirects browsers to `page_url` (`{studio}/s/{token}`). Calling it again returns the same link. |
+| `DELETE /projects/{id}/share` | 204. The link stops working within a minute (share responses are cached for 60 s). |
+| `GET /s/{token}` | HTML with `og:` and `twitter:` tags (title, description, a 1200x630 `og.png`) and a no-script redirect to the share page. A revoked link redirects too, with status 404, so the page can explain. |
+| `GET /shares/{token}` | `{title, style, shots: [{number, framing, action, dialogue, duration_ms, image_url}], animatic: {url, duration_ms} \| null}`. Media URLs are under `/shares/{token}/`. |
+| `GET /shares/{token}/panels/{n}`, `/animatic`, `/og.png` | The panel as shown, the animatic (with `Range` support) and the preview image. |
+

@@ -301,6 +301,7 @@ class ProjectOut(BaseModel):
     shots: list[ShotOut]
     narrations: list[NarrationOut] = Field(description="Kept recordings, one per live session, for the animatic.")
     animatic: AnimaticOut | None = Field(description="The latest exported animatic.")
+    share_token: str | None = Field(description="The live share link's token: {api}/s/{token}. None when off.")
 
     @classmethod
     def of(cls, p: Project) -> ProjectOut:
@@ -318,7 +319,57 @@ class ProjectOut(BaseModel):
                 for n in p.narrations.values()
             ],
             animatic=AnimaticOut.of(p.animatic) if p.animatic else None,
+            share_token=p.share_token,
         )
+
+
+class ShareOut(BaseModel):
+    token: str
+    url: str = Field(description="The link to post: it previews on X and sends browsers to the share page.")
+    page_url: str = Field(description="The read-only page in the studio.")
+
+
+class SharedShotOut(BaseModel):
+    number: int
+    framing: str
+    action: str
+    dialogue: str
+    duration_ms: int
+    image_url: str | None
+
+
+class SharedAnimaticOut(BaseModel):
+    url: str
+    duration_ms: int
+
+
+class SharedProjectOut(BaseModel):
+    """What a share link shows: read-only, with media under /shares/{token}/, never the project id."""
+
+    title: str
+    style: Literal["pencil", "paper_cutout"]
+    shots: list[SharedShotOut]
+    animatic: SharedAnimaticOut | None
+
+    @classmethod
+    def of(cls, p: Project, token: str) -> SharedProjectOut:
+        base = f"/shares/{token}"
+        shots = []
+        for s in p.shots:
+            panel = p.panels.get(s.id)
+            drawn = panel is not None and panel.shown_image is not None and panel.status.value == "ready"
+            shots.append(
+                SharedShotOut(
+                    number=s.number,
+                    framing=s.framing.value,
+                    action=s.action,
+                    dialogue=s.dialogue,
+                    duration_ms=s.duration_ms,
+                    image_url=f"{base}/panels/{s.number}" if drawn else None,
+                )
+            )
+        animatic = SharedAnimaticOut(url=f"{base}/animatic", duration_ms=p.animatic.duration_ms) if p.animatic else None
+        return cls(title=p.title, style=p.style.value, shots=shots, animatic=animatic)
 
 
 class CastReviewOut(BaseModel):

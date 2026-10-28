@@ -297,6 +297,20 @@ class InMemorySpendLedger:
         self.usage.append(usage)
 
 
+class InMemoryShareIndex:
+    def __init__(self) -> None:
+        self.tokens: dict[str, str] = {}
+
+    async def put(self, token: str, project_id: str) -> None:
+        self.tokens[token] = project_id
+
+    async def find(self, token: str) -> str | None:
+        return self.tokens.get(token)
+
+    async def delete(self, token: str) -> None:
+        self.tokens.pop(token, None)
+
+
 class FakeCompositor:
     """Records what it was asked to paste and returns a recognisable image."""
 

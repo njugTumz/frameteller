@@ -130,6 +130,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             {"session": n.session, "recording": n.recording.key, "duration_ms": n.duration_ms}
             for n in p.narrations.values()
         ],
+        "share_token": p.share_token,
         "animatic": (
             {
                 "video": p.animatic.video.key,
@@ -201,6 +202,7 @@ def project_from_dict(d: dict[str, Any]) -> Project:
             for n in d.get("narrations", [])
         },
         animatic=_animatic(d.get("animatic")),
+        share_token=d.get("share_token"),
     )
 
 

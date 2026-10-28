@@ -33,6 +33,7 @@ class Project:
     panels: dict[str, Panel] = field(default_factory=dict)
     narrations: dict[str, Narration] = field(default_factory=dict)  # by session tag, kept only with consent
     animatic: AnimaticExport | None = None  # the latest export
+    share_token: str | None = None  # the read-only share link, until revoked
 
     # ---- transcript and characters ----
 
@@ -128,6 +129,19 @@ class Project:
         refs = [n.recording for n in self.narrations.values()]
         self.narrations = {}
         return refs
+
+    # ---- sharing ----
+
+    def share(self, token: str) -> str:
+        """Turn the read-only link on. Sharing again keeps the link people already have."""
+        if self.share_token is None:
+            self.share_token = token
+        return self.share_token
+
+    def unshare(self) -> str | None:
+        """Turn the link off. Returns the revoked token so the caller can forget it."""
+        token, self.share_token = self.share_token, None
+        return token
 
     # ---- exports ----
 

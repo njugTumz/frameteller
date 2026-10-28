@@ -43,15 +43,20 @@ async def get_media(key: str, request: Request, c: Deps) -> Response:
         data = await c.storage.get(MediaRef(key))
     except (FileNotFoundError, KeyError, ValueError, InvalidValueError):
         return error_response(404, "media_not_found", "No such file.")
+    return serve(data, request, cache=cache_control(key), filename=key.rsplit("/", 1)[-1])
+
+
+def serve(data: bytes, request: Request, *, cache: str, filename: str) -> Response:
+    """A stored file with ETag revalidation, single byte ranges (video seeking) and ?download=1."""
     etag = '"' + hashlib.sha256(data).hexdigest()[:32] + '"'
     headers = {
         "ETag": etag,
-        "Cache-Control": cache_control(key),
+        "Cache-Control": cache,
         "X-Content-Type-Options": "nosniff",
         "Accept-Ranges": "bytes",
     }
     if request.query_params.get("download"):
-        headers["Content-Disposition"] = f'attachment; filename="{key.rsplit("/", 1)[-1]}"'
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     wanted = byte_range(request.headers.get("range"), len(data))

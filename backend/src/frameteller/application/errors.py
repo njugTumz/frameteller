@@ -53,3 +53,7 @@ class InvalidModelOutputError(ModelError):
 
 class ProjectNotFoundError(ApplicationError):
     user_message = "We couldn't find that project."
+
+
+class ShareNotFoundError(ApplicationError):
+    user_message = "This link was turned off, or never existed."

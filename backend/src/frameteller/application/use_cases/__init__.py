@@ -25,6 +25,7 @@ from frameteller.application.use_cases.requests import (
     RequestPanelRender,
 )
 from frameteller.application.use_cases.segment_object_at_point import SegmentObjectAtPoint, Selection
+from frameteller.application.use_cases.share import OpenShare, RevokeShare, SharePreview, ShareProject
 from frameteller.application.use_cases.transcribe_instruction import MAX_DICTATION_MS, TranscribeInstruction
 from frameteller.application.use_cases.voice_session import Beat, ClientInput, RunVoiceSession, TranscriptCorrection
 
@@ -54,6 +55,7 @@ __all__ = [
     "MergeCharacters",
     "Merged",
     "MovePanelObject",
+    "OpenShare",
     "PreSegmentPanel",
     "RemoveCharacter",
     "RenameCharacter",
@@ -62,9 +64,12 @@ __all__ = [
     "RequestCastReferences",
     "RequestPanelEdit",
     "RequestPanelRender",
+    "RevokeShare",
     "RunVoiceSession",
     "SegmentObjectAtPoint",
     "Selection",
+    "SharePreview",
+    "ShareProject",
     "TranscribeInstruction",
     "TranscriptCorrection",
     "character_mask_id",

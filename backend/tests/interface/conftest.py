@@ -27,6 +27,7 @@ from tests.fakes import (
     FakeVideoRenderer,
     InMemoryMediaStorage,
     InMemoryProjectRepository,
+    InMemoryShareIndex,
     InMemorySpendLedger,
     SequentialIds,
 )
@@ -44,6 +45,7 @@ class Fakes:
     ledger: InMemorySpendLedger = field(default_factory=InMemorySpendLedger)
     compositor: FakeCompositor = field(default_factory=FakeCompositor)
     renderer: FakeVideoRenderer = field(default_factory=FakeVideoRenderer)
+    shares: InMemoryShareIndex = field(default_factory=InMemoryShareIndex)
     ready: bool = True
 
     def __post_init__(self) -> None:
@@ -88,6 +90,7 @@ def build(settings: Settings, f: Fakes) -> Container:
         readiness={"storage": storage_check},
         compositor=f.compositor,
         renderer=f.renderer,
+        shares=f.shares,
     )
 
 

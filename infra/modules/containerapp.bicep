@@ -8,6 +8,7 @@ param containerImage string
 @secure()
 param modelApiKey string
 param allowedOrigins string
+param publicAppUrl string
 param storageAccountName string
 param logAnalyticsWorkspaceName string
 param appInsightsConnectionString string
@@ -75,6 +76,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'STORAGE_BACKEND', value: 'blob' }
             { name: 'AZURE_STORAGE_ACCOUNT', value: storageAccountName }
             { name: 'ALLOWED_ORIGINS', value: allowedOrigins }
+            { name: 'PUBLIC_APP_URL', value: publicAppUrl }
             { name: 'LOG_LEVEL', value: 'INFO' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
           ]

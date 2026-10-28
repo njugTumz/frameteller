@@ -15,6 +15,7 @@ from frameteller.application.errors import (
     ModelTimeoutError,
     NothingToSegmentError,
     ProjectNotFoundError,
+    ShareNotFoundError,
 )
 from frameteller.domain import (
     DomainError,
@@ -29,6 +30,7 @@ log = logging.getLogger("frameteller.api")
 # First match wins, so subclasses come before their bases.
 _STATUS: list[tuple[type[Exception], int, str]] = [
     (ProjectNotFoundError, 404, "project_not_found"),
+    (ShareNotFoundError, 404, "share_not_found"),
     (UnknownShotError, 404, "shot_not_found"),
     (UnknownCharacterError, 404, "character_not_found"),
     (UnknownObjectError, 404, "object_not_found"),

@@ -90,6 +90,40 @@ class AzureBlobMediaStorage:
         await asyncio.to_thread(probe)
 
 
+class BlobShareIndex:
+    """ShareIndex as one tiny blob per token next to the project documents (shares/<token>)."""
+
+    def __init__(self, container: ContainerClient) -> None:
+        self._container = container
+
+    def _blob(self, token: str) -> Any:
+        return self._container.get_blob_client(check_key(f"shares/{token}"))
+
+    async def put(self, token: str, project_id: str) -> None:
+        await asyncio.to_thread(self._blob(token).upload_blob, project_id.encode(), overwrite=True)
+
+    async def find(self, token: str) -> str | None:
+        try:
+            blob = self._blob(token)
+        except ValueError:
+            return None
+
+        def read() -> bytes:
+            return bytes(blob.download_blob().readall())
+
+        try:
+            return (await asyncio.to_thread(read)).decode()
+        except ResourceNotFoundError:
+            return None
+
+    async def delete(self, token: str) -> None:
+        def remove() -> None:
+            with contextlib.suppress(ResourceNotFoundError):
+                self._blob(token).delete_blob()
+
+        await asyncio.to_thread(remove)
+
+
 class BlobProjectRepository:
     """ProjectRepository as one JSON blob per project, with ETag optimistic concurrency.
 

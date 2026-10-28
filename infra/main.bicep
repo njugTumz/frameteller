@@ -20,6 +20,9 @@ param modelApiKey string
 @description('Comma-separated browser origins allowed for CORS and the live session WebSocket.')
 param allowedOrigins string
 
+@description('The studio URL that share links send browsers to. Empty: the first https origin in allowedOrigins.')
+param publicAppUrl string = ''
+
 @description('The studio frontend Static Web App.')
 param staticWebAppName string
 
@@ -63,6 +66,7 @@ module app 'modules/containerapp.bicep' = {
     containerImage: containerImage
     modelApiKey: modelApiKey
     allowedOrigins: allowedOrigins
+    publicAppUrl: publicAppUrl
     storageAccountName: storage.outputs.accountName
     logAnalyticsWorkspaceName: monitoring.outputs.workspaceName
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString

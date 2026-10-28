@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     azure_media_container: str = "media"
     azure_projects_container: str = "projects"
     allowed_origins: str = ""  # comma-separated browser origins for CORS and WebSocket Origin checks
+    public_app_url: str = ""  # the studio, where share links send browsers; default: the first https origin
     log_level: str = "INFO"
 
     rate_limit_per_minute: int = Field(default=120, ge=1)  # per client IP, all endpoints
@@ -94,6 +95,12 @@ class Settings(BaseSettings):
     @property
     def origins(self) -> list[str]:
         return [o.strip().rstrip("/") for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def app_url(self) -> str:
+        if self.public_app_url.strip():
+            return self.public_app_url.strip().rstrip("/")
+        return next((o for o in self.origins if o.startswith("https://")), "")
 
     @property
     def director(self) -> str:

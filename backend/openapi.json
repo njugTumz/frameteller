@@ -574,6 +574,18 @@
             "title": "Narrations",
             "type": "array"
           },
+          "share_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The live share link's token: {api}/s/{token}. None when off.",
+            "title": "Share Token"
+          },
           "shots": {
             "items": {
               "$ref": "#/components/schemas/ShotOut"
@@ -609,7 +621,8 @@
           "turns",
           "shots",
           "narrations",
-          "animatic"
+          "animatic",
+          "share_token"
         ],
         "title": "ProjectOut",
         "type": "object"
@@ -699,6 +712,136 @@
           "mask"
         ],
         "title": "SelectionOut",
+        "type": "object"
+      },
+      "ShareOut": {
+        "properties": {
+          "page_url": {
+            "description": "The read-only page in the studio.",
+            "title": "Page Url",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "url": {
+            "description": "The link to post: it previews on X and sends browsers to the share page.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "url",
+          "page_url"
+        ],
+        "title": "ShareOut",
+        "type": "object"
+      },
+      "SharedAnimaticOut": {
+        "properties": {
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "duration_ms"
+        ],
+        "title": "SharedAnimaticOut",
+        "type": "object"
+      },
+      "SharedProjectOut": {
+        "description": "What a share link shows: read-only, with media under /shares/{token}/, never the project id.",
+        "properties": {
+          "animatic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SharedAnimaticOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shots": {
+            "items": {
+              "$ref": "#/components/schemas/SharedShotOut"
+            },
+            "title": "Shots",
+            "type": "array"
+          },
+          "style": {
+            "enum": [
+              "pencil",
+              "paper_cutout"
+            ],
+            "title": "Style",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "style",
+          "shots",
+          "animatic"
+        ],
+        "title": "SharedProjectOut",
+        "type": "object"
+      },
+      "SharedShotOut": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "dialogue": {
+            "title": "Dialogue",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "framing": {
+            "title": "Framing",
+            "type": "string"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "number",
+          "framing",
+          "action",
+          "dialogue",
+          "duration_ms",
+          "image_url"
+        ],
+        "title": "SharedShotOut",
         "type": "object"
       },
       "ShotOut": {
@@ -1782,6 +1925,105 @@
         ]
       }
     },
+    "/projects/{project_id}/share": {
+      "delete": {
+        "description": "Turn the link off. Pages already open stop loading within a minute.",
+        "operationId": "revoke_share_projects__project_id__share_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Share",
+        "tags": [
+          "shares"
+        ]
+      },
+      "post": {
+        "description": "Turn on the read-only link. Calling it again returns the same link.",
+        "operationId": "share_project_projects__project_id__share_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share Project",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
     "/projects/{project_id}/shots/reorder": {
       "post": {
         "operationId": "reorder_shots_projects__project_id__shots_reorder_post",
@@ -2245,6 +2487,209 @@
         "summary": "Readyz",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/shares/{token}": {
+      "get": {
+        "operationId": "get_share_shares__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Share",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
+    "/shares/{token}/animatic": {
+      "get": {
+        "operationId": "shared_animatic_shares__token__animatic_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shared Animatic",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
+    "/shares/{token}/og.png": {
+      "get": {
+        "description": "The link preview: the title over the first six panels, 1200x630.",
+        "operationId": "share_image_shares__token__og_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share Image",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
+    "/shares/{token}/panels/{n}": {
+      "get": {
+        "operationId": "shared_panel_shares__token__panels__n__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "N",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shared Panel",
+        "tags": [
+          "shares"
         ]
       }
     }

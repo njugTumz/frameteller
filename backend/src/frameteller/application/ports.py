@@ -282,6 +282,22 @@ class StoryboardSheetPort(Protocol):
         ...
 
 
+class ShareIndex(Protocol):
+    """Which project a share token opens. Kept apart so a share link never reveals the project id."""
+
+    async def put(self, token: str, project_id: str) -> None: ...
+
+    async def find(self, token: str) -> str | None: ...
+
+    async def delete(self, token: str) -> None: ...
+
+
+class SharePreviewPort(Protocol):
+    async def contact_sheet(self, title: str, panels: Sequence[bytes]) -> bytes:
+        """A 1200x630 PNG for link previews (og:image): the title and up to six panels."""
+        ...
+
+
 class CompositorPort(Protocol):
     async def compose(self, background: bytes, layers: Sequence[CutoutLayer], size: Size) -> bytes:
         """Paste the layers in order on the background, resized to `size`. Returns a WebP image."""
