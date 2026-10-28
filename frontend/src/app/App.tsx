@@ -1,4 +1,6 @@
 import { Button } from '../shared/ui/Button'
+import { StartPage } from './pages/StartPage'
+import { StudioPage } from './pages/StudioPage'
 import { Notice } from '../shared/ui/Notice'
 import { navigate, parseRoute, usePathname } from './router'
 import { ThemeSwitch } from './ThemeSwitch'
@@ -27,7 +29,9 @@ export function App() {
       ) : (
         <>
           <TopBar>{themeSwitch}</TopBar>
-          <main id="main" className="flex-1 p-4">{route.name}</main>
+          <main id="main" className="flex-1">
+            {route.name === 'start' ? <StartPage /> : <StudioPage key={route.projectId} projectId={route.projectId} />}
+          </main>
         </>
       )}
     </div>

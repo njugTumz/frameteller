@@ -9,7 +9,7 @@ export default defineConfig([
     extends: [tseslint.configs.strict, tseslint.configs.stylistic, reactHooks.configs.flat['recommended-latest']],
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       eqeqeq: ['error', 'always'],
     },
   },
@@ -17,12 +17,12 @@ export default defineConfig([
     // CLAUDE.md section 6: components render, hooks orchestrate, api.ts talks to the backend.
     files: ['src/**/components/**/*.tsx'],
     rules: {
-      'no-restricted-imports': [
+      '@typescript-eslint/no-restricted-imports': [
         'error',
         {
           patterns: [
-            { group: ['**/api', '**/api.ts', '**/shared/api/*'], message: 'Components render. Call the backend from a hook.' },
-            { group: ['**/session/*', '**/audio/*'], message: 'Components render. Drive the session from a hook.' },
+            { group: ['**/api', '**/api.ts', '**/shared/api/client'], message: 'Components render. Call the backend from a hook.', allowTypeImports: true },
+            { group: ['**/session/*', '**/audio/*'], message: 'Components render. Drive the session from a hook.', allowTypeImports: true },
           ],
         },
       ],

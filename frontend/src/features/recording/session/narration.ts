@@ -1,0 +1,203 @@
+import { MAX_KEYWORDS, type ServerEvent } from '../../../shared/events'
+import { micError, openMicrophone, type MicError, type Microphone } from '../audio/microphone'
+import type { ProblemKind, RecordingState, useRecordingStore } from '../store'
+import { SessionSocket, closeMessage, sessionUrl, type SocketFactory } from './sessionSocket'
+
+const RECONNECT_DELAYS_MS = [500, 1500, 4000]
+const FINAL_CODES = [4400, 4404, 4409]
+
+const MIC_PROBLEMS: Record<MicError['problem'], ProblemKind> = {
+  blocked: 'mic-blocked',
+  missing: 'mic-missing',
+  busy: 'mic-busy',
+  unsupported: 'mic-unsupported',
+  lost: 'mic-lost',
+}
+
+export const RECONNECTED =
+  'The connection dropped, so a new session started. Keep telling: new shots continue the storyboard.'
+
+export interface NarrationDeps {
+  store: typeof useRecordingStore
+  openMic?: typeof openMicrophone
+  socketFactory?: SocketFactory
+  wait?: (ms: number) => Promise<void>
+}
+
+export interface NarrationHandlers {
+  onEvent(e: ServerEvent): void
+  /** Names to bias recognition with, beyond the ones the narrator typed (e.g. the cast). */
+  extraKeywords: readonly string[]
+}
+
+/**
+ * One project's narration: microphone → 80 ms PCM frames → session WebSocket, and server events → the store
+ * and onEvent. A dropped socket reconnects with a new session (the backend has no resume) and says so.
+ * After session.ended the socket stays open, so job updates keep arriving.
+ */
+export class Narration {
+  private mic: Microphone | null = null
+  private socket: SocketSession | null = null
+  private disposed = false
+  private readonly deps: NarrationDeps
+  private readonly projectId: string
+  private handlers: NarrationHandlers = { onEvent: () => undefined, extraKeywords: [] }
+
+  constructor(projectId: string, deps: NarrationDeps) {
+    this.projectId = projectId
+    this.deps = deps
+  }
+
+  /** The latest event handler and keywords, from the component that owns this narration. */
+  use(handlers: NarrationHandlers): void {
+    this.handlers = handlers
+  }
+
+  /** Mounted (again, under StrictMode): accept work. */
+  attach(): void {
+    this.disposed = false
+  }
+
+  private get state(): RecordingState & ReturnType<typeof useRecordingStore.getState> {
+    return this.deps.store.getState()
+  }
+
+  private keywords(): string[] {
+    const all = [...this.state.keywords, ...this.handlers.extraKeywords].map((k) => k.trim()).filter(Boolean)
+    return [...new Set(all)].slice(0, MAX_KEYWORDS)
+  }
+
+  private async connect(onDrop: (code: number) => void): Promise<SocketSession> {
+    const s: SocketSession = new SessionSocket(
+      sessionUrl(this.projectId),
+      { mode: 'narrate', keywords: this.keywords() },
+      {
+        onEvent: (e) => {
+          this.state.apply(e)
+          this.handlers.onEvent(e)
+        },
+        onClose: ({ code, expected }) => {
+          if (this.socket !== s) return
+          this.socket = null
+          this.state.setConnected(false)
+          if (!expected && !this.disposed) onDrop(code)
+        },
+      },
+      this.deps.socketFactory,
+    )
+    this.socket = s
+    await s.ready
+    this.state.setConnected(true)
+    return s
+  }
+
+  private stopMic(): void {
+    void this.mic?.close()
+    this.mic = null
+    this.state.setLevel(0)
+  }
+
+  private fail(kind: ProblemKind, message: string): void {
+    this.stopMic()
+    this.socket?.close()
+    this.socket = null
+    this.state.setProblem({ kind, message })
+    this.state.setTelling('idle')
+  }
+
+  /** The socket dropped mid-narration: start a new session and keep going. */
+  private async reconnect(code: number, attempt = 0): Promise<void> {
+    const { telling } = this.state
+    if (this.disposed || (telling !== 'live' && telling !== 'finishing' && telling !== 'connecting')) return
+    if (FINAL_CODES.includes(code) || attempt >= RECONNECT_DELAYS_MS.length) {
+      this.fail('connection', closeMessage(code))
+      return
+    }
+    this.state.setTelling('connecting')
+    await (this.deps.wait ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(RECONNECT_DELAYS_MS[attempt] ?? 0)
+    try {
+      const s = await this.connect((next) => void this.reconnect(next))
+      if (this.mic) {
+        this.state.setTelling('live')
+        this.state.notice(RECONNECTED)
+      } else {
+        s.end() // it dropped while finishing: the new session has nothing to transcribe
+        this.state.setTelling('finishing')
+      }
+    } catch {
+      await this.reconnect(code, attempt + 1)
+    }
+  }
+
+  async start(): Promise<void> {
+    const { telling } = this.state
+    if (this.disposed || telling === 'mic' || telling === 'connecting' || telling === 'live') return
+    this.state.setProblem(null)
+    this.state.setTelling('mic')
+    try {
+      this.mic = await (this.deps.openMic ?? openMicrophone)({
+        onFrame: (pcm) => this.socket?.sendAudio(pcm),
+        onLevel: (level) => this.state.setLevel(level),
+        onLost: (error) => this.micLost(error),
+        onSwitched: (label) => this.state.notice(`Now recording from ${label}.`),
+      })
+    } catch (e) {
+      const error = micError(e)
+      this.fail(MIC_PROBLEMS[error.problem], error.message)
+      return
+    }
+    if (this.disposed) return this.stopMic()
+    this.state.setTelling('connecting')
+    try {
+      this.socket?.close() // one kept open after a previous session.ended
+      await this.connect((code) => void this.reconnect(code))
+      this.state.setTelling('live')
+    } catch (e) {
+      this.fail('connection', e instanceof Error ? e.message : closeMessage(0))
+    }
+  }
+
+  private micLost(error: MicError): void {
+    this.stopMic()
+    const ended = this.socket?.end() ?? false // keep what was said: finish the session normally
+    this.state.setProblem({ kind: MIC_PROBLEMS[error.problem], message: error.message })
+    this.state.setTelling(ended ? 'finishing' : 'idle')
+  }
+
+  stop(): void {
+    const { telling } = this.state
+    if (telling !== 'live' && telling !== 'connecting') return
+    this.stopMic()
+    this.state.setTelling(this.socket?.end() ? 'finishing' : 'idle')
+  }
+
+  beat(): boolean {
+    if (this.state.telling !== 'live' || !this.socket?.beat()) return false
+    this.state.beatSent()
+    return true
+  }
+
+  correct(turnId: string, text: string): void {
+    const send = (s: SocketSession) => {
+      if (s.correct(turnId, text)) this.state.correctionSent(turnId)
+    }
+    if (this.socket?.isOpen) return send(this.socket)
+    // The socket timed out after the session: open one just for this correction, then end it.
+    this.connect(() => undefined)
+      .then((s) => {
+        send(s)
+        s.end()
+      })
+      .catch(() => this.state.notice('The studio is not answering, so the correction was not sent. Try again.'))
+  }
+
+  dispose(): void {
+    this.disposed = true
+    this.stopMic()
+    this.socket?.close()
+    this.socket = null
+    this.state.setConnected(false)
+  }
+}
+
+type SocketSession = SessionSocket
