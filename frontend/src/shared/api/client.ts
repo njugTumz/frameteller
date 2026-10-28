@@ -3,7 +3,8 @@ import { API_BASE_URL } from '../../config'
 import type { paths } from './schema'
 
 /** The typed REST client, generated from backend/openapi.json. The browser only ever talks to our backend. */
-export const api = createClient<paths>({ baseUrl: API_BASE_URL })
+// fetch is looked up per request (not captured once), so tests and polyfills can replace it.
+export const api = createClient<paths>({ baseUrl: API_BASE_URL, fetch: (request) => globalThis.fetch(request) })
 
 /** A failed request, with a message written for the user (the backend's ErrorOut, or ours). */
 export class ApiError extends Error {
