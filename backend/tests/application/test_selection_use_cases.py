@@ -16,7 +16,9 @@ from tests.application.conftest import World
 from tests.builders import bitmap
 from tests.fakes import FakeVideoRenderer
 
-MIRA_SEGMENT = Segment(bitmap(100, 100, 300, 400).box, bitmap(100, 100, 300, 400), "Mira")
+MIRA_SEGMENT = Segment(
+    bitmap(100, 100, 300, 400).box, bitmap(100, 100, 300, 400), "Mira", MediaRef("projects/p1/cut-mira.png")
+)
 CAT_SEGMENT = Segment(bitmap(320, 300, 380, 360).box, bitmap(320, 300, 380, 360), "Grey Cat")
 
 
@@ -25,7 +27,7 @@ async def render(w: World, shot_id: str = "s2") -> None:
 
 
 def pre_segment(w: World) -> PreSegmentPanel:
-    return PreSegmentPanel(w.repo, w.sam, w.budget)
+    return PreSegmentPanel(w.repo, w.sam, w.budget, w.jobs)
 
 
 def click(w: World) -> SegmentObjectAtPoint:
@@ -114,22 +116,26 @@ async def test_click_needs_a_ready_panel(world: World) -> None:
         await click(world).execute("p1", "s2", Point(5, 5))
 
 
-async def test_move_object_records_a_canvas_transform_without_model_calls(world: World) -> None:
+async def test_move_object_saves_a_layer_and_queues_a_composite_without_model_calls(world: World) -> None:
     world.sam.by_concept = {"8-year-old girl": MIRA_SEGMENT}
     await render(world)
     await pre_segment(world).execute("p1", "s2", revision=1)
     calls = world.images.calls
 
-    t = await MovePanelObject(world.repo).execute("p1", "s2", "character:mira", dx=40, scale=1.2)
+    ticket = await MovePanelObject(world.repo, world.jobs).execute("p1", "s2", "character:mira", dx=40, scale=1.2)
 
-    assert world.project().panel("s2").transforms == [t]
+    [layer] = world.project().panel("s2").transforms
+    assert (layer.object_id, layer.dx, layer.scale) == ("character:mira", 40, 1.2)
     assert world.images.calls == calls
+    assert ticket.kind == "compose_panel"
+    assert ticket.enqueued
+    assert world.jobs.jobs[-1].payload == {"project_id": "p1", "shot_id": "s2", "revision": "1"}
 
 
 async def test_move_unknown_object_fails(world: World) -> None:
     await render(world)
     with pytest.raises(UnknownObjectError):
-        await MovePanelObject(world.repo).execute("p1", "s2", "character:ghost", dx=1)
+        await MovePanelObject(world.repo, world.jobs).execute("p1", "s2", "character:ghost", dx=1)
 
 
 async def test_export_renders_every_panel_with_narration(world: World) -> None:

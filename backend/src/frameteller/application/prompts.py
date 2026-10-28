@@ -73,6 +73,17 @@ def edit_prompt(change: str, target: str, parts: Sequence[str]) -> str:
     )
 
 
+def clean_plate_prompt(target: str) -> str:
+    """Remove one object for a clean plate (ADR 0010): the rest must stay as it was, so the cut-out fits back."""
+    target = target.strip()
+    if not target:
+        raise ValueError("a clean plate needs an object to remove")
+    return (
+        f"Remove the {target} from the picture. Keep everything else identical: composition, background, "
+        "lighting, drawing style and every other object. Fill the space it leaves with what would be behind it."
+    )
+
+
 def _join(items: Sequence[str]) -> str:
     quoted = [f"the {i}" for i in items]
     return quoted[0] if len(quoted) == 1 else ", ".join(quoted[:-1]) + " and " + quoted[-1]

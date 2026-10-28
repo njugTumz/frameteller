@@ -14,6 +14,7 @@ from frameteller.interface.dto import (
     DictationOut,
     EditRequest,
     ErrorOut,
+    LayerRequest,
     ProjectCreate,
     ProjectOut,
     RenderRequest,
@@ -99,6 +100,18 @@ async def select_object(project_id: ProjectId, n: ShotNumber, body: SelectReques
     shot = await c.find_shot.execute(project_id, n)
     shown = Size(body.preview_width, body.preview_height)
     return SelectionOut.of(await c.select_object.execute(project_id, shot.id, Point(body.x, body.y), shown))
+
+
+@router.post(
+    "/{project_id}/shots/{n}/panel/layers", status_code=status.HTTP_202_ACCEPTED, responses={402: {"model": ErrorOut}}
+)
+async def save_layer(project_id: ProjectId, n: ShotNumber, body: LayerRequest, c: Deps) -> TicketOut:
+    """Save a move, resize or delete of a selected object. A compose_panel job applies it on a clean plate."""
+    shot = await c.find_shot.execute(project_id, n)
+    ticket = await c.move_object.execute(
+        project_id, shot.id, body.object_id, dx=body.dx, dy=body.dy, scale=body.scale, deleted=body.deleted
+    )
+    return TicketOut.of(ticket)
 
 
 @router.post("/{project_id}/shots/reorder")

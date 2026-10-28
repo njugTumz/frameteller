@@ -10,6 +10,7 @@ from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.events import JobUpdated
 from frameteller.application.ports import (
     Clock,
+    CompositorPort,
     DirectorPort,
     IdGenerator,
     ImageGenerationPort,
@@ -22,6 +23,7 @@ from frameteller.application.ports import (
 )
 from frameteller.application.use_cases import (
     ApproveCast,
+    ComposePanel,
     CorrectTranscript,
     CreateProject,
     DeleteNarration,
@@ -34,6 +36,7 @@ from frameteller.application.use_cases import (
     GeneratePanel,
     GetProject,
     MergeCharacters,
+    MovePanelObject,
     PreSegmentPanel,
     RemoveCharacter,
     RenameCharacter,
@@ -47,6 +50,7 @@ from frameteller.application.use_cases import (
 )
 from frameteller.infrastructure.azure import AzureBlobMediaStorage, BlobProjectRepository, BlobSpendLedger, blob_service
 from frameteller.infrastructure.config import Settings
+from frameteller.infrastructure.imaging.compositor import PillowCompositor
 from frameteller.infrastructure.jobs import Handler, InProcessJobQueue, JobStatus
 from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
 from frameteller.infrastructure.meta import meta_client
@@ -79,6 +83,7 @@ class Container:
     request_render: RequestPanelRender
     request_edit: RequestPanelEdit
     select_object: SegmentObjectAtPoint
+    move_object: MovePanelObject
     reorder_shots: ReorderShots
     voice_session: RunVoiceSession
     correct_transcript: CorrectTranscript
@@ -101,9 +106,11 @@ def wire(
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
     readiness: dict[str, ReadinessCheck] | None = None,
+    compositor: CompositorPort | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
+    compositor = compositor or PillowCompositor()  # local work, no network: tests use it too
     hub = EventHub()
     budget = LimitBudgetGuard(
         ledger,
@@ -128,7 +135,8 @@ def wire(
     queue = InProcessJobQueue(handlers, on_status=on_status)
 
     generate_panel = GeneratePanel(repo, images, budget, queue)
-    pre_segment = PreSegmentPanel(repo, segmentation, budget)
+    pre_segment = PreSegmentPanel(repo, segmentation, budget, queue)
+    compose_panel = ComposePanel(repo, images, storage, compositor, budget)
     edit_by_command = EditPanelByCommand(repo, director, EditPanelAppearance(repo, images, budget, queue))
     cast_references = GenerateCastReferences(GenerateCharacterReference(repo, images, budget), hub)
     request_cast = RequestCastReferences(repo, queue, ids)
@@ -147,6 +155,9 @@ def wire(
     )
     handlers[job_kinds.PRE_SEGMENT_PANEL] = handler(
         lambda p: pre_segment.execute(p["project_id"], p["shot_id"], int(p["revision"]))
+    )
+    handlers[job_kinds.COMPOSE_PANEL] = handler(
+        lambda p: compose_panel.execute(p["project_id"], p["shot_id"], int(p["revision"]))
     )
     handlers[job_kinds.EDIT_PANEL] = handler(
         lambda p: edit_by_command.execute(p["project_id"], p["shot_id"], p["instruction"])
@@ -172,6 +183,7 @@ def wire(
         request_render=RequestPanelRender(repo, queue),
         request_edit=RequestPanelEdit(repo, queue),
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),
+        move_object=MovePanelObject(repo, queue),
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
             speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids, repo, storage

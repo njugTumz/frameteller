@@ -12,6 +12,8 @@ from frameteller.domain import (
     CastStatus,
     Character,
     CharacterBible,
+    CleanPlate,
+    Composite,
     Framing,
     MaskBitmap,
     MediaRef,
@@ -107,6 +109,19 @@ def project_to_dict(p: Project) -> dict[str, Any]:
                     for t in pn.transforms
                 ],
                 "outdated": pn.outdated,
+                "plates": [
+                    {"object_ids": list(pl.object_ids), "image": pl.image.key, "response_id": pl.response_id}
+                    for pl in pn.plates.values()
+                ],
+                "composite": (
+                    {
+                        "revision": pn.composite.revision,
+                        "image": pn.composite.image.key,
+                        "size": [pn.composite.size.width, pn.composite.size.height],
+                    }
+                    if pn.composite
+                    else None
+                ),
             }
             for pn in p.panels.values()
         ],
@@ -115,6 +130,10 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             for n in p.narrations.values()
         ],
     }
+
+
+def _composite(d: dict[str, Any] | None) -> Composite | None:
+    return Composite(d["revision"], MediaRef(d["image"]), Size(*d["size"])) if d else None
 
 
 def project_from_dict(d: dict[str, Any]) -> Project:
@@ -136,6 +155,14 @@ def project_from_dict(d: dict[str, Any]) -> Project:
             masks={m["id"]: _unmask(m) for m in pd["masks"]},
             transforms=[CanvasTransform(**t) for t in pd["transforms"]],
             outdated=pd.get("outdated", False),
+            plates={
+                plate.key: plate
+                for plate in (
+                    CleanPlate(tuple(pl["object_ids"]), MediaRef(pl["image"]), pl["response_id"])
+                    for pl in pd.get("plates", [])
+                )
+            },
+            composite=_composite(pd.get("composite")),
         )
     return Project(
         id=d["id"],

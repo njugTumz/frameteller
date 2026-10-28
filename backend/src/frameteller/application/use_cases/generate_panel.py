@@ -59,5 +59,5 @@ class GeneratePanel:
 
         rendered, recorded = await self._repo.update(project_id, apply)
         if recorded:
-            await self._jobs.enqueue(pre_segment_job(project_id, shot_id, revision))
+            await self._jobs.enqueue(pre_segment_job(project_id, shot_id, rendered.revision))
         return rendered

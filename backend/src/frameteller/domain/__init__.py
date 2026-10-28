@@ -17,7 +17,19 @@ from frameteller.domain.errors import (
 )
 from frameteller.domain.media import MediaRef
 from frameteller.domain.narration import Narration, session_of
-from frameteller.domain.panels import Box, CanvasTransform, MaskBitmap, ObjectMask, Panel, PanelStatus, Point, Size
+from frameteller.domain.panels import (
+    Box,
+    CanvasTransform,
+    CleanPlate,
+    Composite,
+    MaskBitmap,
+    ObjectMask,
+    Panel,
+    PanelStatus,
+    Point,
+    Size,
+    plate_key,
+)
 from frameteller.domain.project import Project
 from frameteller.domain.shots import Framing, Shot
 from frameteller.domain.style import PanelStyle
@@ -34,6 +46,8 @@ __all__ = [
     "CastStatus",
     "Character",
     "CharacterBible",
+    "CleanPlate",
+    "Composite",
     "DomainError",
     "Framing",
     "InvalidValueError",
@@ -57,6 +71,7 @@ __all__ = [
     "UnknownObjectError",
     "UnknownShotError",
     "UnknownTurnError",
+    "plate_key",
     "session_of",
     "split_duration",
 ]

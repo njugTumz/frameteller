@@ -88,3 +88,13 @@ def test_concept_phrase_is_a_short_visual_noun_phrase() -> None:
     cat = Character("cat", "Grey Cat", "tiny small kitten with short soft grey fur and white paws and amber eyes")
     assert concept_phrase(cat) == "tiny small kitten with short soft grey fur"
     assert concept_phrase(Character("x", "Owl", "   ,   ")) == "Owl"
+
+
+def test_clean_plate_prompt_removes_only_the_object() -> None:
+    from frameteller.application.prompts import clean_plate_prompt
+
+    prompt = clean_plate_prompt("small grey kitten ")
+    assert prompt.startswith("Remove the small grey kitten from the picture.")
+    assert "Keep everything else identical" in prompt
+    with pytest.raises(ValueError, match="object to remove"):
+        clean_plate_prompt(" ")

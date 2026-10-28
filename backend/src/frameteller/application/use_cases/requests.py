@@ -37,7 +37,7 @@ class RequestPanelRender:
     async def execute(self, project_id: str, shot_id: str, quality: Quality) -> JobTicket:
         project = await self._repo.get(project_id)
         project.require_cast_approved()  # fail now rather than in the background
-        job = panel_job(project_id, shot_id, project.panel(shot_id).revision + 1, quality)
+        job = panel_job(project_id, shot_id, project.panel(shot_id).current_revision + 1, quality)
         return JobTicket.of(job, await self._jobs.enqueue(job))
 
 

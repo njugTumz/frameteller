@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from frameteller.application import costs
-from frameteller.application.ports import BudgetGuard, ProjectRepository, SegmentationPort
+from frameteller.application.jobs import compose_job
+from frameteller.application.ports import BudgetGuard, JobQueuePort, ProjectRepository, SegmentationPort
 from frameteller.application.prompts import concept_phrase
+from frameteller.application.use_cases.compose_panel import layers_signature
 from frameteller.domain import ObjectMask, Project
 
 
@@ -14,8 +16,10 @@ def character_mask_id(character_id: str) -> str:
 class PreSegmentPanel:
     """Segment every character in a freshly rendered panel and cache the masks (ADR 0006)."""
 
-    def __init__(self, repo: ProjectRepository, segmentation: SegmentationPort, budget: BudgetGuard) -> None:
-        self._repo, self._sam, self._budget = repo, segmentation, budget
+    def __init__(
+        self, repo: ProjectRepository, segmentation: SegmentationPort, budget: BudgetGuard, jobs: JobQueuePort
+    ) -> None:
+        self._repo, self._sam, self._budget, self._jobs = repo, segmentation, budget, jobs
 
     async def execute(self, project_id: str, shot_id: str, revision: int) -> list[ObjectMask]:
         snapshot = await self._repo.get(project_id)
@@ -36,8 +40,13 @@ class PreSegmentPanel:
                 best = max(segments, key=lambda s: len(s.bitmap.data))
                 found.append(ObjectMask(mask_id, character.name, best.bitmap, cutout=best.cutout, character_id=cid))
 
-        def apply(project: Project) -> list[ObjectMask]:
+        def apply(project: Project) -> tuple[list[ObjectMask], str | None]:
             current = project.panel(shot_id)
-            return [m for m in found if current.cache_mask(revision, m)]  # dropped if the panel moved on
+            cached = [m for m in found if current.cache_mask(revision, m)]  # dropped if the panel moved on
+            relayer = current.revision == revision and bool(current.layers()) and current.composite is None
+            return cached, layers_signature(current) if relayer else None
 
-        return await self._repo.update(project_id, apply)
+        cached, signature = await self._repo.update(project_id, apply)
+        if signature is not None:  # a new render of a panel with saved geometry: re-apply it (ADR 0005, 0010)
+            await self._jobs.enqueue(compose_job(project_id, shot_id, revision, signature))
+        return cached

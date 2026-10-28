@@ -60,7 +60,7 @@ def test_has_render_for_this_or_an_earlier_revision() -> None:
 
 def test_new_render_drops_masks_but_keeps_transforms() -> None:
     panel = ready_panel()
-    panel.cache_mask(1, ObjectMask("character:mira", "Mira", bitmap(0, 0, 10, 10)))
+    panel.cache_mask(1, ObjectMask("character:mira", "Mira", bitmap(0, 0, 10, 10), cutout=MediaRef("cut.png")))
     panel.transform(CanvasTransform("character:mira", dx=5))
     panel.record_render(2, MediaRef("panels/s1/r2"), "resp_2", SIZE)
     assert panel.masks == {}

@@ -32,7 +32,7 @@ def test_clips_follow_shot_order_and_durations() -> None:
 def test_clips_carry_canvas_transforms() -> None:
     p = rendered(project(shots=1))
     panel = p.panel("s1")
-    panel.cache_mask(1, ObjectMask("character:mira", "Mira", bitmap(0, 0, 4, 4)))
+    panel.cache_mask(1, ObjectMask("character:mira", "Mira", bitmap(0, 0, 4, 4), cutout=MediaRef("cut.png")))
     panel.transform(CanvasTransform("character:mira", dx=12))
     assert Animatic.from_project(p).clips[0].transforms == (CanvasTransform("character:mira", dx=12),)
 

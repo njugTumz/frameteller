@@ -19,6 +19,7 @@ from frameteller.interface.app import create_app
 from frameteller.interface.container import Container, wire
 from tests.builders import project
 from tests.fakes import (
+    FakeCompositor,
     FakeDirector,
     FakeImageGeneration,
     FakeSegmentation,
@@ -40,6 +41,7 @@ class Fakes:
     sam: FakeSegmentation = field(default_factory=FakeSegmentation)
     speech: FakeSpeechToText = field(default_factory=FakeSpeechToText)
     ledger: InMemorySpendLedger = field(default_factory=InMemorySpendLedger)
+    compositor: FakeCompositor = field(default_factory=FakeCompositor)
     ready: bool = True
 
     def __post_init__(self) -> None:
@@ -82,6 +84,7 @@ def build(settings: Settings, f: Fakes) -> Container:
         ledger=f.ledger,
         ids=SequentialIds("id"),
         readiness={"storage": storage_check},
+        compositor=f.compositor,
     )
 
 

@@ -238,6 +238,84 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "LayerOut": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "dx": {
+            "title": "Dx",
+            "type": "integer"
+          },
+          "dy": {
+            "title": "Dy",
+            "type": "integer"
+          },
+          "object_id": {
+            "title": "Object Id",
+            "type": "string"
+          },
+          "scale": {
+            "title": "Scale",
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_id",
+          "dx",
+          "dy",
+          "scale",
+          "deleted"
+        ],
+        "title": "LayerOut",
+        "type": "object"
+      },
+      "LayerRequest": {
+        "description": "Move, resize or delete a selected object: its cut-out's top-left moves by (dx, dy) panel pixels and it\nscales from that corner. dx = dy = 0 and scale = 1 moves it back home.",
+        "properties": {
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "dx": {
+            "default": 0,
+            "maximum": 20000.0,
+            "minimum": -20000.0,
+            "title": "Dx",
+            "type": "integer"
+          },
+          "dy": {
+            "default": 0,
+            "maximum": 20000.0,
+            "minimum": -20000.0,
+            "title": "Dy",
+            "type": "integer"
+          },
+          "object_id": {
+            "examples": [
+              "character:mira"
+            ],
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Object Id",
+            "type": "string"
+          },
+          "scale": {
+            "default": 1.0,
+            "maximum": 3.0,
+            "minimum": 0.2,
+            "title": "Scale",
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_id"
+        ],
+        "title": "LayerRequest",
+        "type": "object"
+      },
       "MaskOut": {
         "properties": {
           "box": {
@@ -309,6 +387,18 @@
       },
       "PanelOut": {
         "properties": {
+          "base_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model render without layers; the editor draws on it.",
+            "title": "Base Image Url"
+          },
           "height": {
             "anyOf": [
               {
@@ -329,7 +419,15 @@
                 "type": "null"
               }
             ],
+            "description": "The panel as shown: with its layers applied once composited.",
             "title": "Image Url"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerOut"
+            },
+            "title": "Layers",
+            "type": "array"
           },
           "masks": {
             "items": {
@@ -344,7 +442,13 @@
             "type": "boolean"
           },
           "revision": {
+            "description": "The model render the masks and layers belong to.",
             "title": "Revision",
+            "type": "integer"
+          },
+          "shown_revision": {
+            "description": "What image_url shows: the composite of the layers, or the render.",
+            "title": "Shown Revision",
             "type": "integer"
           },
           "status": {
@@ -365,11 +469,14 @@
         },
         "required": [
           "revision",
+          "shown_revision",
           "status",
           "image_url",
+          "base_image_url",
           "width",
           "height",
           "masks",
+          "layers",
           "outdated"
         ],
         "title": "PanelOut",
@@ -1735,6 +1842,101 @@
           }
         },
         "summary": "Edit Panel",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/shots/{n}/panel/layers": {
+      "post": {
+        "description": "Save a move, resize or delete of a selected object. A compose_panel job applies it on a clean plate.",
+        "operationId": "save_layer_projects__project_id__shots__n__panel_layers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "N",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LayerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Layer",
         "tags": [
           "projects"
         ]

@@ -34,7 +34,7 @@ class EditPanelAppearance:
         snapshot.require_cast_approved()
         _, response_id = snapshot.panel(shot_id).require_ready()
         prompt = edit_prompt(change, target, parts)
-        revision = snapshot.panel(shot_id).revision + 1
+        revision = snapshot.panel(shot_id).current_revision + 1
         await self._budget.charge(project_id, costs.IMAGE, f"edit {shot_id} r{revision}")
         stored = await self._images.edit(
             response_id, prompt, quality, store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}/image"
@@ -46,5 +46,5 @@ class EditPanelAppearance:
             return panel
 
         panel = await self._repo.update(project_id, apply)
-        await self._jobs.enqueue(pre_segment_job(project_id, shot_id, revision))
+        await self._jobs.enqueue(pre_segment_job(project_id, shot_id, panel.revision))
         return panel

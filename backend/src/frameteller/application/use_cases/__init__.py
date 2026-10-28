@@ -3,6 +3,7 @@
 from frameteller.application.use_cases.approve_cast import ApproveCast, CastReview
 from frameteller.application.use_cases.build_character_bible import BuildCharacterBible
 from frameteller.application.use_cases.cast_references import GenerateCastReferences
+from frameteller.application.use_cases.compose_panel import ComposePanel
 from frameteller.application.use_cases.correct_transcript import CorrectTranscript
 from frameteller.application.use_cases.direct_turn import DirectedShots, DirectTurn
 from frameteller.application.use_cases.edit_panel_appearance import EditPanelAppearance
@@ -33,6 +34,7 @@ __all__ = [
     "BuildCharacterBible",
     "CastReview",
     "ClientInput",
+    "ComposePanel",
     "CorrectTranscript",
     "CreateProject",
     "DeleteNarration",

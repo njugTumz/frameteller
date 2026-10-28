@@ -14,6 +14,7 @@ from typing import Any
 from frameteller.application.errors import ProjectNotFoundError
 from frameteller.application.events import ProjectEvent
 from frameteller.application.ports import (
+    CutoutLayer,
     DirectedTurn,
     EditIntent,
     ImageRequest,
@@ -282,6 +283,17 @@ class InMemorySpendLedger:
 
     async def record_usage(self, usage: UsageRecord) -> None:
         self.usage.append(usage)
+
+
+class FakeCompositor:
+    """Records what it was asked to paste and returns a recognisable image."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[bytes, list[CutoutLayer], Size]] = []
+
+    async def compose(self, background: bytes, layers: Sequence[CutoutLayer], size: Size) -> bytes:
+        self.calls.append((background, list(layers), size))
+        return b"composite-" + background
 
 
 class RecordingBudget:

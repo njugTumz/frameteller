@@ -12,6 +12,7 @@ PRE_SEGMENT_PANEL = "pre_segment_panel"
 EDIT_PANEL = "edit_panel"
 GENERATE_CAST = "generate_cast"
 EXPORT_ANIMATIC = "export_animatic"
+COMPOSE_PANEL = "compose_panel"
 
 
 def panel_key(kind: str, project_id: str, shot_id: str, revision: int) -> str:
@@ -46,6 +47,16 @@ def edit_job(project_id: str, shot_id: str, base_revision: int, instruction: str
             "revision": str(base_revision),
             "instruction": instruction,
         },
+    )
+
+
+def compose_job(project_id: str, shot_id: str, base_revision: int, layers: str) -> Job:
+    """Apply the geometry layers to a base render. Keyed on the layers, so the same arrangement composes once."""
+    digest = hashlib.sha256(layers.encode()).hexdigest()[:12]
+    return Job(
+        kind=COMPOSE_PANEL,
+        idempotency_key=panel_key(COMPOSE_PANEL, project_id, shot_id, base_revision) + f":{digest}",
+        payload={"project_id": project_id, "shot_id": shot_id, "revision": str(base_revision)},
     )
 
 

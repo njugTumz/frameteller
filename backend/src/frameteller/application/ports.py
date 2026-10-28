@@ -94,6 +94,16 @@ class Segment:
 
 
 @dataclass(frozen=True, slots=True)
+class CutoutLayer:
+    """A cut-out pasted on a clean plate: its top-left at (left, top) in panel pixels, scaled from that corner."""
+
+    image: bytes
+    left: int
+    top: int
+    scale: float
+
+
+@dataclass(frozen=True, slots=True)
 class Job:
     kind: str
     idempotency_key: str
@@ -239,6 +249,12 @@ class JobQueuePort(Protocol):
 
 class VideoRendererPort(Protocol):
     async def render(self, animatic: Animatic, frames: dict[str, bytes], narration: bytes | None) -> bytes: ...
+
+
+class CompositorPort(Protocol):
+    async def compose(self, background: bytes, layers: Sequence[CutoutLayer], size: Size) -> bytes:
+        """Paste the layers in order on the background, resized to `size`. Returns a WebP image."""
+        ...
 
 
 class Clock(Protocol):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -104,6 +105,36 @@ class CanvasTransform:
         if self.scale <= 0:
             raise InvalidValueError("scale must be positive")
 
+    @property
+    def is_identity(self) -> bool:
+        return not self.deleted and self.dx == 0 and self.dy == 0 and self.scale == 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class CleanPlate:
+    """The base render with some objects removed by the image model, so moved cut-outs leave no ghost (ADR 0010)."""
+
+    object_ids: tuple[str, ...]  # sorted
+    image: MediaRef
+    response_id: str  # chain the next removal from here
+
+    @property
+    def key(self) -> str:
+        return plate_key(self.object_ids)
+
+
+def plate_key(object_ids: Iterable[str]) -> str:
+    return "+".join(sorted(set(object_ids)))
+
+
+@dataclass(frozen=True, slots=True)
+class Composite:
+    """The base render with its geometry layers applied: what the storyboard, animatic and shares show."""
+
+    revision: int
+    image: MediaRef
+    size: Size
+
 
 class PanelStatus(StrEnum):
     PENDING = "pending"
@@ -120,17 +151,36 @@ class Panel:
     response_id: str | None = None
     size: Size | None = None
     masks: dict[str, ObjectMask] = field(default_factory=dict)
-    transforms: list[CanvasTransform] = field(default_factory=list)
+    transforms: list[CanvasTransform] = field(default_factory=list)  # one geometry layer per object, on the base
     outdated: bool = False  # the shot changed after this was drawn (a reveal, a merge, a removed character)
+    plates: dict[str, CleanPlate] = field(default_factory=dict)  # by plate_key, for the current base revision
+    composite: Composite | None = None
+
+    @property
+    def current_revision(self) -> int:
+        """The newest revision: a composite of the base render, or the base render itself."""
+        return self.composite.revision if self.composite else self.revision
+
+    @property
+    def shown_image(self) -> MediaRef | None:
+        return self.composite.image if self.composite else self.image
+
+    @property
+    def shown_size(self) -> Size | None:
+        return self.composite.size if self.composite else self.size
 
     def record_render(self, revision: int, image: MediaRef, response_id: str, size: Size) -> None:
         """A new model render. Revisions only increase.
 
-        Masks of older revisions are dropped. Canvas transforms are kept: pre-segmented character masks
-        use stable ids (``character:<id>``), so transforms re-apply once the new revision is segmented.
+        Masks, clean plates and the composite of older revisions are dropped. Layers of characters are kept:
+        pre-segmented character masks use stable ids (``character:<id>``), so those layers re-apply once the new
+        revision is segmented. Layers of clicked objects cannot be found again and are dropped.
         """
         if revision <= self.revision:
             raise RevisionOrderError(f"panel {self.shot_id}: revision {revision} is not after {self.revision}")
+        revision = max(revision, self.current_revision + 1)  # a composite took the number meanwhile: the next one
+        self.transforms = [t for t in self.transforms if t.object_id.startswith("character:")]
+        self.plates, self.composite = {}, None
         self.revision, self.image, self.response_id, self.size = revision, image, response_id, size
         self.status = PanelStatus.READY
         self.masks = {}
@@ -160,6 +210,32 @@ class Panel:
         return min(hits, key=lambda m: len(m.bitmap.data), default=None)
 
     def transform(self, t: CanvasTransform) -> None:
+        """Set an object's geometry layer, replacing its previous one. Moving it back home removes the layer."""
         if t.object_id not in self.masks:
             raise UnknownObjectError(f"panel {self.shot_id}: no object {t.object_id!r} on revision {self.revision}")
-        self.transforms.append(t)
+        if self.masks[t.object_id].cutout is None:
+            raise UnknownObjectError(f"panel {self.shot_id}: object {t.object_id!r} has no cut-out to move")
+        self.transforms = [x for x in self.transforms if x.object_id != t.object_id]
+        if not t.is_identity:
+            self.transforms.append(t)
+
+    def layers(self) -> list[tuple[ObjectMask, CanvasTransform]]:
+        """The geometry layers whose objects are segmented on the current base revision."""
+        return [(self.masks[t.object_id], t) for t in self.transforms if t.object_id in self.masks]
+
+    def cache_plate(self, base_revision: int, plate: CleanPlate) -> bool:
+        if base_revision != self.revision:
+            return False  # a new render replaced the base this plate was made from
+        self.plates[plate.key] = plate
+        return True
+
+    def record_composite(self, base_revision: int, image: MediaRef, size: Size) -> Composite | None:
+        """The layers applied to base `base_revision`, as the next revision. Ignored if the base moved on."""
+        if base_revision != self.revision or self.status is not PanelStatus.READY:
+            return None
+        self.composite = Composite(self.current_revision + 1, image, size)
+        return self.composite
+
+    def clear_composite(self) -> None:
+        """Every layer was moved back: the base render is shown again."""
+        self.composite = None

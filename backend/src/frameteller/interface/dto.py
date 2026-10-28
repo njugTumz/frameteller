@@ -22,7 +22,18 @@ from frameteller.application.events import (
 from frameteller.application.ports import Quality, SpeechMode, SpeechOptions
 from frameteller.application.use_cases import Beat, CastReview, JobTicket, Selection, TranscriptCorrection
 from frameteller.application.use_cases.correct_transcript import MAX_TURN_CHARS
-from frameteller.domain import Box, Character, MediaRef, ObjectMask, Panel, PanelStyle, Project, Shot, TranscriptTurn
+from frameteller.domain import (
+    Box,
+    CanvasTransform,
+    Character,
+    MediaRef,
+    ObjectMask,
+    Panel,
+    PanelStyle,
+    Project,
+    Shot,
+    TranscriptTurn,
+)
 
 Id = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -76,6 +87,17 @@ class SelectRequest(BaseModel):
     y: int = Field(ge=0, le=20_000)
     preview_width: int = Field(ge=1, le=20_000)
     preview_height: int = Field(ge=1, le=20_000)
+
+
+class LayerRequest(BaseModel):
+    """Move, resize or delete a selected object: its cut-out's top-left moves by (dx, dy) panel pixels and it
+    scales from that corner. dx = dy = 0 and scale = 1 moves it back home."""
+
+    object_id: str = Field(min_length=1, max_length=200, examples=["character:mira"])
+    dx: int = Field(default=0, ge=-20_000, le=20_000)
+    dy: int = Field(default=0, ge=-20_000, le=20_000)
+    scale: float = Field(default=1.0, ge=0.2, le=3.0)
+    deleted: bool = False
 
 
 class ReorderRequest(BaseModel):
@@ -151,24 +173,43 @@ class MaskOut(BaseModel):
         )
 
 
+class LayerOut(BaseModel):
+    object_id: str
+    dx: int
+    dy: int
+    scale: float
+    deleted: bool
+
+    @classmethod
+    def of(cls, t: CanvasTransform) -> LayerOut:
+        return cls(object_id=t.object_id, dx=t.dx, dy=t.dy, scale=t.scale, deleted=t.deleted)
+
+
 class PanelOut(BaseModel):
-    revision: int
+    revision: int = Field(description="The model render the masks and layers belong to.")
+    shown_revision: int = Field(description="What image_url shows: the composite of the layers, or the render.")
     status: str
-    image_url: str | None
+    image_url: str | None = Field(description="The panel as shown: with its layers applied once composited.")
+    base_image_url: str | None = Field(description="The model render without layers; the editor draws on it.")
     width: int | None
     height: int | None
     masks: list[MaskOut]
+    layers: list[LayerOut]
     outdated: bool = Field(description="The shot changed after this was drawn; draw it again.")
 
     @classmethod
     def of(cls, p: Panel) -> PanelOut:
+        size = p.shown_size
         return cls(
             revision=p.revision,
+            shown_revision=p.current_revision,
             status=p.status.value,
-            image_url=media_url(p.image),
-            width=p.size.width if p.size else None,
-            height=p.size.height if p.size else None,
+            image_url=media_url(p.shown_image),
+            base_image_url=media_url(p.image),
+            width=size.width if size else None,
+            height=size.height if size else None,
             masks=[MaskOut.of(m) for m in p.masks.values()],
+            layers=[LayerOut.of(t) for t in p.transforms],
             outdated=p.outdated,
         )
 

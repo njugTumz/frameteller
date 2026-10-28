@@ -232,3 +232,36 @@ async def test_delete_my_recording(api: Api) -> None:
     assert deleted.status_code == 200
     assert deleted.json()["narrations"] == []
     assert "projects/p1/narration/s1.wav" not in api.fakes.storage.files
+
+
+async def test_moving_an_object_saves_a_layer_and_shows_the_composite(api: Api) -> None:
+    api.fakes.sam.by_concept = {"8-year-old girl": MIRA}
+    api.fakes.storage.files["projects/p1/cut.png"] = (b"mira-cut", "image/png")
+    await api.client.post("/projects/p1/shots/1/panel", json={})
+    await api.settle()
+
+    r = await api.client.post(
+        "/projects/p1/shots/1/panel/layers", json={"object_id": "character:mira", "dx": 30, "dy": 5, "scale": 1.25}
+    )
+    assert r.status_code == 202
+    assert r.json()["kind"] == "compose_panel"
+    await api.settle()  # clean plate, then the composite
+
+    panel = (await api.client.get("/projects/p1")).json()["shots"][0]["panel"]
+    assert panel["revision"] == 1
+    assert panel["shown_revision"] == 2
+    assert panel["base_image_url"] == "/media/projects/p1/panels/s1/r1/image"
+    assert "/composites/" in panel["image_url"]
+    assert panel["layers"] == [{"object_id": "character:mira", "dx": 30, "dy": 5, "scale": 1.25, "deleted": False}]
+    assert (await api.client.get(panel["image_url"])).status_code == 200
+    [(_, prompt)] = api.fakes.images.edits
+    assert prompt.startswith("Remove the 8-year-old girl")
+
+
+async def test_layers_need_a_known_object_and_a_sane_scale(api: Api) -> None:
+    await api.client.post("/projects/p1/shots/1/panel", json={})
+    await api.settle()
+    unknown = await api.client.post("/projects/p1/shots/1/panel/layers", json={"object_id": "character:ghost"})
+    assert unknown.status_code in (404, 422)
+    huge = await api.client.post("/projects/p1/shots/1/panel/layers", json={"object_id": "x", "scale": 9})
+    assert huge.status_code == 422
