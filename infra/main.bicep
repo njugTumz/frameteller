@@ -26,6 +26,31 @@ param publicAppUrl string = ''
 @description('The studio frontend Static Web App.')
 param staticWebAppName string
 
+@description('Always-on replicas: 1 in production, 0 (scale to zero) in staging. At most 1 (ADR 0009).')
+@minValue(0)
+@maxValue(1)
+param minReplicas int = 0
+
+@description('Seconds a deploy lets the old revision finish a live session or export before stopping it.')
+param terminationGracePeriodSeconds int = 120
+
+@description('Director model: always the standard (paid) model outside local runs, never a -contributor one.')
+param directorModel string = 'muse-spark-1.3'
+
+@description('API custom domain, e.g. api.frameteller.com, and its managed certificate in the environment.')
+param apiDomain string = ''
+param apiCertificateName string = ''
+
+@description('Guardrail settings for a public demo, as name/value pairs (see the backend settings).')
+param guardrailEnv array = []
+
+@description('Email for budget and availability alerts. Empty: no alerts.')
+param alertEmail string = ''
+param monthlyBudget int = 0
+param budgetStartDate string = '2026-10-01'
+@description('URL the availability test probes. Empty: no test.')
+param availabilityUrl string = ''
+
 @description('Delete media blobs older than this many days; 0 keeps them.')
 @minValue(0)
 param mediaRetentionDays int = 0
@@ -70,6 +95,26 @@ module app 'modules/containerapp.bicep' = {
     storageAccountName: storage.outputs.accountName
     logAnalyticsWorkspaceName: monitoring.outputs.workspaceName
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    minReplicas: minReplicas
+    terminationGracePeriodSeconds: terminationGracePeriodSeconds
+    directorModel: directorModel
+    customDomain: apiDomain
+    customDomainCertificateName: apiCertificateName
+    extraEnv: guardrailEnv
+  }
+}
+
+module alerts 'modules/alerts.bicep' = if (!empty(alertEmail)) {
+  name: 'alerts'
+  params: {
+    location: location
+    tags: tags
+    suffix: suffix
+    alertEmail: alertEmail
+    monthlyBudget: monthlyBudget
+    budgetStartDate: budgetStartDate
+    availabilityUrl: availabilityUrl
+    appInsightsId: monitoring.outputs.appInsightsId
   }
 }
 
@@ -92,6 +137,9 @@ module frontend 'modules/staticwebapp.bicep' = {
 
 output appName string = app.outputs.name
 output appUrl string = 'https://${app.outputs.fqdn}'
+output appFqdn string = app.outputs.fqdn
+output containerEnvironmentName string = app.outputs.environmentName
+output customDomainVerificationId string = app.outputs.customDomainVerificationId
 output storageAccountName string = storage.outputs.accountName
 output frontendName string = frontend.outputs.name
 output frontendUrl string = 'https://${frontend.outputs.hostname}'
