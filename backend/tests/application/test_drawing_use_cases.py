@@ -1,7 +1,7 @@
 import pytest
 
 from frameteller.application import costs
-from frameteller.application.jobs import PRE_SEGMENT_PANEL
+from frameteller.application.jobs import PRE_SEGMENT_PANEL, SUPERVISE_PANEL
 from frameteller.application.use_cases import EditPanelAppearance, GenerateCharacterReference, GeneratePanel
 from frameteller.domain import (
     CastNotApprovedError,
@@ -67,7 +67,10 @@ async def test_idempotent_generate_panel_does_not_call_the_image_port_twice(worl
 async def test_generate_panel_queues_pre_segmentation_once(world: World) -> None:
     await generate(world).execute("p1", "s1", revision=1)
     await generate(world).execute("p1", "s1", revision=1)
-    assert [(j.kind, j.idempotency_key) for j in world.jobs.jobs] == [(PRE_SEGMENT_PANEL, "pre_segment_panel:p1:s1:r1")]
+    assert [(j.kind, j.idempotency_key) for j in world.jobs.jobs] == [
+        (PRE_SEGMENT_PANEL, "pre_segment_panel:p1:s1:r1"),
+        (SUPERVISE_PANEL, "supervise_panel:p1:s1:r1"),
+    ]
 
 
 async def test_failed_render_marks_panel_failed_and_reraises(world: World) -> None:

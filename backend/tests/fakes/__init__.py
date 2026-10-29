@@ -21,6 +21,7 @@ from frameteller.application.ports import (
     Job,
     Progress,
     Quality,
+    ReviewRequest,
     Segment,
     SpeechEvent,
     SpeechOptions,
@@ -28,7 +29,20 @@ from frameteller.application.ports import (
     TurnCompleted,
     UsageRecord,
 )
-from frameteller.domain import Animatic, Character, MediaRef, Point, Project, Shot, Size, TranscriptTurn
+from frameteller.application.rubrics import Rubric, parse_rubric
+from frameteller.domain import (
+    Animatic,
+    Character,
+    Decision,
+    Issue,
+    MediaRef,
+    Point,
+    Project,
+    Shot,
+    Size,
+    TranscriptTurn,
+    Verdict,
+)
 
 PANEL_SIZE = Size(1920, 1280)
 
@@ -345,3 +359,55 @@ class RecordingBudget:
     @property
     def total(self) -> float:
         return sum(c for _, c, _ in self.charges)
+
+
+def verdict(
+    decision: Decision = Decision.PASS,
+    *issues: Issue,
+    confidence: float = 0.9,
+    fix: str = "",
+    target: str = "",
+    parts: tuple[str, ...] = (),
+    model: str = "fake-reviewer",
+) -> Verdict:
+    return Verdict(decision, confidence, issues, fix, target, parts, model, 5, (("panel-continuity", "abc123"),))
+
+
+PASS = verdict()
+
+
+class FakeReviewer:
+    """ReviewerPort that answers from a script (one verdict per call, the last one repeating), else passes."""
+
+    def __init__(self, *verdicts: Verdict | Exception) -> None:
+        self.verdicts: list[Verdict | Exception] = list(verdicts)
+        self.requests: list[ReviewRequest] = []
+
+    async def review(self, request: ReviewRequest) -> Verdict:
+        self.requests.append(request)
+        if not self.verdicts:
+            return PASS
+        answer = self.verdicts.pop(0) if len(self.verdicts) > 1 else self.verdicts[0]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+def rubric_text(rubric_id: str, *rules: tuple[str, str]) -> str:
+    rows = "\n".join(f"| {rule_id} | {severity} | test {rule_id} |" for rule_id, severity in rules)
+    head = f"---\nid: {rubric_id}\nversion: 1\n---\n# {rubric_id}\nGuidance.\n\n## Rules\n\n"
+    return f"{head}| id | severity | test |\n|---|---|---|\n{rows}\n"
+
+
+class InMemoryRubricLibrary:
+    """The four pipeline rubrics with one blocker, one major and one minor rule each."""
+
+    def __init__(self) -> None:
+        prefixes = {"cast": "CAST", "panel-continuity": "CONT", "shot": "SHOT", "edit": "EDIT"}
+        self.rubrics: dict[str, Rubric] = {
+            rid: parse_rubric(rubric_text(rid, (f"{p}-01", "blocker"), (f"{p}-02", "major"), (f"{p}-03", "minor")))
+            for rid, p in prefixes.items()
+        }
+
+    def get(self, rubric_id: str) -> Rubric:
+        return self.rubrics[rubric_id]

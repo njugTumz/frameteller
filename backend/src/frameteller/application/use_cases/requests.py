@@ -78,9 +78,10 @@ class RequestCastReferences:
     def __init__(self, repo: ProjectRepository, jobs: JobQueuePort, ids: IdGenerator) -> None:
         self._repo, self._jobs, self._ids = repo, jobs, ids
 
-    async def execute(self, project_id: str, character_ids: Sequence[str]) -> JobTicket:
+    async def execute(self, project_id: str, character_ids: Sequence[str], correction: str = "") -> JobTicket:
+        """`correction`: what the continuity review asked to change on the sheet (its "Apply fix")."""
         project = await self._repo.get(project_id)
         for cid in character_ids:
             project.bible.get(cid)  # unknown ids fail here, not in the background
-        job = cast_job(project_id, character_ids, self._ids.new_id())
+        job = cast_job(project_id, character_ids, self._ids.new_id(), correction)
         return JobTicket.of(job, await self._jobs.enqueue(job))

@@ -9,18 +9,22 @@ from enum import StrEnum
 from typing import Literal, Protocol
 
 from frameteller.application.events import ProjectEvent
+from frameteller.application.rubrics import Rubric, RubricSet
 from frameteller.domain import (
     Animatic,
     Box,
     Character,
     Framing,
+    Issue,
     MaskBitmap,
     MediaRef,
+    PanelStyle,
     Point,
     Project,
     Shot,
     Size,
     TranscriptTurn,
+    Verdict,
 )
 
 # ---- data crossing the ports ----
@@ -211,6 +215,40 @@ class ImageGenerationPort(Protocol):
     async def generate(self, request: ImageRequest, store_as: str) -> StoredImage: ...
 
     async def edit(self, previous_response_id: str, prompt: str, quality: Quality, store_as: str) -> StoredImage: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceSheet:
+    """A character's approved look, as the reviewer compares a panel against it."""
+
+    name: str
+    description: str
+    image: MediaRef
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewRequest:
+    """One review: the image(s) under review, what they must match, and the rules to check (ADR 0012)."""
+
+    images: tuple[MediaRef, ...]  # the panel or the sheet under review
+    rubric: RubricSet
+    style: PanelStyle
+    reference_sheets: tuple[ReferenceSheet, ...] = ()
+    shot: Shot | None = None
+    subject: str = ""  # a sheet's character and description, or the edit that was asked for
+    previous_issues: tuple[Issue, ...] = ()  # what a fix tried to repair, for the re-review
+
+
+class ReviewerPort(Protocol):
+    async def review(self, request: ReviewRequest) -> Verdict:
+        """Check the request against its rubric. The verdict names the model that served it."""
+        ...
+
+
+class RubricLibrary(Protocol):
+    def get(self, rubric_id: str) -> Rubric:
+        """The current text of a rubric (agents/<id>.md), parsed. Raises RubricError if it is missing or bad."""
+        ...
 
 
 class SegmentationPort(Protocol):

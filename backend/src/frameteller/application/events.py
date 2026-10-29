@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from frameteller.domain import Character, Shot, TranscriptTurn
+from frameteller.domain import Character, Issue, Shot, SupervisorEntry, TranscriptTurn
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +81,33 @@ class SessionEnded:
     heard: bool = True  # False when no words were heard at all
 
 
+@dataclass(frozen=True, slots=True)
+class SupervisorReviewed:
+    """The continuity supervisor checked a panel or a sheet and found nothing to fix (ADR 0012)."""
+
+    entry: SupervisorEntry
+    revision: int | None = None  # the panel revision reviewed; None for a sheet
+
+
+@dataclass(frozen=True, slots=True)
+class SupervisorFixed:
+    """It fixed a draft panel by itself, in `fixes` appearance edits, and the fixed panel passed."""
+
+    entry: SupervisorEntry
+    revision: int
+    fixes: int
+
+
+@dataclass(frozen=True, slots=True)
+class SupervisorNeedsUser:
+    """It found issues it will not or could not fix: the user decides (apply the fix, accept or redraw)."""
+
+    entry: SupervisorEntry
+    issues: tuple[Issue, ...]
+    fix_instruction: str
+    revision: int | None = None
+
+
 ProjectEvent = (
     TranscriptUpdated
     | TurnFinished
@@ -92,4 +119,7 @@ ProjectEvent = (
     | SessionFailed
     | NoSpeechHeard
     | SessionEnded
+    | SupervisorReviewed
+    | SupervisorFixed
+    | SupervisorNeedsUser
 )

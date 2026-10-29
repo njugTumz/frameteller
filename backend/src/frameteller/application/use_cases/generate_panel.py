@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from frameteller.application import costs
-from frameteller.application.jobs import pre_segment_job
+from frameteller.application.jobs import pre_segment_job, supervise_job
 from frameteller.application.ports import (
     BudgetGuard,
     ImageGenerationPort,
@@ -60,4 +60,6 @@ class GeneratePanel:
         rendered, recorded = await self._repo.update(project_id, apply)
         if recorded:
             await self._jobs.enqueue(pre_segment_job(project_id, shot_id, rendered.revision))
+            if snapshot.continuity_checks:  # reviewed in the background; drawing never waits for it
+                await self._jobs.enqueue(supervise_job(project_id, shot_id, rendered.revision, quality))
         return rendered

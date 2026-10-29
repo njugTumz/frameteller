@@ -20,7 +20,7 @@ ONLY_AS_DESCRIBED = (
 )
 
 
-def reference_prompt(c: Character, style: PanelStyle = PanelStyle.PENCIL) -> str:
+def reference_prompt(c: Character, style: PanelStyle = PanelStyle.PENCIL, correction: str = "") -> str:
     """A neutral two-view sheet in the project's style. Panels copy their references' look, so the sheet sets it."""
     return (
         f"Character reference sheet for an original character named {c.name}: {c.canonical_description}. "
@@ -28,6 +28,7 @@ def reference_prompt(c: Character, style: PanelStyle = PanelStyle.PENCIL) -> str
         "neutral standing pose, identical in both views. "
         f"{ONLY_AS_DESCRIBED} Plain light grey background, no text, no scenery. "
         f"Style: {STYLES[style]}. {NOT_PHOTOREAL}"
+        + (f" Correction from the continuity review: {correction.strip().rstrip('.')}." if correction.strip() else "")
     )
 
 

@@ -13,6 +13,8 @@ EDIT_PANEL = "edit_panel"
 GENERATE_CAST = "generate_cast"
 EXPORT_ANIMATIC = "export_animatic"
 COMPOSE_PANEL = "compose_panel"
+SUPERVISE_PANEL = "supervise_panel"
+REVIEW_SHEET = "review_sheet"
 
 
 def panel_key(kind: str, project_id: str, shot_id: str, revision: int) -> str:
@@ -70,11 +72,30 @@ def export_job(project_id: str, digest: str, subtitles: bool) -> Job:
     )
 
 
-def cast_job(project_id: str, character_ids: Sequence[str], nonce: str) -> Job:
+def supervise_job(project_id: str, shot_id: str, revision: int, quality: Quality) -> Job:
+    """Review a new render (and fix a draft if it can). One review per revision."""
+    return Job(
+        kind=SUPERVISE_PANEL,
+        idempotency_key=panel_key(SUPERVISE_PANEL, project_id, shot_id, revision),
+        payload={"project_id": project_id, "shot_id": shot_id, "revision": str(revision), "quality": quality},
+    )
+
+
+def sheet_review_job(project_id: str, character_id: str, reference_key: str) -> Job:
+    """Review a new reference sheet. Keyed on the sheet itself, so each drawing is reviewed once."""
+    digest = hashlib.sha256(reference_key.encode()).hexdigest()[:12]
+    return Job(
+        kind=REVIEW_SHEET,
+        idempotency_key=f"{REVIEW_SHEET}:{project_id}:{character_id}:{digest}",
+        payload={"project_id": project_id, "character_id": character_id, "reference": reference_key},
+    )
+
+
+def cast_job(project_id: str, character_ids: Sequence[str], nonce: str, correction: str = "") -> Job:
     """Reference sheets for some characters. `nonce` separates a deliberate regenerate from a retry."""
     ids = sorted(set(character_ids))
     return Job(
         kind=GENERATE_CAST,
         idempotency_key=f"{GENERATE_CAST}:{project_id}:{','.join(ids)}:{nonce}",
-        payload={"project_id": project_id, "character_ids": ",".join(ids)},
+        payload={"project_id": project_id, "character_ids": ",".join(ids), "correction": correction},
     )

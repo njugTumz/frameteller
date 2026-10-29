@@ -15,9 +15,9 @@ class GenerateCastReferences:
     def __init__(self, reference: GenerateCharacterReference, events: EventPublisher) -> None:
         self._reference, self._events = reference, events
 
-    async def execute(self, project_id: str, character_ids: Sequence[str]) -> list[Character]:
+    async def execute(self, project_id: str, character_ids: Sequence[str], correction: str = "") -> list[Character]:
         results = await asyncio.gather(
-            *(self._reference.execute(project_id, cid) for cid in character_ids), return_exceptions=True
+            *(self._reference.execute(project_id, cid, correction) for cid in character_ids), return_exceptions=True
         )
         drawn = [r for r in results if isinstance(r, Character)]
         if drawn:
