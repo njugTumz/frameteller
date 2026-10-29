@@ -13,10 +13,10 @@ from frameteller.application.audio import BYTES_PER_MS, wav_bytes
 from frameteller.application.errors import ApplicationError
 from frameteller.application.events import (
     NoSpeechHeard,
+    ScriptAccepted,
     SessionEnded,
     SessionFailed,
-    ShotCreated,
-    ShotUpdated,
+    TeleprompterAdvanced,
     TranscriptUpdated,
     TurnFinished,
 )
@@ -34,21 +34,27 @@ from frameteller.application.ports import (
     TurnEnded,
     TurnStarted,
 )
+from frameteller.application.teleprompter import normalise, paragraph_end
 from frameteller.application.use_cases.correct_transcript import CorrectTranscript
 from frameteller.application.use_cases.direct_turn import DirectTurn
 from frameteller.application.use_cases.requests import RequestCastReferences
-from frameteller.domain import DomainError, Narration, TranscriptTurn
+from frameteller.application.use_cases.story_director import StoryDirector, TranscriptCorrection
+from frameteller.domain import Narration, Script, TranscriptTurn
 
 log = logging.getLogger("frameteller.session")
 
-DIRECTION_FAILED = "The director couldn't place that line. Try saying it again."
-CORRECTION_FAILED = "We couldn't apply that correction. Check the turn and try again."
 AUDIO_BUFFER_FRAMES = 256  # about 20 s of 80 ms frames waiting for the transcriber
 # A beat closes once the transcriber has processed this much audio past it (ADR 0008). The last word before a
 # pause reached the transcript up to 240 ms after the pause; the next sentence's first word, 840 ms or more.
 BEAT_GRACE_MS = 500
 # A beat with fewer real words than this is a stray noise ("Bacon."), not a shot: its words join the next beat.
 MIN_BEAT_WORDS = 2
+# Teleprompter (ADR 0015): a paragraph read to its end is cut once the reader pauses this long, or at once when
+# they have read on this many words. A Space press this soon after an automatic cut, with nothing said since, is
+# the reader confirming that cut, not skipping a paragraph.
+READ_PAUSE_MS = 600
+READ_ON_WORDS = 2
+CONFIRM_MS = 2500
 SILENCE_WARNING_MS = 8000  # audio received with no words and no level before we say we can't hear the narrator
 SILENT_LEVEL = 0.005  # RMS of full scale (about -46 dBFS): a muted or wrong microphone, not a quiet room
 MAX_KEPT_MS = 30 * 60 * 1000  # the narration kept for the animatic stops here (about 86 MB of PCM)
@@ -95,14 +101,6 @@ class Beat:
     """
 
     at_ms: int
-
-
-@dataclass(frozen=True, slots=True)
-class TranscriptCorrection:
-    """The user fixed misheard words in a turn."""
-
-    turn_id: str
-    text: str
 
 
 ClientInput = bytes | Beat | TranscriptCorrection
@@ -157,18 +155,44 @@ class _Heard:
 
     def pending(self) -> str:
         """The words heard since the last boundary: the live line the narrator sees."""
-        return " ".join((self.done + self.partial)[self.cursor :])
+        return " ".join(self.pending_words())
 
-    def cut(self, at_ms: int) -> tuple[str, int, int]:
-        """Close the stretch since the last boundary: (its text, start ms, end ms), leading silence trimmed."""
+    def pending_words(self) -> list[str]:
+        return (self.done + self.partial)[self.cursor :]
+
+    def cut(self, at_ms: int, upto: int | None = None) -> tuple[str, int, int]:
+        """Close the stretch since the last boundary: (its text, start ms, end ms), leading silence trimmed.
+
+        `upto` keeps the words from that many on (counted from the boundary) for the next stretch: a reader who
+        went straight on into the next paragraph.
+        """
         words = self.done + self.partial
-        text = " ".join(words[self.cursor :])
-        self.cursor = max(self.cursor, len(words))
+        end = len(words) if upto is None else min(len(words), self.cursor + upto)
+        text = " ".join(words[self.cursor : end])
+        self.cursor = max(self.cursor, end)
         start = self.cut_ms if self.first_speech_ms is None else self.first_speech_ms
         self.cut_ms = max(self.cut_ms, at_ms)
         self.first_speech_ms = None
+        self._note_first_words()  # words kept for the next stretch were spoken from the cut on
         start = min(start, self.cut_ms)
         return text, start, max(at_ms, start)
+
+
+@dataclass(slots=True)
+class _Reading:
+    """Where a teleprompter reader is: the current paragraph, and when its end was first heard."""
+
+    index: int = 0
+    covered: bool = False  # the current paragraph's end was heard
+    covered_at: int | None = None  # the audio position of the first progress after that
+    paused: bool = False  # the transcriber heard a pause after that
+    processed_ms: int = 0
+    speech_end_ms: int = 0  # the transcriber's latest speechEnd
+    last_cut_ms: int = -CONFIRM_MS
+
+
+def _real(words: list[str]) -> int:
+    return sum(any(ch.isalnum() for ch in w) for w in words)
 
 
 async def _drain(audio: asyncio.Queue[bytes | None]) -> None:
@@ -199,10 +223,10 @@ class RunVoiceSession:
         storage: MediaStoragePort,
         limits: DemoLimits | None = None,
     ) -> None:
-        self._speech, self._direct, self._correct = speech, direct, correct
-        self._cast, self._events, self._ids = cast, events, ids
+        self._speech, self._events, self._ids = speech, events, ids
         self._repo, self._storage = repo, storage
         self._limits = limits
+        self._story = StoryDirector(direct, correct, cast, events, limits)
 
     async def execute(
         self,
@@ -211,17 +235,23 @@ class RunVoiceSession:
         options: SpeechOptions,
         *,
         keep_audio: bool = False,
+        script: Script | None = None,
     ) -> SessionEnded:
-        """`keep_audio`: the narrator agreed to keep their recording for the animatic. Never logged."""
+        """`keep_audio`: the narrator agreed to keep their recording for the animatic. Never logged.
+
+        With a `script` (teleprompter), each paragraph read becomes one turn with the script's words and cues, cut
+        when the reader reaches its end and pauses; Space still cuts by hand (ADR 0015).
+        """
         # Turn ids are per session; the tag keeps a second narration in the same project from reusing them.
         tag = self._ids.new_id()[:8]
         work: asyncio.Queue[TranscriptTurn | TranscriptCorrection | None] = asyncio.Queue()
         audio: asyncio.Queue[bytes | None] = asyncio.Queue(AUDIO_BUFFER_FRAMES)
         heard = _Heard()
         counts = {"beats": 0, "turns": 0, "shots": 0}
-        told = {"shots_full": False}  # say a limit once per session
-        beat_mode = False  # set by the first beat: from then on beats, not the transcriber, cut the shots
+        beat_mode = script is not None  # beats, not the transcriber, cut the shots (unscripted: from the first beat)
         beats: list[int] = []  # beats waiting for the transcript to catch up, oldest first
+        paragraphs = list(script.beats) if script else []
+        reading = _Reading()
 
         async def publish_failure(message: str, *, fatal: bool = False) -> None:
             await self._events.publish(project_id, SessionFailed(message, fatal))
@@ -232,7 +262,59 @@ class RunVoiceSession:
             if any(ch.isalnum() for ch in turn.text):  # "." or "-" is noise, not a shot
                 work.put_nowait(turn)
 
+        async def close_paragraph(at_ms: int, *, upto: int | None = None, manual: bool = False) -> None:
+            """Teleprompter: the stretch is the current paragraph, told in the script's own words."""
+            words = heard.words_pending() if upto is None else _real(heard.pending_words()[:upto])
+            spoken = heard.first_speech_ms is not None and heard.first_speech_ms < at_ms
+            if manual and not spoken and at_ms - reading.last_cut_ms < CONFIRM_MS:
+                return  # Space just after an automatic cut, before the next words, confirms it
+            text, start, end = heard.cut(at_ms, upto)
+            reading.covered, reading.covered_at, reading.paused = False, None, False
+            reading.last_cut_ms = at_ms
+            if reading.index < len(paragraphs):
+                episode, beat = paragraphs[reading.index]
+                reading.index += 1
+                await self._events.publish(project_id, TeleprompterAdvanced(reading.index))
+                text, direction = (beat.narration, beat.direction) if words else ("", "")
+            else:  # the reader went on past the script: their own words
+                episode, direction = paragraphs[-1][0], ""
+            if words:
+                counts["beats"] += 1
+                turn = TranscriptTurn(f"{tag}-b{counts['beats']}", text, start, end, None, direction, episode)
+                await finish(turn)
+            await self._events.publish(project_id, TranscriptUpdated(heard.pending()))
+
+        async def follow(*, final: bool = False) -> None:
+            """Teleprompter: cut each paragraph the reader has finished, once they pause or read on."""
+            while paragraphs and reading.index < len(paragraphs) and not beats:
+                pending = heard.pending_words()
+                words, owner = [], []
+                for i, w in enumerate(pending):
+                    for n in normalise(w):
+                        words.append(n)
+                        owner.append(i)
+                end = paragraph_end(paragraphs[reading.index][1].narration, words)
+                if end is None:
+                    reading.covered, reading.covered_at, reading.paused = False, None, False
+                    return
+                last_word = owner[end]
+                reading.covered = True  # timed by the next audio progress: the words were heard by then
+                heard_at = (
+                    reading.covered_at if reading.covered_at is not None else max(reading.processed_ms, heard.cut_ms)
+                )
+                read_on = _real(pending[last_word + 1 :]) >= READ_ON_WORDS
+                waited = reading.covered_at is not None and reading.processed_ms - reading.covered_at >= READ_PAUSE_MS
+                if not (read_on or reading.paused or waited or final):
+                    return
+                # Cut where the speech stopped if the transcriber said so, else where the end was first heard.
+                at = heard_at if read_on else max(heard_at, reading.speech_end_ms)
+                await close_paragraph(at, upto=last_word + 1)
+
         async def close_beat(at_ms: int, *, last: bool = False) -> None:
+            if paragraphs:
+                if not last or heard.words_pending():
+                    await close_paragraph(at_ms, manual=not last)
+                return
             words = heard.words_pending()
             if 0 < words < MIN_BEAT_WORDS and not last:
                 return  # a stray word: leave the stretch open so it joins the next beat
@@ -282,47 +364,33 @@ class RunVoiceSession:
             while (chunk := await audio.get()) is not None:
                 yield chunk
 
-        async def direct() -> None:
-            while (item := await work.get()) is not None:
-                try:
-                    if isinstance(item, TranscriptCorrection):
-                        await self._correct.execute(project_id, item.turn_id, item.text)
-                        continue
-                    directed = await self._direct.execute(project_id, item)
-                    for shot in directed.revised:
-                        await self._events.publish(project_id, ShotUpdated(shot))
-                    for shot in directed.shots:
-                        counts["shots"] += 1
-                        await self._events.publish(project_id, ShotCreated(shot))
-                    if directed.refusal:
-                        await publish_failure(directed.refusal)
-                    if directed.capped and self._limits and not told["shots_full"]:
-                        told["shots_full"] = True
-                        await publish_failure(self._limits.shots_full)
-                    if directed.new_characters:
-                        await self._cast.execute(project_id, [c.id for c in directed.new_characters])
-                except ApplicationError as e:
-                    await publish_failure(e.user_message)
-                except DomainError:
-                    failed = CORRECTION_FAILED if isinstance(item, TranscriptCorrection) else DIRECTION_FAILED
-                    await publish_failure(failed)
-
-        director = asyncio.create_task(direct())
+        if script:
+            await self._events.publish(project_id, ScriptAccepted(script))
+        director = asyncio.create_task(self._story.run(project_id, work))
         reader = asyncio.create_task(read_client())
         try:
             async for event in self._speech.stream(pcm(), options):
                 if isinstance(event, PartialTranscript):
                     heard.hear_partial(event.text)
                     await self._events.publish(project_id, TranscriptUpdated(heard.pending()))
+                    await follow()
                 elif isinstance(event, AudioProgress):
+                    reading.processed_ms = event.processed_ms
+                    if reading.covered and reading.covered_at is None:
+                        reading.covered_at = event.processed_ms
                     await close_beats_heard(event.processed_ms)
+                    await follow()
                 elif isinstance(event, TurnStarted):
                     heard.hear_speech_start(event.start_ms)
                 elif isinstance(event, TurnEnded):
                     heard.speech_end_ms = max(heard.speech_end_ms, event.end_ms)
+                    reading.paused = reading.covered  # the transcriber heard the pause
+                    reading.speech_end_ms = event.end_ms
+                    await follow()
                 elif isinstance(event, TurnCompleted):
                     heard.finish_turn(event.turn.text)
                     heard.speech_end_ms = max(heard.speech_end_ms, event.turn.end_ms)
+                    await follow()
                     if not beat_mode:  # endpointing is the fallback when the narrator sends no beats
                         heard.cut(event.turn.end_ms)
                         t = event.turn
@@ -333,6 +401,7 @@ class RunVoiceSession:
             discard.cancel()
             if beat_mode:  # the transcript is complete: close every waiting beat, then the last stretch
                 await close_beats_heard()
+                await follow(final=True)
                 await close_beat(max(heard.speech_end_ms, heard.cut_ms), last=True)
         except ApplicationError as e:
             await publish_failure(e.user_message, fatal=True)
@@ -345,7 +414,7 @@ class RunVoiceSession:
             with contextlib.suppress(asyncio.CancelledError):
                 await asyncio.gather(reader, return_exceptions=True)
         work.put_nowait(None)
-        await director  # finish directing what was said before the stream ended
+        counts["shots"] = await director  # finish directing what was said before the stream ended
         if kept:
             await self._keep(project_id, tag, bytes(kept))
         ended = SessionEnded(counts["turns"], counts["shots"], heard.heard_any)

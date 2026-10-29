@@ -10,7 +10,11 @@ from frameteller.application.events import (
     CastProposed,
     JobUpdated,
     NoSpeechHeard,
+    ParagraphVoiced,
     ProjectEvent,
+    ReadingPaused,
+    ReadingResumed,
+    ScriptAccepted,
     SessionEnded,
     SessionFailed,
     ShotCreated,
@@ -19,6 +23,7 @@ from frameteller.application.events import (
     SupervisorFixed,
     SupervisorNeedsUser,
     SupervisorReviewed,
+    TeleprompterAdvanced,
     TranscriptUpdated,
     TurnFinished,
 )
@@ -43,6 +48,7 @@ from frameteller.domain import (
     Panel,
     PanelStyle,
     Project,
+    Script,
     SheetReview,
     Shot,
     SupervisorEntry,
@@ -311,6 +317,7 @@ class ShotOut(BaseModel):
     dialogue: str
     duration_ms: int
     source_turn_ids: list[str]
+    episode: int = Field(default=1, description="Shots are numbered through the story; the studio counts per episode.")
     panel: PanelOut | None = None
 
     @classmethod
@@ -325,6 +332,7 @@ class ShotOut(BaseModel):
             dialogue=s.dialogue,
             duration_ms=s.duration_ms,
             source_turn_ids=list(s.source_turn_ids),
+            episode=s.episode,
             panel=PanelOut.of(panel) if panel else None,
         )
 
@@ -359,16 +367,28 @@ class TurnOut(BaseModel):
     start_ms: int
     end_ms: int
     speaker: str | None
+    direction: str = Field(default="", description="From a script: the paragraph as written, with its cues.")
+    episode: int = 1
 
     @classmethod
     def of(cls, t: TranscriptTurn) -> TurnOut:
-        return cls(id=t.id, text=t.text, start_ms=t.start_ms, end_ms=t.end_ms, speaker=t.speaker)
+        return cls(
+            id=t.id,
+            text=t.text,
+            start_ms=t.start_ms,
+            end_ms=t.end_ms,
+            speaker=t.speaker,
+            direction=t.direction,
+            episode=t.episode,
+        )
 
 
 class NarrationOut(BaseModel):
     session: str
     duration_ms: int
     url: str
+    voice: str | None = Field(default=None, description="The synthesized voice that read it; null: the user's own.")
+    language: str | None = None
 
 
 class AnimaticOut(BaseModel):
@@ -411,7 +431,13 @@ class ProjectOut(BaseModel):
             turns=[TurnOut.of(t) for t in p.turns],
             shots=[ShotOut.of(s, p.panels.get(s.id)) for s in p.shots],
             narrations=[
-                NarrationOut(session=n.session, duration_ms=n.duration_ms, url=f"/media/{n.recording.key}")
+                NarrationOut(
+                    session=n.session,
+                    duration_ms=n.duration_ms,
+                    url=f"/media/{n.recording.key}",
+                    voice=n.voice,
+                    language=n.language,
+                )
                 for n in p.narrations.values()
             ],
             animatic=AnimaticOut.of(p.animatic) if p.animatic else None,
@@ -492,7 +518,9 @@ class CastReviewOut(BaseModel):
 class LimitsOut(BaseModel):
     projects_per_visitor_per_day: int
     narration_minutes_per_session: float
-    shots_per_project: int
+    shots_per_episode: int
+    episodes_per_script: int
+    script_characters: int
     renders_per_project: int
     exports_per_project: int
 
@@ -512,7 +540,9 @@ class StudioStatusOut(BaseModel):
             limits=LimitsOut(
                 projects_per_visitor_per_day=s.limits.projects_per_visitor_per_day,
                 narration_minutes_per_session=s.limits.narration_ms_per_session / 60_000,
-                shots_per_project=s.limits.shots_per_project,
+                shots_per_episode=s.limits.shots_per_episode,
+                episodes_per_script=s.limits.episodes_per_script,
+                script_characters=s.limits.script_characters,
                 renders_per_project=s.limits.renders_per_project,
                 exports_per_project=s.limits.exports_per_project,
             ),
@@ -636,6 +666,42 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
                 "fix_instruction": fix_instruction,
                 "revision": revision,
             }
+        case ScriptAccepted(script):
+            return script_message(script)
+        case TeleprompterAdvanced(paragraph):
+            return {"type": "teleprompter.advanced", "paragraph": paragraph}
+        case ParagraphVoiced(paragraph, episode, text, original, audio, duration_ms):
+            return {
+                "type": "script.voiced",
+                "paragraph": paragraph,
+                "episode": episode,
+                "text": text,
+                "original": original,
+                "audio_url": f"/media/{audio.key}",
+                "duration_ms": duration_ms,
+            }
+        case ReadingPaused(next_paragraph, next_episode, reason):
+            return {
+                "type": "script.paused",
+                "next_paragraph": next_paragraph,
+                "next_episode": next_episode,
+                "reason": reason,
+            }
+        case ReadingResumed(next_paragraph):
+            return {"type": "script.resumed", "next_paragraph": next_paragraph}
+
+
+def script_message(script: Script) -> dict[str, Any]:
+    return {
+        "type": "script.accepted",
+        "episodes": [
+            {
+                "number": e.number,
+                "paragraphs": [{"narration": b.narration, "direction": b.direction} for b in e.beats],
+            }
+            for e in script.episodes
+        ],
+    }
 
 
 def error_message(message: str, *, fatal: bool = False) -> dict[str, Any]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from frameteller.domain import Character, Issue, Shot, SupervisorEntry, TranscriptTurn
+from frameteller.domain import Character, Issue, MediaRef, Script, Shot, SupervisorEntry, TranscriptTurn
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +108,46 @@ class SupervisorNeedsUser:
     revision: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ScriptAccepted:
+    """A script was parsed for a teleprompter or "Read it to me" session: the paragraphs, as the server split them."""
+
+    script: Script
+
+
+@dataclass(frozen=True, slots=True)
+class TeleprompterAdvanced:
+    """The reader finished a paragraph (or pressed Space): `paragraph` is now current, counted through the script."""
+
+    paragraph: int
+
+
+@dataclass(frozen=True, slots=True)
+class ParagraphVoiced:
+    """ "Read it to me": a paragraph's narration is synthesized and stored, ready to play."""
+
+    paragraph: int
+    episode: int
+    text: str  # what the voice says (translated if the language is not the script's)
+    original: str
+    audio: MediaRef
+    duration_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingPaused:
+    """ "Read it to me" stopped before `next_paragraph`: the listener paused, or an episode's drafts are drawing."""
+
+    next_paragraph: int
+    next_episode: int
+    reason: str  # "user" | "episode"
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingResumed:
+    next_paragraph: int
+
+
 ProjectEvent = (
     TranscriptUpdated
     | TurnFinished
@@ -122,4 +162,9 @@ ProjectEvent = (
     | SupervisorReviewed
     | SupervisorFixed
     | SupervisorNeedsUser
+    | ScriptAccepted
+    | TeleprompterAdvanced
+    | ParagraphVoiced
+    | ReadingPaused
+    | ReadingResumed
 )

@@ -27,6 +27,7 @@ from frameteller.application.use_cases.requests import (
 from frameteller.application.use_cases.segment_object_at_point import SegmentObjectAtPoint, Selection
 from frameteller.application.use_cases.share import OpenShare, RevokeShare, SharePreview, ShareProject
 from frameteller.application.use_cases.status import GetStudioStatus, StudioStatus
+from frameteller.application.use_cases.story_director import StoryDirector, TranscriptCorrection
 from frameteller.application.use_cases.supervise import (
     AcceptReview,
     ApplySuggestedFix,
@@ -35,7 +36,7 @@ from frameteller.application.use_cases.supervise import (
     SupervisePanel,
 )
 from frameteller.application.use_cases.transcribe_instruction import MAX_DICTATION_MS, TranscribeInstruction
-from frameteller.application.use_cases.voice_session import Beat, ClientInput, RunVoiceSession, TranscriptCorrection
+from frameteller.application.use_cases.voice_session import Beat, ClientInput, RunVoiceSession
 
 __all__ = [
     "MAX_DICTATION_MS",
@@ -83,6 +84,7 @@ __all__ = [
     "SetContinuityChecks",
     "SharePreview",
     "ShareProject",
+    "StoryDirector",
     "StudioStatus",
     "SupervisePanel",
     "TranscribeInstruction",
