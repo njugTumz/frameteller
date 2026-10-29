@@ -38,6 +38,43 @@ The start screen asks "How you'll tell it" ([ADR 0015](docs/adr/0015-script-mode
 
 In both script modes each paragraph is one shot. Cues like "Wide shot." guide the camera. A line "Episode 2" starts a new episode with the same cast: shot numbers restart, and the storyboard groups shots by episode. In "Read it to me" the reading pauses after each episode until its draft panels are drawn ("Episode 2 is next"), then goes on by itself. The public demo takes scripts of up to 4,000 characters, 3 episodes and 12 shots per episode.
 
+## Captions
+
+Every animatic carries captions of what is actually said:
+
+- **Narrate and Teleprompter:** the transcript, with your Fix words corrections.
+- **Read it to me:** the script text.
+- **Another language:** the translation, from Muse Spark.
+
+Each shot's words are split into short lines of at most ten words, and each line is shown for its share of the shot by word count, so a line is never on screen longer than it is spoken. Captions come three ways:
+
+- **Burned in:** large, on a soft dark backing, inside the bottom safe area. On by default, and always on for gallery and share-page videos.
+- **A soft subtitle track** in the MP4 (`mov_text`, tagged with its language).
+- **A downloadable `.srt`.**
+
+"Captions in" picks another language for the captions alone. English, French, Spanish and Portuguese are burned in. Hindi and Arabic come as the soft track and `.srt`, which players draw with their own fonts.
+
+## Gallery
+
+https://app.frameteller.com/gallery ([ADR 0017](docs/adr/0017-gallery.md)):
+
+- **Submitting:** "Submit to gallery" sits next to Share. You agree to show your story and choose its audio: your voice, the Brandon voice instead, or none.
+- **The gallery's copy:** the gallery keeps its own copy of the animatic, with burned-in captions, so later edits never change it. You can withdraw it at any time, which deletes it.
+- **Moderation:** before anyone sees it, the continuity supervisor checks it against [`agents/gallery.md`](agents/gallery.md): no real people, no franchise characters, nothing sexual, hateful or violent, no personal details. A confident clean pass publishes it; anything doubtful waits for a person.
+- **Browsing:** the gallery shows Featured or Newest, by style. You play the animatic in place, give one heart per browser, and can report a card. Each card links to its share page, and published share pages are in the sitemap for search engines.
+
+## Built for a crowd
+
+The studio is sized for the launch and judging days ([ADR 0016](docs/adr/0016-capacity-and-fairness.md)):
+
+- **Global limits** on live voice sessions (24), Muse Image calls in flight (8), SAM calls (4) and exports (2). Past a limit you join a waiting room with your place in line and an estimate, never an error.
+- **Exports in their own lane,** at low CPU priority, so they never slow live sessions.
+- **Meta's 429s** back off and wait in line, and never trip the circuit breaker.
+- **A judge pass:** a private link gives judges their own lane, ahead of every line and outside the per-visitor caps, with a reserved daily budget the public can't use.
+- **A daily cap by date:** USD 25 on launch and judging days, USD 10 on other days.
+
+**Load test:** [`backend/scripts/load_test.py`](backend/scripts/load_test.py) runs the real app with fake Meta models, at real latencies, against 50 visitors who narrate, approve, draw and export. Every one of the 50 visits finished, REST calls stayed under 20 ms at p95, and a burst of 50 arrivals in 5 s seated 26 of them from the waiting room within 45 s. The server peaked at 1.97 cores and 0.93 GiB, so production runs on 2 vCPU / 4 GiB ([results](docs/load-test.md)).
+
 ## Continuity supervisor
 
 Reference sheets keep characters consistent, but not every time. In our own runs, a fox's reference sheet came back in the other character's green sweater, and a panel put him in a blue vest. The continuity supervisor is an agent that checks every frame so the creator doesn't have to ([ADR 0012](docs/adr/0012-continuity-supervisor.md)).
@@ -270,7 +307,11 @@ Everything in this repository was built during the event. The commit history is 
 - [x] Stray beats: a beat with no words or one stray word joins the next beat instead of becoming a shot
 - [x] Edits from our stored panel image, never a response chain that can expire ([ADR 0014](docs/adr/0014-edit-from-stored-images.md)); Glimmer reviews only while the warm-up script holds a lease
 - [x] Three ways to tell it: narrate, a teleprompter that follows your reading, or "Read it to me" with Azure Text-to-Speech voices in six languages; scripts with episodes and Fountain ([ADR 0015](docs/adr/0015-script-mode.md))
-- [ ] TODO: list features as they ship
+- [x] A judge pass with its own lane and budget, global capacity limits with a waiting room, a budget calendar, and a 50-visitor load test ([ADR 0016](docs/adr/0016-capacity-and-fairness.md), [results](docs/load-test.md))
+- [x] Captions on the animatic: burned in, a soft subtitle track and an `.srt`, optionally translated by Muse Spark
+- [x] The public gallery with consent, automatic moderation by rubric, hearts, reports, withdraw and an admin page ([ADR 0017](docs/adr/0017-gallery.md))
+- [x] "Try a sample story" for visitors without a microphone, a first-visit guide, storyboard progress, and `demo_check.py`
+- [x] Cast sheets that Muse Image's content filter refused for young characters now pass: ages are softened and the pose is clothed, with one safer retry, and a failed sheet names the character with Try again and Edit description
 
 ## License
 
