@@ -3,24 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Frameteller</title>
-<meta name="description" content="Say the scene, see the storyboard. Frameteller turns spoken stories into consistent storyboard panels and timed animatics. Live demo Nov 2.">
+<title>Frameteller: AI storyboard generator from your voice</title>
+<meta name="description" content="Frameteller is an AI storyboard generator: tell your story out loud and get consistent storyboard panels and an animatic timed to your own voice.">
+<link rel="canonical" href="https://frameteller.com/">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#EEF3F8">
 <meta property="og:title" content="Frameteller: say the scene, see the storyboard">
 <meta property="og:description" content="Talk through a story and get consistent storyboard panels and a timed animatic. Live demo Nov 2, 12:00 PM ET.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://gentle-stone-032869c0f.3.azurestaticapps.net/">
-<meta property="og:image" content="https://gentle-stone-032869c0f.3.azurestaticapps.net/og.png">
+<meta property="og:url" content="https://frameteller.com/">
+<meta property="og:site_name" content="Frameteller">
+<meta property="og:image" content="https://frameteller.com/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Say the scene. See the storyboard. Three storyboard panels of a girl in a yellow raincoat finding a glowing cat.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Frameteller: say the scene, see the storyboard">
 <meta name="twitter:description" content="Talk through a story and get consistent storyboard panels and a timed animatic. Live demo Nov 2, 12:00 PM ET.">
-<meta name="twitter:image" content="https://gentle-stone-032869c0f.3.azurestaticapps.net/og.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+<meta name="twitter:image" content="https://frameteller.com/og.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Frameteller",
+  "description": "Frameteller is an AI storyboard generator: tell your story out loud and get consistent storyboard panels and an animatic timed to your own voice.",
+  "url": "https://frameteller.com/",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Web",
+  "image": "https://frameteller.com/og.png",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+<link rel="preload" href="fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
+  /* Archivo (SIL Open Font License, fonts/OFL.txt), latin subset, self-hosted. "optional" never swaps after
+     first paint, so the big headline does not shift. */
+  @font-face {
+    font-family: "Archivo";
+    font-style: normal;
+    font-weight: 300 900;
+    font-stretch: 62% 125%;
+    font-display: optional;
+    src: url(fonts/archivo-latin.woff2) format("woff2");
+  }
   :root {
     --paper: #EEF3F8;
     --sheet: #F8FAFC;
@@ -102,6 +128,7 @@
     max-width: 12ch;
   }
   h1 .line2 { display: block; color: var(--blue); }
+  h1 .kicker { display: block; max-width: none; margin-bottom: 16px; font-size: 1.05rem; font-weight: 650; font-variation-settings: "wdth" 100; letter-spacing: 0; line-height: 1.3; color: var(--muted); }
   .lede { max-width: 58ch; margin: 24px 0 0; font-size: 1.2rem; color: var(--muted); }
   .lede strong { color: var(--ink); font-weight: 650; }
 
@@ -248,6 +275,14 @@
   .log p { margin: 0; color: var(--muted); max-width: 64ch; }
   .log-empty { color: var(--muted); }
 
+  /* Made by talking */
+  .made { display: grid; gap: 20px; grid-template-columns: 1fr; list-style: none; margin: 32px 0 0; padding: 0; }
+  @media (min-width: 760px) { .made { grid-template-columns: repeat(3, 1fr); } }
+  .made figure { margin: 0; }
+  .made img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; border: 2px solid var(--ink); background: var(--sheet); }
+  .made figcaption { margin-top: 8px; color: var(--muted); font-size: 0.95rem; }
+  .made .shot { margin-top: 0; }
+
   /* Footer */
   footer { margin-top: 96px; padding: 32px 0 48px; border-top: 1.5px solid var(--rule); color: var(--muted); font-size: 0.95rem; }
   footer .wrap { display: flex; padding-block: 0; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
@@ -261,7 +296,7 @@
 </head>
 <body>
   <header class="wrap top">
-    <a class="brand" href="#" aria-label="Frameteller home">
+    <a class="brand" href="/" aria-label="Frameteller home">
       <svg viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="6" width="24" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M8 11c2 2 2 4 0 6M12 9c3 3 3 7 0 10" fill="none" stroke="#4F8FD0" stroke-width="2.2" stroke-linecap="round"/><circle cx="20" cy="14" r="3" fill="#F2C230" stroke="currentColor" stroke-width="1.4"/></svg>
       <span data-config="name">Frameteller</span>
     </a>
@@ -270,7 +305,7 @@
 
   <main>
     <div class="wrap hero">
-      <h1>Say the scene.<span class="line2">See the storyboard.</span></h1>
+      <h1><span class="kicker">The AI storyboard generator that listens</span>Say the scene.<span class="line2">See the storyboard.</span></h1>
       <p class="lede">Talk through your story out loud. <strong>Frameteller turns it into storyboard panels where every character stays on model</strong>, lets you fix any panel by voice, and exports an animatic timed to your own narration.</p>
 
       <div class="sheet" aria-label="Example: three spoken lines and the storyboard panels drawn from them">
@@ -279,7 +314,7 @@
           <li class="beat">
             <figure>
               <div class="frame">
-                <svg viewBox="0 0 160 90" role="img" aria-label="Wide shot: a narrow alley in the rain, a small figure in a yellow raincoat">
+                <svg viewBox="0 0 160 90" role="img" aria-label="Storyboard sketch, wide shot: a narrow alley at night in heavy rain, with a small girl in a yellow raincoat far down the lane">
                   <g class="lines">
                     <path class="draw" pathLength="1" d="M0 4 L58 30 L58 66 L0 90"/>
                     <path class="draw" pathLength="1" d="M160 0 L104 28 L104 66 L160 90"/>
@@ -304,7 +339,7 @@
           <li class="beat">
             <figure>
               <div class="frame">
-                <svg viewBox="0 0 160 90" role="img" aria-label="Medium shot: the girl kneels beside a small glowing cat">
+                <svg viewBox="0 0 160 90" role="img" aria-label="Storyboard sketch, medium shot: the girl in the yellow raincoat kneels by a crate where a small cat glows in the dark">
                   <g class="lines">
                     <path class="draw" pathLength="1" d="M0 70 L160 66"/>
                     <path class="draw" pathLength="1" d="M0 10 L40 18 L40 66 M160 6 L132 14 L132 66"/>
@@ -329,7 +364,7 @@
           <li class="beat">
             <figure>
               <div class="frame">
-                <svg viewBox="0 0 160 90" role="img" aria-label="Close-up: the cat's glowing eyes, a yellow sleeve reaching in from the left">
+                <svg viewBox="0 0 160 90" role="img" aria-label="Storyboard sketch, close-up: the cat's eyes glow like lanterns as a yellow sleeve reaches in from the left">
                   <g class="fill-in">
                     <circle class="glow" cx="96" cy="50" r="38"/>
                     <circle class="glow" cx="96" cy="50" r="24"/>
@@ -394,13 +429,32 @@
     </section>
 
     <section class="wrap" aria-labelledby="how-title">
-      <h2 id="how-title">From your voice to an animatic</h2>
+      <h2 id="how-title">Voice to storyboard to animatic, in four steps</h2>
       <p class="intro">Four of Meta's models each do one job in the pipeline.</p>
       <ol class="steps">
         <li><h3>Speak</h3><p>Narrate the scene. <span class="model">Muse Voice Transcribe</span> writes it down live and tells co-directors apart.</p></li>
         <li><h3>Direct</h3><p><span class="model">Muse Spark</span> breaks your words into shots, framing and dialogue, and keeps one description per character.</p></li>
         <li><h3>Draw</h3><p><span class="model">Muse Image</span> draws each panel from character references, so faces and outfits stay consistent.</p></li>
         <li><h3>Refine and export</h3><p>Click anything in a panel and <span class="model">SAM 3.1</span> selects it to move or change. Export a timed animatic.</p></li>
+      </ol>
+    </section>
+
+    <section class="wrap" aria-labelledby="made-title">
+      <h2 id="made-title">Made by talking</h2>
+      <p class="intro">Three panels from <i>The Lighthouse</i>, a story we told out loud: no sketching, just narration. Ada and Pip the fox stay on model from the storm to the sunrise, and the animatic is timed to the narrator's voice.</p>
+      <ol class="made">
+        <li><figure>
+          <img src="img/lighthouse-shot-1-960.webp" srcset="img/lighthouse-shot-1-480.webp 480w, img/lighthouse-shot-1-720.webp 720w, img/lighthouse-shot-1-960.webp 960w" sizes="(min-width: 1120px) 340px, (min-width: 760px) 30vw, calc(100vw - 32px)" width="960" height="640" loading="lazy" decoding="async" alt="Pencil storyboard panel, wide shot: a tiny lighthouse on a rock with its lamp lit, as huge waves crash around it under a stormy sky.">
+          <figcaption><div class="shot"><b>Shot 1</b><span>Wide</span></div>A tiny lighthouse on a rock, waves crashing all around it.</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="img/lighthouse-shot-4-960.webp" srcset="img/lighthouse-shot-4-480.webp 480w, img/lighthouse-shot-4-720.webp 720w, img/lighthouse-shot-4-960.webp 960w" sizes="(min-width: 1120px) 340px, (min-width: 760px) 30vw, calc(100vw - 32px)" width="960" height="640" loading="lazy" decoding="async" alt="Pencil storyboard panel, medium shot: Ada, an older woman with silver hair in a green sweater, opens the window as Pip, a small soaked orange fox, tumbles in from the rain.">
+          <figcaption><div class="shot"><b>Shot 4</b><span>Medium</span></div>Ada opens the window and Pip tumbles inside, shaking off the rain.</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="img/lighthouse-shot-6-960.webp" srcset="img/lighthouse-shot-6-480.webp 480w, img/lighthouse-shot-6-720.webp 720w, img/lighthouse-shot-6-960.webp 960w" sizes="(min-width: 1120px) 340px, (min-width: 760px) 30vw, calc(100vw - 32px)" width="960" height="640" loading="lazy" decoding="async" alt="Pencil storyboard panel, wide shot: Ada and Pip the fox sit together on the rocks beside the lighthouse, watching the sun rise over a calm sea.">
+          <figcaption><div class="shot"><b>Shot 6</b><span>Wide</span></div>Ada and Pip watch the sunrise over the calm sea.</figcaption>
+        </figure></li>
       </ol>
     </section>
 
