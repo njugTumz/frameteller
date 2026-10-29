@@ -28,6 +28,7 @@ from tests.fakes import (
     FakeSpeechToText,
     FakeTranslator,
     FakeVideoRenderer,
+    InMemoryGalleryRepository,
     InMemoryMediaStorage,
     InMemoryProjectRepository,
     InMemoryRubricLibrary,
@@ -55,6 +56,7 @@ class Fakes:
     reviewer: FakeReviewer = field(default_factory=FakeReviewer)
     rubrics: InMemoryRubricLibrary = field(default_factory=InMemoryRubricLibrary)
     translator: FakeTranslator = field(default_factory=FakeTranslator)
+    gallery: InMemoryGalleryRepository = field(default_factory=InMemoryGalleryRepository)
     ready: bool = True
     tts: bool = True  # Text-to-Speech configured ("Read it to me" offered)
 
@@ -107,6 +109,7 @@ def build(settings: Settings, f: Fakes) -> Container:
         quota=f.quota,
         synthesizer=f.synthesis if f.tts else None,
         translator=f.translator,
+        gallery=f.gallery,
     )
 
 

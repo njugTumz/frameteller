@@ -322,6 +322,142 @@
         "title": "ErrorOut",
         "type": "object"
       },
+      "GalleryCardOut": {
+        "properties": {
+          "cover_url": {
+            "title": "Cover Url",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "episodes": {
+            "title": "Episodes",
+            "type": "integer"
+          },
+          "featured": {
+            "title": "Featured",
+            "type": "boolean"
+          },
+          "hearted": {
+            "description": "This browser already gave it a heart.",
+            "title": "Hearted",
+            "type": "boolean"
+          },
+          "hearts": {
+            "title": "Hearts",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "share_url": {
+            "description": "The storyboard's share page.",
+            "title": "Share Url",
+            "type": "string"
+          },
+          "shots": {
+            "title": "Shots",
+            "type": "integer"
+          },
+          "style": {
+            "title": "Style",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "video_url": {
+            "title": "Video Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "style",
+          "episodes",
+          "shots",
+          "duration_ms",
+          "cover_url",
+          "video_url",
+          "share_url",
+          "hearts",
+          "hearted",
+          "featured",
+          "published_at"
+        ],
+        "title": "GalleryCardOut",
+        "type": "object"
+      },
+      "GalleryPageOut": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/GalleryCardOut"
+            },
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "title": "GalleryPageOut",
+        "type": "object"
+      },
+      "GalleryReportRequest": {
+        "properties": {
+          "reason": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "GalleryReportRequest",
+        "type": "object"
+      },
+      "GallerySubmitRequest": {
+        "properties": {
+          "audio": {
+            "default": "mine",
+            "description": "\"mine\": the kept narration; \"voice\": the Brandon voice instead; \"none\": silent.",
+            "enum": [
+              "mine",
+              "voice",
+              "none"
+            ],
+            "title": "Audio",
+            "type": "string"
+          },
+          "consent": {
+            "description": "The creator agreed to show this storyboard publicly in the gallery.",
+            "title": "Consent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "consent"
+        ],
+        "title": "GallerySubmitRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -333,6 +469,24 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HeartOut": {
+        "properties": {
+          "hearted": {
+            "title": "Hearted",
+            "type": "boolean"
+          },
+          "hearts": {
+            "title": "Hearts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hearts",
+          "hearted"
+        ],
+        "title": "HeartOut",
         "type": "object"
       },
       "IssueOut": {
@@ -637,6 +791,64 @@
         "title": "MaskOut",
         "type": "object"
       },
+      "MyGalleryEntryOut": {
+        "description": "The creator's view of their entry.",
+        "properties": {
+          "audio": {
+            "enum": [
+              "mine",
+              "voice",
+              "none"
+            ],
+            "title": "Audio",
+            "type": "string"
+          },
+          "featured": {
+            "title": "Featured",
+            "type": "boolean"
+          },
+          "hearts": {
+            "title": "Hearts",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why it is waiting, hidden or failed, in plain words.",
+            "title": "Note",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "checking",
+              "published",
+              "pending",
+              "hidden",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "note",
+          "audio",
+          "hearts",
+          "featured",
+          "submitted_at"
+        ],
+        "title": "MyGalleryEntryOut",
+        "type": "object"
+      },
       "NarrationOut": {
         "properties": {
           "duration_ms": {
@@ -790,6 +1002,14 @@
         ],
         "title": "PanelOut",
         "type": "object"
+      },
+      "PanelStyle": {
+        "enum": [
+          "pencil",
+          "paper_cutout"
+        ],
+        "title": "PanelStyle",
+        "type": "string"
       },
       "ProjectCreate": {
         "properties": {
@@ -1657,6 +1877,272 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/gallery": {
+      "get": {
+        "operationId": "gallery_gallery_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "newest",
+              "enum": [
+                "featured",
+                "newest"
+              ],
+              "title": "View",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "style",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PanelStyle"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Style"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GalleryPageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gallery",
+        "tags": [
+          "gallery"
+        ]
+      }
+    },
+    "/gallery/{entry_id}/cover.webp": {
+      "get": {
+        "operationId": "gallery_cover_gallery__entry_id__cover_webp_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gallery Cover",
+        "tags": [
+          "gallery"
+        ]
+      }
+    },
+    "/gallery/{entry_id}/heart": {
+      "post": {
+        "description": "One heart per browser: a second one changes nothing.",
+        "operationId": "heart_gallery__entry_id__heart_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Heart",
+        "tags": [
+          "gallery"
+        ]
+      }
+    },
+    "/gallery/{entry_id}/report": {
+      "post": {
+        "description": "Flag an entry for the admin. Enough reports from different visitors hide it until the admin decides.",
+        "operationId": "report_gallery__entry_id__report_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GalleryReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report",
+        "tags": [
+          "gallery"
+        ]
+      }
+    },
+    "/gallery/{entry_id}/video.mp4": {
+      "get": {
+        "operationId": "gallery_video_gallery__entry_id__video_mp4_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gallery Video",
+        "tags": [
+          "gallery"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "description": "The process is up.",
@@ -2754,6 +3240,166 @@
         "summary": "Storyboard Pdf",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/gallery": {
+      "delete": {
+        "description": "Take it out of the gallery: the entry, its video and cover are deleted.",
+        "operationId": "withdraw_from_gallery_projects__project_id__gallery_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw From Gallery",
+        "tags": [
+          "gallery"
+        ]
+      },
+      "get": {
+        "operationId": "my_gallery_entry_projects__project_id__gallery_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyGalleryEntryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Gallery Entry",
+        "tags": [
+          "gallery"
+        ]
+      },
+      "post": {
+        "description": "Submit with consent. The gallery's copy renders and is checked in the background (job.updated\ngallery_submission); clean ones are published, doubtful ones wait for a person.",
+        "operationId": "submit_to_gallery_projects__project_id__gallery_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GallerySubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyGalleryEntryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Submit To Gallery",
+        "tags": [
+          "gallery"
         ]
       }
     },

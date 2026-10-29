@@ -4,6 +4,97 @@
  */
 
 export interface paths {
+    "/gallery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gallery */
+        get: operations["gallery_gallery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gallery/{entry_id}/cover.webp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gallery Cover */
+        get: operations["gallery_cover_gallery__entry_id__cover_webp_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gallery/{entry_id}/heart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Heart
+         * @description One heart per browser: a second one changes nothing.
+         */
+        post: operations["heart_gallery__entry_id__heart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gallery/{entry_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report
+         * @description Flag an entry for the admin. Enough reports from different visitors hide it until the admin decides.
+         */
+        post: operations["report_gallery__entry_id__report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gallery/{entry_id}/video.mp4": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gallery Video */
+        get: operations["gallery_video_gallery__entry_id__video_mp4_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -284,6 +375,32 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/gallery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Gallery Entry */
+        get: operations["my_gallery_entry_projects__project_id__gallery_get"];
+        put?: never;
+        /**
+         * Submit To Gallery
+         * @description Submit with consent. The gallery's copy renders and is checked in the background (job.updated
+         *     gallery_submission); clean ones are published, doubtful ones wait for a person.
+         */
+        post: operations["submit_to_gallery_projects__project_id__gallery_post"];
+        /**
+         * Withdraw From Gallery
+         * @description Take it out of the gallery: the entry, its video and cover are deleted.
+         */
+        delete: operations["withdraw_from_gallery_projects__project_id__gallery_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -785,10 +902,80 @@ export interface components {
         ErrorOut: {
             error: components["schemas"]["ErrorBody"];
         };
+        /** GalleryCardOut */
+        GalleryCardOut: {
+            /** Cover Url */
+            cover_url: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Episodes */
+            episodes: number;
+            /** Featured */
+            featured: boolean;
+            /**
+             * Hearted
+             * @description This browser already gave it a heart.
+             */
+            hearted: boolean;
+            /** Hearts */
+            hearts: number;
+            /** Id */
+            id: string;
+            /** Published At */
+            published_at: string | null;
+            /**
+             * Share Url
+             * @description The storyboard's share page.
+             */
+            share_url: string;
+            /** Shots */
+            shots: number;
+            /** Style */
+            style: string;
+            /** Title */
+            title: string;
+            /** Video Url */
+            video_url: string;
+        };
+        /** GalleryPageOut */
+        GalleryPageOut: {
+            /** Entries */
+            entries: components["schemas"]["GalleryCardOut"][];
+        };
+        /** GalleryReportRequest */
+        GalleryReportRequest: {
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /** GallerySubmitRequest */
+        GallerySubmitRequest: {
+            /**
+             * Audio
+             * @description "mine": the kept narration; "voice": the Brandon voice instead; "none": silent.
+             * @default mine
+             * @enum {string}
+             */
+            audio: "mine" | "voice" | "none";
+            /**
+             * Consent
+             * @description The creator agreed to show this storyboard publicly in the gallery.
+             */
+            consent: boolean;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HeartOut */
+        HeartOut: {
+            /** Hearted */
+            hearted: boolean;
+            /** Hearts */
+            hearts: number;
         };
         /** IssueOut */
         IssueOut: {
@@ -931,6 +1118,38 @@ export interface components {
             /** Label */
             label: string;
         };
+        /**
+         * MyGalleryEntryOut
+         * @description The creator's view of their entry.
+         */
+        MyGalleryEntryOut: {
+            /**
+             * Audio
+             * @enum {string}
+             */
+            audio: "mine" | "voice" | "none";
+            /** Featured */
+            featured: boolean;
+            /** Hearts */
+            hearts: number;
+            /** Id */
+            id: string;
+            /**
+             * Note
+             * @description Why it is waiting, hidden or failed, in plain words.
+             */
+            note: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "checking" | "published" | "pending" | "hidden" | "failed";
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+        };
         /** NarrationOut */
         NarrationOut: {
             /** Duration Ms */
@@ -987,6 +1206,11 @@ export interface components {
             /** Width */
             width: number | null;
         };
+        /**
+         * PanelStyle
+         * @enum {string}
+         */
+        PanelStyle: "pencil" | "paper_cutout";
         /** ProjectCreate */
         ProjectCreate: {
             /**
@@ -1378,6 +1602,196 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    gallery_gallery_get: {
+        parameters: {
+            query?: {
+                view?: "featured" | "newest";
+                style?: components["schemas"]["PanelStyle"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gallery_cover_gallery__entry_id__cover_webp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heart_gallery__entry_id__heart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_gallery__entry_id__report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GalleryReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gallery_video_gallery__entry_id__video_mp4_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     healthz_healthz_get: {
         parameters: {
             query?: never;
@@ -2169,6 +2583,128 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_gallery_entry_projects__project_id__gallery_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyGalleryEntryOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_to_gallery_projects__project_id__gallery_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GallerySubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyGalleryEntryOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    withdraw_from_gallery_projects__project_id__gallery_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -20,3 +20,11 @@ def visitor_id(connection: HTTPConnection) -> str:
     browser = connection.headers.get(VISITOR_HEADER, "")
     browser = browser if _BROWSER_ID.match(browser) else ""
     return hashlib.sha256(f"{ip}|{browser}".encode()).hexdigest()[:32]
+
+
+def browser_key(connection: HTTPConnection) -> str:
+    """One browser, across networks (gallery hearts): its id, or its IP when it sent none. Hashed."""
+    browser = connection.headers.get(VISITOR_HEADER, "")
+    if not _BROWSER_ID.match(browser):
+        browser = "ip:" + (connection.client.host if connection.client else "unknown")
+    return hashlib.sha256(f"browser|{browser}".encode()).hexdigest()[:32]

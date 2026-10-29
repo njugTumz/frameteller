@@ -17,6 +17,14 @@ from frameteller.domain.errors import (
     UnknownTurnError,
 )
 from frameteller.domain.exports import AnimaticExport
+from frameteller.domain.gallery import (
+    REPORTS_TO_HIDE,
+    EntryStatus,
+    Gallery,
+    GalleryAudio,
+    GalleryEntry,
+    Report,
+)
 from frameteller.domain.media import MediaRef
 from frameteller.domain.narration import Narration, session_of
 from frameteller.domain.panels import (
@@ -52,6 +60,7 @@ from frameteller.domain.transcript import TranscriptTurn
 __all__ = [
     "END_MS",
     "MIN_SHOT_MS",
+    "REPORTS_TO_HIDE",
     "TITLE_MS",
     "Animatic",
     "AnimaticClip",
@@ -68,8 +77,12 @@ __all__ = [
     "Cue",
     "Decision",
     "DomainError",
+    "EntryStatus",
     "Episode",
     "Framing",
+    "Gallery",
+    "GalleryAudio",
+    "GalleryEntry",
     "InvalidValueError",
     "Issue",
     "MaskBitmap",
@@ -86,6 +99,7 @@ __all__ = [
     "PanelStyle",
     "Point",
     "Project",
+    "Report",
     "RevisionOrderError",
     "Script",
     "ScriptBeat",

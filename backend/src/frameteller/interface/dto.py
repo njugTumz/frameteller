@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -44,6 +45,9 @@ from frameteller.domain import (
     Box,
     CanvasTransform,
     Character,
+    EntryStatus,
+    GalleryAudio,
+    GalleryEntry,
     MediaRef,
     ObjectMask,
     Outcome,
@@ -57,6 +61,7 @@ from frameteller.domain import (
     TranscriptTurn,
     Verdict,
 )
+from frameteller.domain.gallery import MAX_REPORT_CHARS
 
 Id = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -816,3 +821,134 @@ def script_message(script: Script) -> dict[str, Any]:
 
 def error_message(message: str, *, fatal: bool = False) -> dict[str, Any]:
     return {"type": "error", "message": message, "fatal": fatal}
+
+
+# ---- the gallery (ADR 0017) ----
+
+
+class GallerySubmitRequest(BaseModel):
+    consent: bool = Field(description="The creator agreed to show this storyboard publicly in the gallery.")
+    audio: GalleryAudio = Field(
+        default="mine", description='"mine": the kept narration; "voice": the Brandon voice instead; "none": silent.'
+    )
+
+
+class MyGalleryEntryOut(BaseModel):
+    """The creator's view of their entry."""
+
+    id: str
+    status: Literal["checking", "published", "pending", "hidden", "failed"]
+    note: str = Field(description="Why it is waiting, hidden or failed, in plain words.")
+    audio: GalleryAudio
+    hearts: int
+    featured: bool
+    submitted_at: datetime
+
+    @classmethod
+    def of(cls, e: GalleryEntry) -> MyGalleryEntryOut:
+        note = e.note if e.status in (EntryStatus.FAILED, EntryStatus.PENDING) else ""
+        if e.status is EntryStatus.PENDING:
+            note = "A person will look at it before it appears in the gallery."  # never the reviewer's own words
+        return cls(
+            id=e.id,
+            status=e.status.value,
+            note=note,
+            audio=e.audio,
+            hearts=len(e.hearts),
+            featured=e.featured,
+            submitted_at=e.submitted_at,
+        )
+
+
+class GalleryCardOut(BaseModel):
+    id: str
+    title: str
+    style: str
+    episodes: int
+    shots: int
+    duration_ms: int
+    cover_url: str
+    video_url: str
+    share_url: str = Field(description="The storyboard's share page.")
+    hearts: int
+    hearted: bool = Field(description="This browser already gave it a heart.")
+    featured: bool
+    published_at: datetime | None
+
+    @classmethod
+    def of(cls, e: GalleryEntry, app_url: str, browser: str) -> GalleryCardOut:
+        return cls(
+            id=e.id,
+            title=e.title,
+            style=e.style,
+            episodes=e.episodes,
+            shots=e.shots,
+            duration_ms=e.duration_ms,
+            cover_url=f"/gallery/{e.id}/cover.webp",
+            video_url=f"/gallery/{e.id}/video.mp4",
+            share_url=f"{app_url}/s/{e.share_token}",
+            hearts=len(e.hearts),
+            hearted=browser in e.hearts,
+            featured=e.featured,
+            published_at=e.published_at,
+        )
+
+
+class GalleryPageOut(BaseModel):
+    entries: list[GalleryCardOut]
+
+
+class HeartOut(BaseModel):
+    hearts: int
+    hearted: bool
+
+
+class GalleryReportRequest(BaseModel):
+    reason: str = Field(default="", max_length=MAX_REPORT_CHARS)
+
+
+class GalleryReportOut(BaseModel):
+    reason: str
+    at: datetime
+
+
+class AdminGalleryEntryOut(BaseModel):
+    id: str
+    project_id: str
+    title: str
+    style: str
+    status: str
+    note: str
+    reviewed_by: str
+    audio: str
+    featured: bool
+    hearts: int
+    reports: list[GalleryReportOut]
+    submitted_at: datetime
+    published_at: datetime | None
+    share_token: str
+    has_video: bool
+
+    @classmethod
+    def of(cls, e: GalleryEntry) -> AdminGalleryEntryOut:
+        return cls(
+            id=e.id,
+            project_id=e.project_id,
+            title=e.title,
+            style=e.style,
+            status=e.status.value,
+            note=e.note,
+            reviewed_by=e.reviewed_by,
+            audio=e.audio,
+            featured=e.featured,
+            hearts=len(e.hearts),
+            reports=[GalleryReportOut(reason=r.reason, at=r.at) for r in e.reports],
+            submitted_at=e.submitted_at,
+            published_at=e.published_at,
+            share_token=e.share_token,
+            has_video=e.video is not None,
+        )
+
+
+class AdminGalleryAction(BaseModel):
+    action: Literal["publish", "hide", "feature", "unfeature"]

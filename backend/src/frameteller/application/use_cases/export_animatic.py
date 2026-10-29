@@ -6,6 +6,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -20,25 +21,27 @@ from frameteller.application.ports import (
     JobQueuePort,
     MediaStoragePort,
     ProjectRepository,
+    SpeechSynthesisPort,
     TranslatorPort,
     VideoRendererPort,
 )
 from frameteller.application.use_cases.requests import JobTicket
-from frameteller.domain import TITLE_MS, Animatic, AnimaticExport, Project, caption_cues, to_srt
+from frameteller.domain import TITLE_MS, Animatic, AnimaticExport, AudioCut, MediaRef, Project, caption_cues, to_srt
 
 log = logging.getLogger("frameteller.export")
 
 PROGRESS_STEP = 0.05  # publish progress every 5% of the timeline
 # Pillow's bundled font draws Latin script only: other captions are a soft track and an .srt (the player's fonts).
 BURNABLE = ("en", "fr", "es", "pt")
-Audio = Literal["mine", "none"]
+Audio = Literal["mine", "voice", "none"]
+GALLERY_VOICE = "en-US-BrandonMultilingualNeural"  # "the Brandon voice instead": speaks every language we offer
 
 
 @dataclass(frozen=True, slots=True)
 class AnimaticOptions:
     subtitles: bool = True  # burn the captions into the picture
     caption_language: str | None = None  # a locale to translate the captions into; None: as spoken
-    audio: Audio = "mine"  # the kept narration, or a silent animatic
+    audio: Audio = "mine"  # the kept narration, the Brandon voice reading the captions, or silent
 
     def payload(self) -> dict[str, str]:
         return {
@@ -49,7 +52,8 @@ class AnimaticOptions:
 
     @classmethod
     def of(cls, payload: dict[str, str]) -> AnimaticOptions:
-        audio: Audio = "none" if payload.get("audio") == "none" else "mine"
+        raw = payload.get("audio")
+        audio: Audio = "none" if raw == "none" else "voice" if raw == "voice" else "mine"
         return cls(bool(payload.get("subtitles")), payload.get("caption_language") or None, audio)
 
 
@@ -61,6 +65,10 @@ def animatic_digest(animatic: Animatic, options: AnimaticOptions) -> str:
 def spoken_language(project: Project) -> str:
     """What the turns are in: a voice's language when one read the story, else English."""
     return next((n.language for n in project.narrations.values() if n.language), "en-US")
+
+
+def _silent(animatic: Animatic) -> Animatic:
+    return dataclasses.replace(animatic, clips=tuple(dataclasses.replace(c, audio=()) for c in animatic.clips))
 
 
 class RequestAnimaticExport:
@@ -93,46 +101,24 @@ class ExportAnimatic:
         events: EventPublisher,
         translator: TranslatorPort | None = None,
         budget: BudgetGuard | None = None,
+        synthesizer: SpeechSynthesisPort | None = None,
     ) -> None:
         self._repo, self._storage, self._renderer, self._events = repo, storage, renderer, events
-        self._translator, self._budget = translator, budget
+        self._translator, self._budget, self._synthesizer = translator, budget, synthesizer
 
     async def execute(
         self, project_id: str, options: AnimaticOptions | None = None, *, job_key: str = ""
     ) -> AnimaticExport:
         options = options or AnimaticOptions()
         project = await self._repo.get(project_id)
-        animatic = Animatic.from_project(project)
-        digest = animatic_digest(animatic, options)  # before the audio is dropped: the request's own key
-        if options.audio == "none":
-            animatic = dataclasses.replace(
-                animatic, clips=tuple(dataclasses.replace(c, audio=()) for c in animatic.clips)
-            )
-        frames = {c.shot_id: await self._storage.get(c.image) for c in animatic.clips}
-        recordings = {}
-        for cut in (cut for clip in animatic.clips for cut in clip.audio):
-            if cut.recording.key not in recordings:
-                recordings[cut.recording.key] = await self._storage.get(cut.recording)
-        language, texts = await self._captions(project_id, animatic, spoken_language(project), options)
-        cues = tuple(caption_cues(animatic, texts, offset_ms=TITLE_MS))
-        burn = options.subtitles and language.split("-")[0].lower() in BURNABLE
-        track = CaptionTrack(cues, language, burn) if cues else None
-        reported = 0.0
+        digest = animatic_digest(Animatic.from_project(project), options)
 
         async def on_progress(done: float) -> None:
-            nonlocal reported
-            if done - reported >= PROGRESS_STEP and done < 1:
-                reported = done
-                await self._events.publish(
-                    project_id, JobUpdated(EXPORT_ANIMATIC, job_key, "running", progress=round(done, 2))
-                )
+            await self._events.publish(
+                project_id, JobUpdated(EXPORT_ANIMATIC, job_key, "running", progress=round(done, 2))
+            )
 
-        video = await self._renderer.render(animatic, frames, recordings, captions=track, on_progress=on_progress)
-        base = f"projects/{project_id}/exports/animatic-{digest}"
-        ref = await self._storage.put(f"{base}.mp4", video, "video/mp4")
-        srt = await self._storage.put(f"{base}.srt", to_srt(cues).encode(), "application/x-subrip") if cues else None
-        translated = language if options.caption_language else ""
-        export = AnimaticExport(ref, animatic.duration_ms, burn, animatic.has_voice, srt, translated)
+        export = await self.render(project, options, f"projects/{project_id}/exports/animatic-{digest}", on_progress)
 
         def apply(project: Project) -> AnimaticExport | None:
             previous = project.animatic
@@ -140,11 +126,70 @@ class ExportAnimatic:
             return previous
 
         previous = await self._repo.update(project_id, apply)
-        if previous is not None and previous.video != ref:  # one animatic per project
+        if previous is not None and previous.video != export.video:  # one animatic per project
             await self._storage.delete(previous.video)
-            if previous.captions is not None and previous.captions != srt:
+            if previous.captions is not None and previous.captions != export.captions:
                 await self._storage.delete(previous.captions)
         return export
+
+    async def render(
+        self,
+        project: Project,
+        options: AnimaticOptions,
+        base: str,
+        on_progress: Callable[[float], Awaitable[None]] | None = None,
+    ) -> AnimaticExport:
+        """Render and store `{base}.mp4` and `{base}.srt`, without recording them on the project (the gallery's
+        copy uses this too)."""
+        animatic = Animatic.from_project(project)
+        language = spoken_language(project)
+        if options.audio == "none":
+            animatic = _silent(animatic)
+        elif options.audio == "voice":
+            animatic = await self._voiced(project.id, animatic, language, base)
+        frames = {c.shot_id: await self._storage.get(c.image) for c in animatic.clips}
+        recordings = {}
+        for cut in (cut for clip in animatic.clips for cut in clip.audio):
+            if cut.recording.key not in recordings:
+                recordings[cut.recording.key] = await self._storage.get(cut.recording)
+        language, texts = await self._captions(project.id, animatic, language, options)
+        cues = tuple(caption_cues(animatic, texts, offset_ms=TITLE_MS))
+        burn = options.subtitles and language.split("-")[0].lower() in BURNABLE
+        track = CaptionTrack(cues, language, burn) if cues else None
+        reported = 0.0
+
+        async def progress(done: float) -> None:
+            nonlocal reported
+            if on_progress is not None and done - reported >= PROGRESS_STEP and done < 1:
+                reported = done
+                await on_progress(done)
+
+        video = await self._renderer.render(animatic, frames, recordings, captions=track, on_progress=progress)
+        if options.audio == "voice":  # the voice is in the video now
+            for key in recordings:
+                await self._storage.delete(MediaRef(key))
+        ref = await self._storage.put(f"{base}.mp4", video, "video/mp4")
+        srt = await self._storage.put(f"{base}.srt", to_srt(cues).encode(), "application/x-subrip") if cues else None
+        translated = language if options.caption_language else ""
+        return AnimaticExport(ref, animatic.duration_ms, burn, animatic.has_voice, srt, translated)
+
+    async def _voiced(self, project_id: str, animatic: Animatic, language: str, base: str) -> Animatic:
+        """Each shot's words read by the Brandon voice, cut to the shot. Silent without Text-to-Speech."""
+        if self._synthesizer is None:
+            return _silent(animatic)
+        clips = []
+        for clip in animatic.clips:
+            if not clip.caption.strip():
+                clips.append(dataclasses.replace(clip, audio=()))
+                continue
+            if self._budget is not None:
+                await self._budget.charge(project_id, costs.TTS_PER_CHARACTER * len(clip.caption), "gallery voice")
+            spoken = await self._synthesizer.synthesize(
+                clip.caption, GALLERY_VOICE, language, f"{base}-voice/{clip.shot_id}.wav"
+            )
+            cut = AudioCut(spoken.ref, 0, min(spoken.duration_ms, clip.duration_ms))
+            clips.append(dataclasses.replace(clip, audio=(cut,)))
+        return dataclasses.replace(animatic, clips=tuple(clips))
 
     async def _captions(
         self, project_id: str, animatic: Animatic, spoken: str, options: AnimaticOptions

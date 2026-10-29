@@ -23,8 +23,9 @@ from azure.storage.blob import BlobServiceClient, ContainerClient, ContentSettin
 
 from frameteller.application.errors import ProjectNotFoundError
 from frameteller.application.ports import UsageRecord
-from frameteller.domain import MediaRef, Project
+from frameteller.domain import Gallery, MediaRef, Project
 from frameteller.infrastructure.config import Settings
+from frameteller.infrastructure.local.gallery import gallery_from_dict, gallery_to_dict
 from frameteller.infrastructure.local.serialization import project_from_dict, project_to_dict
 from frameteller.infrastructure.storage_keys import check_key
 
@@ -190,6 +191,58 @@ class BlobProjectRepository:
                 etag=etag,
                 match_condition=MatchConditions.IfNotModified,
             )
+
+
+class BlobGalleryRepository:
+    """GalleryRepository as one JSON blob (gallery/index.json) next to the project documents, with ETags."""
+
+    NAME = "gallery/index.json"
+
+    def __init__(self, container: ContainerClient) -> None:
+        self._container = container
+        self._lock = asyncio.Lock()
+
+    async def _load(self) -> tuple[Gallery, str | None]:
+        blob = self._container.get_blob_client(self.NAME)
+
+        def download() -> tuple[bytes, str]:
+            stream = blob.download_blob()
+            return stream.readall(), str(stream.properties.etag)
+
+        try:
+            data, etag = await asyncio.to_thread(download)
+        except ResourceNotFoundError:
+            return Gallery(), None
+        return gallery_from_dict(json.loads(data)), etag
+
+    async def get(self) -> Gallery:
+        gallery, _ = await self._load()
+        return gallery
+
+    async def update[T](self, change: Callable[[Gallery], T]) -> T:
+        blob = self._container.get_blob_client(self.NAME)
+        settings = ContentSettings(content_type="application/json")
+        async with self._lock:
+            for _ in range(MAX_UPDATE_ATTEMPTS):
+                gallery, etag = await self._load()
+                result = change(gallery)
+                data = json.dumps(gallery_to_dict(gallery), ensure_ascii=False).encode()
+                try:
+                    if etag is None:  # the first entry: fails if someone else created it meanwhile
+                        await asyncio.to_thread(blob.upload_blob, data, overwrite=False, content_settings=settings)
+                    else:
+                        await asyncio.to_thread(
+                            blob.upload_blob,
+                            data,
+                            overwrite=True,
+                            content_settings=settings,
+                            etag=etag,
+                            match_condition=MatchConditions.IfNotModified,
+                        )
+                    return result
+                except (ResourceModifiedError, ResourceExistsError):
+                    continue  # another writer saved first: apply the change to their version
+            raise ProjectConflictError(f"the gallery kept changing; gave up after {MAX_UPDATE_ATTEMPTS} tries")
 
 
 class BlobSpendLedger:

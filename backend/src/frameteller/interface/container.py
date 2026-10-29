@@ -17,6 +17,7 @@ from frameteller.application.ports import (
     Clock,
     CompositorPort,
     DirectorPort,
+    GalleryRepository,
     IdGenerator,
     ImageGenerationPort,
     Job,
@@ -78,8 +79,19 @@ from frameteller.application.use_cases import (
     SupervisePanel,
     TranscribeInstruction,
 )
+from frameteller.application.use_cases.gallery import (
+    BrowseGallery,
+    GalleryEntryOfProject,
+    HeartGalleryEntry,
+    ModerateGallery,
+    ProcessGallerySubmission,
+    ReportGalleryEntry,
+    SubmitToGallery,
+    WithdrawFromGallery,
+)
 from frameteller.infrastructure.azure import (
     AzureBlobMediaStorage,
+    BlobGalleryRepository,
     BlobProjectRepository,
     BlobShareIndex,
     BlobSpendLedger,
@@ -94,6 +106,7 @@ from frameteller.infrastructure.imaging.share_preview import PillowSharePreview
 from frameteller.infrastructure.imaging.storyboard_pdf import PillowStoryboardSheet
 from frameteller.infrastructure.jobs import Handler, InProcessJobQueue, JobStatus
 from frameteller.infrastructure.local import (
+    FileGalleryRepository,
     FileShareIndex,
     FileSpendLedger,
     FileVisitorQuota,
@@ -162,6 +175,14 @@ class Container:
     read_script: ReadScript | None = None
     list_voices: ListVoices | None = None
     preview_voice: PreviewVoice | None = None
+    # The gallery (ADR 0017).
+    submit_to_gallery: SubmitToGallery | None = None
+    gallery_entry: GalleryEntryOfProject | None = None
+    withdraw_from_gallery: WithdrawFromGallery | None = None
+    browse_gallery: BrowseGallery | None = None
+    heart_gallery: HeartGalleryEntry | None = None
+    report_gallery: ReportGalleryEntry | None = None
+    moderate_gallery: ModerateGallery | None = None
 
 
 def wire(
@@ -186,6 +207,7 @@ def wire(
     glimmer_lease: GlimmerLease | None = None,
     synthesizer: SpeechSynthesisPort | None = None,
     translator: TranslatorPort | None = None,
+    gallery: GalleryRepository | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
@@ -232,7 +254,8 @@ def wire(
         handlers,
         concurrency=settings.capacity_jobs,
         on_status=on_status,
-        lanes={job_kinds.EXPORT_ANIMATIC: capacity.exports},  # exports never hold up drawing
+        # Exports (and the gallery's copy) never hold up drawing.
+        lanes={job_kinds.EXPORT_ANIMATIC: capacity.exports, job_kinds.GALLERY_SUBMISSION: capacity.exports},
         on_waiting=on_waiting,
     )
 
@@ -264,7 +287,7 @@ def wire(
     handlers[job_kinds.COMPOSE_PANEL] = handler(
         lambda p: compose_panel.execute(p["project_id"], p["shot_id"], int(p["revision"]))
     )
-    export_animatic = ExportAnimatic(repo, storage, renderer, hub, translator, budget)
+    export_animatic = ExportAnimatic(repo, storage, renderer, hub, translator, budget, synthesizer)
     handlers[job_kinds.EXPORT_ANIMATIC] = handler(
         lambda p: export_animatic.execute(p["project_id"], AnimaticOptions.of(p), job_key=p["job_key"])
     )
@@ -284,6 +307,22 @@ def wire(
     handlers[job_kinds.REVIEW_SHEET] = handler(
         lambda p: review_sheet.execute(p["project_id"], p["character_id"], p["reference"])
     )
+
+    share_project = ShareProject(repo, shares, ids)
+    share_sheet = PillowSharePreview()
+    submit = entry = withdraw = browse = heart = report = moderate = None
+    if gallery is not None:
+        process = ProcessGallerySubmission(
+            repo, gallery, storage, export_animatic, share_sheet, reviewer, rubrics, budget, share_project, clock
+        )
+        handlers[job_kinds.GALLERY_SUBMISSION] = handler(lambda p: process.execute(p["project_id"], p["entry_id"]))
+        voice = synthesizer is not None
+        submit = SubmitToGallery(
+            repo, gallery, share_project, queue, storage, clock, ids, voice_available=voice, allowance=allowance
+        )
+        entry, withdraw = GalleryEntryOfProject(gallery), WithdrawFromGallery(gallery, storage)
+        browse, heart, report = BrowseGallery(gallery), HeartGalleryEntry(gallery), ReportGalleryEntry(gallery, clock)
+        moderate = ModerateGallery(gallery, storage, share_project, clock)
 
     correct_transcript = CorrectTranscript(repo, director, ids, request_cast, hub)
     open_share = OpenShare(repo, shares)
@@ -316,10 +355,10 @@ def wire(
         move_object=MovePanelObject(repo, queue),
         request_animatic=RequestAnimaticExport(repo, queue, allowance),
         storyboard_pdf=ExportStoryboardPdf(repo, storage, PillowStoryboardSheet()),
-        share_project=ShareProject(repo, shares, ids),
+        share_project=share_project,
         revoke_share=RevokeShare(repo, shares),
         open_share=open_share,
-        share_preview=SharePreview(open_share, storage, PillowSharePreview()),
+        share_preview=SharePreview(open_share, storage, share_sheet),
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
             speech,
@@ -345,6 +384,13 @@ def wire(
         read_script=read_script,
         list_voices=list_voices,
         preview_voice=preview_voice,
+        submit_to_gallery=submit,
+        gallery_entry=entry,
+        withdraw_from_gallery=withdraw,
+        browse_gallery=browse,
+        heart_gallery=heart,
+        report_gallery=report,
+        moderate_gallery=moderate,
     )
 
 
@@ -405,6 +451,7 @@ def build_container(settings: Settings) -> Container:
         repo, ledger, check = BlobProjectRepository(projects), BlobSpendLedger(projects), blob_media.check_writable
         shares: ShareIndex = BlobShareIndex(projects)
         quota: VisitorQuota = BlobVisitorQuota(projects)
+        gallery: GalleryRepository = BlobGalleryRepository(projects)
     else:
         root = settings.local_storage_dir
         local_media = LocalFileMediaStorage(root)
@@ -412,6 +459,7 @@ def build_container(settings: Settings) -> Container:
         repo, ledger, check = JsonFileProjectRepository(root), FileSpendLedger(root), local_media.check_writable
         shares = FileShareIndex(root)
         quota = FileVisitorQuota(root)
+        gallery = FileGalleryRepository(root)
     caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s))
     client = meta_client(settings)
     lease = glimmer_lease(settings, storage)
@@ -436,4 +484,5 @@ def build_container(settings: Settings) -> Container:
         readiness={"storage": check},
         shares=shares,
         quota=quota,
+        gallery=gallery,
     )

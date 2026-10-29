@@ -10,6 +10,7 @@ rubric text that produced it.
 | [panel-continuity.md](panel-continuity.md) | every character in a panel against their reference sheet | after every draft and final render |
 | [shot.md](shot.md) | the panel against its shot: framing, cast, action, setting | with panel-continuity |
 | [edit.md](edit.md) | an appearance edit against what was asked | after a fix or a spoken edit |
+| [gallery.md](gallery.md) | a storyboard before the public gallery shows it (ADR 0017) | on "Submit to gallery" |
 
 Format: front matter (`id`, `version`, `applies_to`), a short guidance section the reviewer reads, then one table
 row per rule: a stable id (never reused or renumbered), a severity and a one-line test.

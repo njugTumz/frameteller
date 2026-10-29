@@ -15,6 +15,7 @@ EXPORT_ANIMATIC = "export_animatic"
 COMPOSE_PANEL = "compose_panel"
 SUPERVISE_PANEL = "supervise_panel"
 REVIEW_SHEET = "review_sheet"
+GALLERY_SUBMISSION = "gallery_submission"
 
 
 def panel_key(kind: str, project_id: str, shot_id: str, revision: int) -> str:
@@ -98,4 +99,13 @@ def cast_job(project_id: str, character_ids: Sequence[str], nonce: str, correcti
         kind=GENERATE_CAST,
         idempotency_key=f"{GENERATE_CAST}:{project_id}:{','.join(ids)}:{nonce}",
         payload={"project_id": project_id, "character_ids": ",".join(ids), "correction": correction},
+    )
+
+
+def gallery_job(project_id: str, entry_id: str) -> Job:
+    """Render the gallery copy and run the moderation review. One per submission."""
+    return Job(
+        kind=GALLERY_SUBMISSION,
+        idempotency_key=f"{GALLERY_SUBMISSION}:{project_id}:{entry_id}",
+        payload={"project_id": project_id, "entry_id": entry_id},
     )

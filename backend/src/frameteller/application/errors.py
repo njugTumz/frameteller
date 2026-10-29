@@ -85,3 +85,15 @@ class ProjectNotFoundError(ApplicationError):
 
 class ShareNotFoundError(ApplicationError):
     user_message = "This link was turned off, or never existed."
+
+
+class GalleryEntryNotFoundError(ApplicationError):
+    user_message = "That storyboard isn't in the gallery."
+
+
+class GallerySubmissionError(ApplicationError):
+    """A submission that cannot go ahead: no consent, nothing drawn yet, or no recording to publish."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.user_message = message

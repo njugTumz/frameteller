@@ -16,6 +16,7 @@ from frameteller.domain import (
     Character,
     Cue,
     Framing,
+    Gallery,
     Issue,
     MaskBitmap,
     MediaRef,
@@ -328,6 +329,16 @@ class ProjectRepository(Protocol):
 
         Slow work (model calls) happens before update(); `change` must be quick and must not await.
         """
+        ...
+
+
+class GalleryRepository(Protocol):
+    """The gallery (ADR 0017) as one document: read it whole, change it atomically."""
+
+    async def get(self) -> Gallery: ...
+
+    async def update[T](self, change: Callable[[Gallery], T]) -> T:
+        """Apply `change` to the latest gallery and save it, re-applying it if another writer saved first."""
         ...
 
 

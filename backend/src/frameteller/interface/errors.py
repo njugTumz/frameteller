@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from frameteller.application.errors import (
     ApplicationError,
     BudgetExceededError,
+    GalleryEntryNotFoundError,
+    GallerySubmissionError,
     LimitReachedError,
     ModelError,
     ModelRateLimitedError,
@@ -34,6 +36,8 @@ log = logging.getLogger("frameteller.api")
 _STATUS: list[tuple[type[Exception], int, str]] = [
     (ProjectNotFoundError, 404, "project_not_found"),
     (ShareNotFoundError, 404, "share_not_found"),
+    (GalleryEntryNotFoundError, 404, "gallery_entry_not_found"),
+    (GallerySubmissionError, 422, "gallery_submission"),
     (UnknownShotError, 404, "shot_not_found"),
     (UnknownCharacterError, 404, "character_not_found"),
     (UnknownObjectError, 404, "object_not_found"),

@@ -38,6 +38,7 @@ from frameteller.domain import (
     Animatic,
     Character,
     Decision,
+    Gallery,
     Issue,
     MediaRef,
     Point,
@@ -411,10 +412,10 @@ def rubric_text(rubric_id: str, *rules: tuple[str, str]) -> str:
 
 
 class InMemoryRubricLibrary:
-    """The four pipeline rubrics with one blocker, one major and one minor rule each."""
+    """The pipeline rubrics (and the gallery's) with one blocker, one major and one minor rule each."""
 
     def __init__(self) -> None:
-        prefixes = {"cast": "CAST", "panel-continuity": "CONT", "shot": "SHOT", "edit": "EDIT"}
+        prefixes = {"cast": "CAST", "panel-continuity": "CONT", "shot": "SHOT", "edit": "EDIT", "gallery": "GAL"}
         self.rubrics: dict[str, Rubric] = {
             rid: parse_rubric(rubric_text(rid, (f"{p}-01", "blocker"), (f"{p}-02", "major"), (f"{p}-03", "minor")))
             for rid, p in prefixes.items()
@@ -453,3 +454,26 @@ class FakeTranslator:
             raise ModelUnavailableError("muse-spark-1.3")
         self.calls.append((list(texts), language))
         return [f"[{language}] {t}" for t in texts]
+
+
+class InMemoryGalleryRepository:
+    def __init__(self) -> None:
+        self.gallery = Gallery()
+
+    async def get(self) -> Gallery:
+        return copy.deepcopy(self.gallery)
+
+    async def update[T](self, change: Callable[[Gallery], T]) -> T:
+        gallery = copy.deepcopy(self.gallery)
+        result = change(gallery)  # a change that raises saves nothing
+        self.gallery = gallery
+        return result
+
+
+class FakeSharePreview:
+    def __init__(self) -> None:
+        self.sheets: list[tuple[str, int]] = []
+
+    async def contact_sheet(self, title: str, panels: Sequence[bytes]) -> bytes:
+        self.sheets.append((title, len(panels)))
+        return b"\x89PNG-sheet"

@@ -9,12 +9,15 @@ from __future__ import annotations
 import hmac
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request, Response, status
 from pydantic import BaseModel
 
 from frameteller.application.lanes import Lane
+from frameteller.application.use_cases.gallery import ModerateGallery
 from frameteller.interface.container import Container
-from frameteller.interface.routes.deps import Deps
+from frameteller.interface.dto import AdminGalleryAction, AdminGalleryEntryOut
+from frameteller.interface.routes.deps import PROJECT_ID, Deps
+from frameteller.interface.routes.media import serve
 
 router = APIRouter(prefix="/admin", tags=["admin"], include_in_schema=False)
 
@@ -30,6 +33,7 @@ def require_admin(c: Deps, authorization: Annotated[str | None, Header()] = None
 
 
 Admin = Annotated[Container, Depends(require_admin)]
+EntryId = Annotated[str, Path(pattern=PROJECT_ID)]
 
 
 class BudgetOut(BaseModel):
@@ -88,3 +92,38 @@ async def overview(c: Admin) -> OverviewOut:
         judge_pass=c.settings.judge_token is not None,
         glimmer_warm_until=warm.isoformat(timespec="seconds") if warm else None,
     )
+
+
+# ---- the gallery (ADR 0017) ----
+
+
+def _moderate(c: Container) -> ModerateGallery:
+    if c.moderate_gallery is None:
+        raise HTTPException(404)
+    return c.moderate_gallery
+
+
+@router.get("/gallery")
+async def gallery_entries(c: Admin) -> list[AdminGalleryEntryOut]:
+    """Every entry, newest first: pending ones, reports, and why the check held them."""
+    return [AdminGalleryEntryOut.of(e) for e in await _moderate(c).entries()]
+
+
+@router.post("/gallery/{entry_id}")
+async def gallery_action(entry_id: EntryId, body: AdminGalleryAction, c: Admin) -> AdminGalleryEntryOut:
+    """publish, hide, feature or unfeature."""
+    return AdminGalleryEntryOut.of(await _moderate(c).act(entry_id, body.action))
+
+
+@router.delete("/gallery/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def gallery_remove(entry_id: EntryId, c: Admin) -> None:
+    await _moderate(c).remove(entry_id)
+
+
+@router.get("/gallery/{entry_id}/video.mp4", response_class=Response)
+async def gallery_video(entry_id: EntryId, request: Request, c: Admin) -> Response:
+    """Any entry's video, pending or hidden ones too, for the admin to watch before deciding."""
+    entry = next((e for e in await _moderate(c).entries() if e.id == entry_id), None)
+    if entry is None or entry.video is None:
+        raise HTTPException(404)
+    return serve(await c.storage.get(entry.video), request, cache="private, no-store", filename="entry.mp4")
