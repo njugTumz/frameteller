@@ -27,7 +27,10 @@ export function SharedStoryboard({
       {video && (
         <section aria-label="Animatic" className="flex flex-col gap-1">
           <video src={video} controls preload="metadata" className="frame w-full" data-testid="shared-animatic" aria-label="The animatic" />
-          <p className="m-0 text-sm text-muted">Animatic · {seconds(project.animatic?.duration_ms ?? 0)}</p>
+          <p className="m-0 text-sm text-muted">
+            Animatic · {seconds(project.animatic?.duration_ms ?? 0)}
+            {project.narrated_by && ` · Narrated by ${project.narrated_by} (AI voice)`}
+          </p>
         </section>
       )}
       <ol className="m-0 grid list-none gap-x-5 gap-y-8 p-0 sm:grid-cols-2 lg:grid-cols-3">
