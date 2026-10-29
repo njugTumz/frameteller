@@ -23,6 +23,8 @@ from typing import Any
 import websockets
 
 T0 = time.perf_counter()
+# Counted as its own browser for the per-visitor demo limits (the studio sends one per browser too).
+VISITOR = "read-check-0001"
 
 
 def now() -> float:
@@ -33,7 +35,7 @@ def rest(api: str, method: str, path: str, body: dict[str, Any] | None = None) -
     req = urllib.request.Request(
         api + path,
         data=json.dumps(body).encode() if body is not None else None,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-Visitor-Id": VISITOR},
         method=method,
     )
     with urllib.request.urlopen(req, timeout=120) as r:
