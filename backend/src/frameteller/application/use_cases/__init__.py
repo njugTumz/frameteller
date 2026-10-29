@@ -17,6 +17,7 @@ from frameteller.application.use_cases.move_panel_object import MovePanelObject
 from frameteller.application.use_cases.narration import DeleteNarration
 from frameteller.application.use_cases.pre_segment_panel import PreSegmentPanel, character_mask_id
 from frameteller.application.use_cases.projects import CreateProject, FindShot, GetProject
+from frameteller.application.use_cases.read_script import ReadControl, ReadingOptions, ReadScript
 from frameteller.application.use_cases.reorder_shots import ReorderShots
 from frameteller.application.use_cases.requests import (
     JobTicket,
@@ -37,6 +38,7 @@ from frameteller.application.use_cases.supervise import (
 )
 from frameteller.application.use_cases.transcribe_instruction import MAX_DICTATION_MS, TranscribeInstruction
 from frameteller.application.use_cases.voice_session import Beat, ClientInput, RunVoiceSession
+from frameteller.application.use_cases.voices import ListVoices, OfferedVoice, PreviewVoice
 
 __all__ = [
     "MAX_DICTATION_MS",
@@ -64,11 +66,17 @@ __all__ = [
     "GetProject",
     "GetStudioStatus",
     "JobTicket",
+    "ListVoices",
     "MergeCharacters",
     "Merged",
     "MovePanelObject",
+    "OfferedVoice",
     "OpenShare",
     "PreSegmentPanel",
+    "PreviewVoice",
+    "ReadControl",
+    "ReadScript",
+    "ReadingOptions",
     "RemoveCharacter",
     "RenameCharacter",
     "ReorderShots",

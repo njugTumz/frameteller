@@ -11,7 +11,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
-from frameteller.application.errors import ProjectNotFoundError
+from frameteller.application.audio import wav_bytes
+from frameteller.application.errors import ModelUnavailableError, ProjectNotFoundError
 from frameteller.application.events import ProjectEvent
 from frameteller.application.ports import (
     CutoutLayer,
@@ -25,9 +26,11 @@ from frameteller.application.ports import (
     Segment,
     SpeechEvent,
     SpeechOptions,
+    SpokenClip,
     StoredImage,
     TurnCompleted,
     UsageRecord,
+    Voice,
 )
 from frameteller.application.rubrics import Rubric, parse_rubric
 from frameteller.domain import (
@@ -414,3 +417,34 @@ class InMemoryRubricLibrary:
 
     def get(self, rubric_id: str) -> Rubric:
         return self.rubrics[rubric_id]
+
+
+class FakeSpeechSynthesis:
+    """Speaks 10 ms of silence per character, stored as 24 kHz WAV like Azure's."""
+
+    def __init__(self, storage: InMemoryMediaStorage, fail: bool = False) -> None:
+        self.storage = storage
+        self.calls: list[tuple[str, str, str]] = []
+        self.fail = fail
+
+    async def voices(self) -> list[Voice]:
+        return [Voice("en-US-BrandonMultilingualNeural", "Brandon", "Male", "en-US", ("en-US", "fr-FR"))]
+
+    async def synthesize(self, text: str, voice: str, language: str, store_as: str) -> SpokenClip:
+        if self.fail:
+            raise ModelUnavailableError("azure-tts")
+        self.calls.append((text, voice, language))
+        ref = await self.storage.put(store_as, wav_bytes(b"\x00\x00" * 240 * len(text)), "audio/wav")
+        return SpokenClip(ref, len(text) * 10)
+
+
+class FakeTranslator:
+    def __init__(self, fail: bool = False) -> None:
+        self.calls: list[tuple[list[str], str]] = []
+        self.fail = fail
+
+    async def translate(self, texts: Sequence[str], language: str) -> list[str]:
+        if self.fail:
+            raise ModelUnavailableError("muse-spark-1.3")
+        self.calls.append((list(texts), language))
+        return [f"[{language}] {t}" for t in texts]
