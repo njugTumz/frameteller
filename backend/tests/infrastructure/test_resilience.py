@@ -192,3 +192,18 @@ def test_prices() -> None:
     assert token_cost("unknown", 10, 10, 0) == 0
     assert asr_cost(1) == pytest.approx(0.18 / 3600)  # whole seconds
     assert asr_cost(3_600_000) == pytest.approx(0.18)
+
+
+def test_muse_image_moderation_is_a_content_filter_refusal_never_retried() -> None:
+    from frameteller.application.errors import ModelContentFilteredError
+
+    response = httpx2.Response(400, request=REQ)
+    exc = openai.BadRequestError(
+        "Error code: 400 - The response was filtered due to the prompt triggering our content management policy.",
+        response=response,
+        body=None,
+    )
+    mapped = classify("muse-image-1.0", exc)
+    assert mapped is not None
+    assert isinstance(mapped[0], ModelContentFilteredError)
+    assert mapped[1] is False

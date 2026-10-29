@@ -2,8 +2,8 @@ from dataclasses import replace
 
 import pytest
 
-from frameteller.application.prompts import STYLES, edit_prompt, panel_prompt, reference_prompt
-from frameteller.domain import MediaRef, PanelStyle
+from frameteller.application.prompts import STYLES, by_role, edit_prompt, panel_prompt, reference_prompt, soften_ages
+from frameteller.domain import Character, MediaRef, PanelStyle
 from tests.builders import CAT, MIRA, shot
 
 
@@ -40,8 +40,9 @@ def test_edit_prompt_needs_change_and_target(change: str, target: str) -> None:
 def test_panel_prompt_includes_cast_and_framing() -> None:
     prompt = panel_prompt(shot(1, "mira", "cat"), [MIRA, CAT])
     assert "medium framing" in prompt
-    assert MIRA.canonical_description in prompt
+    assert soften_ages(MIRA.canonical_description) in prompt
     assert CAT.canonical_description in prompt
+    assert "8-year-old" not in prompt
 
 
 def test_panel_prompt_names_the_sheets_in_order_and_forbids_additions() -> None:
@@ -60,8 +61,8 @@ def test_panel_prompt_without_sheets_attaches_none() -> None:
 
 @pytest.mark.parametrize("style", list(PanelStyle))
 def test_reference_sheets_use_the_project_style_and_only_the_description(style: PanelStyle) -> None:
-    prompt = reference_prompt(MIRA, style)
-    assert MIRA.canonical_description in prompt
+    prompt = reference_prompt(CAT, style)
+    assert CAT.canonical_description in prompt
     assert f"Style: {STYLES[style]}" in prompt
     assert "Never photorealistic" in prompt
     assert "no clothing, accessories or props it does not mention" in prompt
@@ -98,3 +99,39 @@ def test_clean_plate_prompt_removes_only_the_object() -> None:
     assert "Keep everything else identical" in prompt
     with pytest.raises(ValueError, match="object to remove"):
         clean_plate_prompt(" ")
+
+
+@pytest.mark.parametrize(
+    ("description", "softened"),
+    [
+        ("human 12-year-old girl, short braided black hair", "human young girl, short braided black hair"),
+        ("human 6 year old boy, green shirt", "human young boy, green shirt"),
+        ("a fifteen-year-old skater", "a teenage skater"),
+        ("a 40-year-old baker", "an adult baker"),
+        ("small orange fox", "small orange fox"),
+    ],
+)
+def test_image_prompts_never_carry_exact_ages(description: str, softened: str) -> None:
+    assert soften_ages(description) == softened
+
+
+def test_a_young_character_is_drawn_fully_clothed_not_full_body() -> None:
+    """Muse Image refused "6-year-old boy ... full body" and "young boy ... full body" in production (Oct 29) and
+    accepted "young boy ... fully clothed, friendly standing pose"."""
+    kito = Character("kito", "Kito", "human 6-year-old boy, small build, gap-toothed smile, wearing a green shirt")
+    prompt = reference_prompt(kito)
+    assert "6-year-old" not in prompt
+    assert "full body" not in prompt
+    assert "fully clothed, friendly standing pose" in prompt
+    assert "full body, neutral standing pose" in reference_prompt(CAT)  # an animal is not dressed up
+
+
+def test_the_retry_wording_is_look_and_role_only() -> None:
+    amara = Character(
+        "amara", "Amara", "human 12-year-old girl, small build, round face, wearing a bright orange headscarf"
+    )
+    assert by_role(amara.canonical_description) == "small build, round face, wearing a bright orange headscarf"
+    prompt = reference_prompt(amara, safer=True)
+    assert "friendly cartoon character for an all-ages family story" in prompt
+    assert "girl" not in prompt
+    assert "12" not in prompt

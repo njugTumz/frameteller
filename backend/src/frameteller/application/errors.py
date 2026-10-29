@@ -67,6 +67,12 @@ class ModelRejectedError(ModelError):
     user_message = "The model couldn't do that one. Try rephrasing it."
 
 
+class ModelContentFilteredError(ModelRejectedError):
+    """The provider's safety filter refused the prompt (Muse Image: "content management policy")."""
+
+    user_message = "Muse Image's safety filter turned this drawing down. Describe the character by look and role."
+
+
 class InvalidModelOutputError(ModelError):
     """The model answered, but not in the shape we asked for, even after one retry."""
 

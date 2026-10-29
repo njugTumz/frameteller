@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import re
 import time
 import urllib.error
 from collections.abc import Awaitable, Callable
@@ -21,6 +22,7 @@ import websockets.exceptions
 
 from frameteller.application.errors import (
     InvalidModelOutputError,
+    ModelContentFilteredError,
     ModelError,
     ModelRateLimitedError,
     ModelRejectedError,
@@ -31,6 +33,8 @@ from frameteller.application.ports import SpendLedger, UsageRecord
 from frameteller.infrastructure.observability import project_id_var
 
 T = TypeVar("T")
+# Muse Image's refusal: "The response was filtered due to the prompt triggering our content management policy."
+_FILTERED = re.compile(r"content management policy|content[_ ]filter", re.I)
 log = logging.getLogger("frameteller.models")
 
 
@@ -122,6 +126,8 @@ def classify(model: str, exc: BaseException) -> tuple[ModelError, bool] | None:
         return ModelTimeoutError(model, "timed out"), True
     if isinstance(exc, openai.RateLimitError):
         return ModelRateLimitedError(model, "rate limited"), True
+    if isinstance(exc, openai.BadRequestError) and _FILTERED.search(str(exc)):
+        return ModelContentFilteredError(model, "HTTP 400 content filter"), False
     if isinstance(exc, openai.APIStatusError):
         return _by_status(model, exc.status_code)
     if isinstance(exc, openai.APIConnectionError):

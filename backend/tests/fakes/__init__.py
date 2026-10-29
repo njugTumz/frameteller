@@ -136,11 +136,15 @@ class FakeImageGeneration:
         self.generated: list[ImageRequest] = []
         self.edits: list[EditRequest] = []
         self.fail_next = False
+        self.refuse: list[BaseException] = []  # raised, in order, by the next generate calls
 
     async def generate(self, request: ImageRequest, store_as: str) -> StoredImage:
         if self.fail_next:
             self.fail_next = False
             raise RuntimeError("model unavailable")
+        if self.refuse:
+            self.generated.append(request)
+            raise self.refuse.pop(0)
         self.generated.append(request)
         return await self._store(store_as)
 

@@ -39,6 +39,8 @@ class Project:
     usage: dict[str, int] = field(default_factory=dict)  # public-demo allowances used, e.g. renders, exports
     continuity_checks: bool = True  # the continuity supervisor reviews sheets and panels (ADR 0012)
     sheet_reviews: dict[str, SheetReview] = field(default_factory=dict)  # by character id
+    # Why a character's sheet could not be drawn, in plain words, until a sheet is drawn for it.
+    sheet_failures: dict[str, str] = field(default_factory=dict)
     supervisor_log: list[SupervisorEntry] = field(default_factory=list)  # oldest first, the last 100
 
     # ---- transcript and characters ----

@@ -158,6 +158,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
         "share_public": p.share_public,
         "usage": dict(p.usage),
         "continuity_checks": p.continuity_checks,
+        "sheet_failures": dict(p.sheet_failures),
         "sheet_reviews": {
             cid: {
                 "reference": r.reference.key,
@@ -316,6 +317,7 @@ def project_from_dict(d: dict[str, Any]) -> Project:
         share_public=bool(d.get("share_public", False)),
         usage={str(k): int(v) for k, v in d.get("usage", {}).items()},
         continuity_checks=bool(d.get("continuity_checks", True)),
+        sheet_failures=dict(d.get("sheet_failures", {})),
         sheet_reviews={
             cid: SheetReview(MediaRef(r["reference"]), Outcome(r["outcome"]), _unverdict(r["verdict"]), r["summary"])
             for cid, r in d.get("sheet_reviews", {}).items()

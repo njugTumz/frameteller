@@ -112,3 +112,29 @@ async def test_panels_and_reference_sheets_follow_the_project_style(world: World
     await world.repo.update("p1", lambda p: p.bible.approve())
     await generate(world).execute("p1", "s2", revision=1)
     assert all("paper cutout" in r.prompt for r in world.images.generated)
+
+
+async def test_a_sheet_refused_by_the_content_filter_is_retried_once_by_look_and_role(world: World) -> None:
+    from frameteller.application.errors import ModelContentFilteredError
+
+    world.images.refuse = [ModelContentFilteredError("muse-image-1.0", "HTTP 400 content filter")]
+    cat = await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
+    assert cat.reference is not None
+    assert len(world.images.generated) == 2
+    assert "all-ages family story" in world.images.generated[1].prompt
+    assert world.budget.charges == [("p1", costs.IMAGE, "reference cat")]  # a refused prompt is not billed
+    assert world.project().sheet_failures == {}
+
+
+async def test_a_sheet_that_still_fails_names_the_character_and_says_why(world: World) -> None:
+    from frameteller.application.errors import ModelContentFilteredError
+    from frameteller.application.use_cases.generate_character_reference import SheetFailedError
+
+    world.images.refuse = [ModelContentFilteredError("muse-image-1.0", "filter")] * 2
+    with pytest.raises(SheetFailedError) as e:
+        await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
+    assert e.value.user_message.startswith("Grey Cat's sheet couldn't be drawn. Muse Image's safety filter")
+    assert "safety filter" in world.project().sheet_failures["cat"]
+
+    await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")  # Try again
+    assert world.project().sheet_failures == {}

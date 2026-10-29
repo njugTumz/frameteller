@@ -371,9 +371,12 @@ class CharacterOut(BaseModel):
     description: str
     reference_url: str | None
     review: ReviewOut | None = Field(default=None, description="The continuity check of this reference sheet.")
+    sheet_error: str | None = Field(
+        default=None, description="Why the last sheet could not be drawn, in plain words; offer Try again and Edit."
+    )
 
     @classmethod
-    def of(cls, c: Character, review: SheetReview | None = None) -> CharacterOut:
+    def of(cls, c: Character, review: SheetReview | None = None, sheet_error: str | None = None) -> CharacterOut:
         current = review if review and review.reference == c.reference else None
         return cls(
             id=c.id,
@@ -381,6 +384,7 @@ class CharacterOut(BaseModel):
             description=c.canonical_description,
             reference_url=media_url(c.reference),
             review=ReviewOut.of(current.outcome, current.summary, current.verdict) if current else None,
+            sheet_error=sheet_error if c.reference is None else None,
         )
 
 
@@ -454,7 +458,10 @@ class ProjectOut(BaseModel):
             style=p.style.value,
             cast=CastOut(
                 status=p.bible.status.value,
-                characters=[CharacterOut.of(c, p.sheet_reviews.get(c.id)) for c in p.bible.characters.values()],
+                characters=[
+                    CharacterOut.of(c, p.sheet_reviews.get(c.id), p.sheet_failures.get(c.id))
+                    for c in p.bible.characters.values()
+                ],
             ),
             turns=[TurnOut.of(t) for t in p.turns],
             shots=[ShotOut.of(s, p.panels.get(s.id)) for s in p.shots],
