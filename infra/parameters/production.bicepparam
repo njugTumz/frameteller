@@ -11,6 +11,9 @@ param mediaRetentionDays = 30 // the privacy page promises deletion after 30 day
 // One always-on replica: no cold starts during the demo and judging (ADR 0009 keeps it at most one).
 param minReplicas = 1
 param terminationGracePeriodSeconds = 120
+// 2 vCPU and 4 GiB (ADR 0016): two exports render at once beside the live sessions; measured in docs/load-test.md.
+param backendCpu = '2'
+param backendMemory = '4Gi'
 // Standard mode: public users' stories are never used for training (never the -contributor model).
 param directorModel = 'muse-spark-1.3'
 
@@ -32,3 +35,6 @@ param glimmerBaseUrl = readEnvironmentVariable('GLIMMER_BASE_URL', '')
 param glimmerApiKey = readEnvironmentVariable('GLIMMER_API_KEY', '')
 // "Read it to me" (ADR 0015): optional; without it the studio offers narration and the teleprompter only.
 param azureSpeechKey = readEnvironmentVariable('AZURE_SPEECH_KEY', '')
+// The judge pass and the admin page (ADR 0016, 0017): our own random tokens, GitHub environment secrets.
+param judgeToken = readEnvironmentVariable('JUDGE_TOKEN', '')
+param adminToken = readEnvironmentVariable('ADMIN_TOKEN', '')

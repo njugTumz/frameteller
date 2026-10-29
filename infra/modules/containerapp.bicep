@@ -13,6 +13,13 @@ param glimmerBaseUrl string
 param glimmerApiKey string
 @secure()
 param azureSpeechKey string
+@secure()
+param judgeToken string
+@secure()
+param adminToken string
+@description('vCPU and memory of the one replica, a valid Consumption pair (ADR 0016: 2 and 4Gi in production).')
+param cpu string = '0.5'
+param memory string = '1Gi'
 param allowedOrigins string
 param publicAppUrl string
 param storageAccountName string
@@ -101,6 +108,16 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'azure-speech-key'
           value: azureSpeechKey
         }
+      ], empty(judgeToken) ? [] : [
+        {
+          name: 'judge-token'
+          value: judgeToken
+        }
+      ], empty(adminToken) ? [] : [
+        {
+          name: 'admin-token'
+          value: adminToken
+        }
       ])
     }
     template: {
@@ -110,8 +127,8 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'backend'
           image: containerImage
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json(cpu)
+            memory: memory
           }
           env: concat([
             { name: 'APP_ENV', value: environmentName }
@@ -129,6 +146,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'GLIMMER_API_KEY', secretRef: 'glimmer-api-key' }
           ], empty(azureSpeechKey) ? [] : [
             { name: 'AZURE_SPEECH_KEY', secretRef: 'azure-speech-key' }
+          ], empty(judgeToken) ? [] : [
+            { name: 'JUDGE_TOKEN', secretRef: 'judge-token' }
+          ], empty(adminToken) ? [] : [
+            { name: 'ADMIN_TOKEN', secretRef: 'admin-token' }
           ], extraEnv)
           probes: [
             {

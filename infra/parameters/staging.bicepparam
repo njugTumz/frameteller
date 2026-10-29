@@ -18,3 +18,6 @@ param glimmerBaseUrl = readEnvironmentVariable('GLIMMER_BASE_URL', '')
 param glimmerApiKey = readEnvironmentVariable('GLIMMER_API_KEY', '')
 // "Read it to me" (ADR 0015): optional; without it the studio offers narration and the teleprompter only.
 param azureSpeechKey = readEnvironmentVariable('AZURE_SPEECH_KEY', '')
+// The judge pass and the admin page (ADR 0016, 0017): our own random tokens, GitHub environment secrets.
+param judgeToken = readEnvironmentVariable('JUDGE_TOKEN', '')
+param adminToken = readEnvironmentVariable('ADMIN_TOKEN', '')

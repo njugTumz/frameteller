@@ -56,6 +56,18 @@ param glimmerApiKey string = ''
 @description('Azure AI Speech key for "Read it to me" (ADR 0015), stored only as a Container App secret. Empty: not offered.')
 param azureSpeechKey string = ''
 
+@secure()
+@description('The judge pass token (the private judge link), stored only as a Container App secret. Empty: no judge pass.')
+param judgeToken string = ''
+
+@secure()
+@description('The admin page token (gallery moderation, budgets), stored only as a Container App secret. Empty: no admin API.')
+param adminToken string = ''
+
+@description('vCPU and memory of the backend replica (ADR 0016).')
+param backendCpu string = '0.5'
+param backendMemory string = '1Gi'
+
 @description('Guardrail settings for a public demo, as name/value pairs (see the backend settings).')
 param guardrailEnv array = []
 
@@ -109,6 +121,10 @@ module app 'modules/containerapp.bicep' = {
     glimmerBaseUrl: glimmerBaseUrl
     glimmerApiKey: glimmerApiKey
     azureSpeechKey: azureSpeechKey
+    judgeToken: judgeToken
+    adminToken: adminToken
+    cpu: backendCpu
+    memory: backendMemory
     allowedOrigins: allowedOrigins
     publicAppUrl: publicAppUrl
     storageAccountName: storage.outputs.accountName
