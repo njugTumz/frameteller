@@ -113,7 +113,7 @@ test('narrate, cut two shots, approve the cast, see drafts, and select an object
   await page.goto('/')
   await page.getByLabel('Name the story').fill('The Lantern Cat')
   await page.getByText('Paper cutout', { exact: true }).click()
-  await expect(page.getByRole('radio', { name: /co-direct/i })).toBeDisabled()
+  await expect(page.getByRole('radio', { name: /Narrate/ })).toBeChecked()
   await page.getByRole('button', { name: 'Open the studio' }).click()
   await expect(page).toHaveURL(/\/projects\/p1$/)
   expect(backend.posted[0]).toEqual({ path: '/projects', body: { title: 'The Lantern Cat', style: 'paper_cutout' } })
