@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-28T07:26:48Z",
+  "updated_at": "2026-10-29T02:45:12Z",
   "items": [
+    {
+      "date": "2026-10-29",
+      "status": "shipped",
+      "title": "A home at frameteller.com",
+      "body": "Frameteller now lives at frameteller.com, and the old address and www both lead there."
+    },
     {
       "date": "2026-10-28",
       "status": "shipped",
