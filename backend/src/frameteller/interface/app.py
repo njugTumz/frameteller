@@ -18,7 +18,7 @@ from frameteller.interface.middleware import (
     RateLimitMiddleware,
     RequestContextMiddleware,
 )
-from frameteller.interface.routes import health, internal, judge, media, projects, session, shares, voices
+from frameteller.interface.routes import admin, health, internal, judge, media, projects, session, shares, voices
 from frameteller.interface.visitor import VISITOR_HEADER
 
 DESCRIPTION = """Frameteller turns spoken stories into storyboards.
@@ -47,7 +47,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     if container is not None:
         app.state.container = container
     errors.install(app)
-    routers = (projects, shares, media, health, session, internal, voices, judge)
+    routers = (projects, shares, media, health, session, internal, voices, judge, admin)
     for router in (r.router for r in routers):
         app.include_router(router)
 
@@ -68,7 +68,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
             CORSMiddleware,
             allow_origins=config.origins,
             allow_methods=["GET", "POST", "PATCH", "DELETE"],
-            allow_headers=["Content-Type", "X-Request-ID", VISITOR_HEADER],
+            allow_headers=["Content-Type", "X-Request-ID", "Authorization", VISITOR_HEADER],
             expose_headers=["X-Request-ID"],
             allow_credentials=True,  # the judge cookie; origins are an explicit list, never "*"
         )
