@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-29T05:44:14Z",
+  "updated_at": "2026-10-29T08:52:40Z",
   "items": [
+    {
+      "date": "2026-10-29",
+      "status": "shipped",
+      "title": "An agent that checks every frame",
+      "body": "A continuity supervisor now checks every character sheet and panel against written rubrics, fixes small slips like a stray vest on its own, and asks you about the rest."
+    },
     {
       "date": "2026-10-29",
       "status": "shipped",
