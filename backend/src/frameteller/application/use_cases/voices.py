@@ -73,7 +73,7 @@ def offered(voices: list[Voice]) -> list[OfferedVoice]:
     """The curated voices this Speech resource has, in our order, each with the languages it speaks."""
     by_name = {v.name: v for v in voices}
     return [
-        OfferedVoice(v.name, v.display_name, v.gender, v.locale, _languages(v))
+        OfferedVoice(v.name, v.display_name.removesuffix(" Multilingual"), v.gender, v.locale, _languages(v))
         for name in CURATED
         if (v := by_name.get(name))
     ]
