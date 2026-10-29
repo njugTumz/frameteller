@@ -3,7 +3,7 @@
 param location string
 param tags object
 param accountName string
-@description('Delete media blobs older than this many days; 0 keeps them.')
+@description('Delete media, project documents, share links and quota counters this many days after their last change; 0 keeps them.')
 param mediaRetentionDays int
 
 resource account 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -46,13 +46,13 @@ resource lifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05
     policy: {
       rules: [
         {
-          name: 'delete-old-media'
+          name: 'delete-after-retention'
           enabled: true
           type: 'Lifecycle'
           definition: {
             filters: {
               blobTypes: ['blockBlob']
-              prefixMatch: ['media/']
+              prefixMatch: ['media/', 'projects/'] // the privacy page promises deletion after 30 days
             }
             actions: {
               baseBlob: { delete: { daysAfterModificationGreaterThan: mediaRetentionDays } }
