@@ -105,9 +105,7 @@ async def share_stub(token: Token, request: Request, c: Deps) -> HTMLResponse:
         )
     image = f"{str(request.base_url).rstrip('/')}/shares/{token}/og.png"
     title = html.escape(project.title or "A storyboard")
-    drawn = sum(1 for p in project.panels.values() if p.status is PanelStatus.READY)
-    what = f"{len(project.shots)} shots" + (" and an animatic" if project.animatic else "")
-    description = html.escape(f"A storyboard told out loud: {what}, {drawn} drawn. Made with Frameteller.")
+    description = html.escape(preview_description(len(project.shots), project.animatic is not None))
     listed = "" if project.share_public else f'<meta name="robots" content="{NOINDEX}">\n'
     tags = f"""{listed}<meta name="description" content="{description}">
 <meta property="og:type" content="website">
@@ -123,6 +121,12 @@ async def share_stub(token: Token, request: Request, c: Deps) -> HTMLResponse:
 <meta name="twitter:image" content="{html.escape(image)}">
 """
     return robots(HTMLResponse(_redirect(page, title, tags), headers={"Cache-Control": SHARED}), project)
+
+
+def preview_description(shots: int, animatic: bool) -> str:
+    """e.g. "A 6-shot storyboard and animatic, told out loud with Frameteller." """
+    what = f"A {shots}-shot storyboard" if shots else "A storyboard"
+    return f"{what}{' and animatic' if animatic else ''}, told out loud with Frameteller."
 
 
 def _redirect(page: str, title: str, tags: str) -> str:

@@ -4,6 +4,7 @@ import httpx2
 
 from frameteller.application.ports import Segment
 from frameteller.domain import MediaRef
+from frameteller.interface.routes.shares import preview_description
 from tests.builders import bitmap, project
 from tests.interface.conftest import Api
 
@@ -322,6 +323,9 @@ async def test_share_link_previews_on_x_and_shows_a_read_only_storyboard(make_ap
     stub = await api.client.get(f"/s/{token}")
     assert stub.status_code == 200
     assert '<meta property="og:title" content="The Lantern Cat">' in stub.text
+    assert (
+        '<meta property="og:description" content="A 3-shot storyboard, told out loud with Frameteller.">' in stub.text
+    )
     assert f'/shares/{token}/og.png"' in stub.text
     assert f'content="0;url=https://studio.example/s/{token}"' in stub.text
     assert "p1" not in stub.text.replace(f"/s/{token}", "")  # never the project id
@@ -369,3 +373,9 @@ async def test_a_share_link_is_unlisted_until_the_owner_makes_it_public(api: Api
     await api.client.delete("/projects/p1/share")
     gone = await api.client.get(f"/s/{token}")
     assert gone.headers["x-robots-tag"] == "noindex, nofollow"
+
+
+def test_share_preview_wording() -> None:
+    assert preview_description(6, True) == "A 6-shot storyboard and animatic, told out loud with Frameteller."
+    assert preview_description(1, False) == "A 1-shot storyboard, told out loud with Frameteller."
+    assert preview_description(0, False) == "A storyboard, told out loud with Frameteller."
