@@ -61,6 +61,8 @@ async def test_narration_becomes_partials_turns_shots_and_a_proposed_cast(api: A
         "start_ms": 0,
         "end_ms": 3000,
         "speaker": None,
+        "direction": "",
+        "episode": 1,
     }
     assert by_type["shot.created"]["shot"]["number"] == 1
     assert by_type["shot.created"]["shot"]["character_ids"] == ["owl"]

@@ -226,7 +226,15 @@ async def test_delete_my_recording(api: Api) -> None:
     await api.fakes.repo.save(p)
     api.fakes.storage.files["projects/p1/narration/s1.wav"] = (b"RIFF\x00\x00\x00\x00WAVE", "audio/wav")
     body = (await api.client.get("/projects/p1")).json()
-    assert body["narrations"] == [{"session": "s1", "duration_ms": 5000, "url": "/media/projects/p1/narration/s1.wav"}]
+    assert body["narrations"] == [
+        {
+            "session": "s1",
+            "duration_ms": 5000,
+            "url": "/media/projects/p1/narration/s1.wav",
+            "voice": None,  # the narrator's own voice
+            "language": None,
+        }
+    ]
     assert (await api.client.get(body["narrations"][0]["url"])).headers["content-type"] == "audio/wav"
 
     deleted = await api.client.delete("/projects/p1/narration")

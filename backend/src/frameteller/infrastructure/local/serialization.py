@@ -87,7 +87,15 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             for c in p.bible.characters.values()
         ],
         "turns": [
-            {"id": t.id, "text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms, "speaker": t.speaker}
+            {
+                "id": t.id,
+                "text": t.text,
+                "start_ms": t.start_ms,
+                "end_ms": t.end_ms,
+                "speaker": t.speaker,
+                "direction": t.direction,
+                "episode": t.episode,
+            }
             for t in p.turns
         ],
         "shots": [
@@ -101,6 +109,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
                 "dialogue": s.dialogue,
                 "source_turn_ids": list(s.source_turn_ids),
                 "duration_ms": s.duration_ms,
+                "episode": s.episode,
             }
             for s in p.shots
         ],
@@ -136,7 +145,13 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             for pn in p.panels.values()
         ],
         "narrations": [
-            {"session": n.session, "recording": n.recording.key, "duration_ms": n.duration_ms}
+            {
+                "session": n.session,
+                "recording": n.recording.key,
+                "duration_ms": n.duration_ms,
+                "voice": n.voice,
+                "language": n.language,
+            }
             for n in p.narrations.values()
         ],
         "share_token": p.share_token,
@@ -262,7 +277,18 @@ def project_from_dict(d: dict[str, Any]) -> Project:
         title=d["title"],
         style=PanelStyle(d.get("style", PanelStyle.PENCIL.value)),  # projects saved before styles are pencil
         bible=bible,
-        turns=[TranscriptTurn(t["id"], t["text"], t["start_ms"], t["end_ms"], t["speaker"]) for t in d["turns"]],
+        turns=[
+            TranscriptTurn(
+                t["id"],
+                t["text"],
+                t["start_ms"],
+                t["end_ms"],
+                t["speaker"],
+                t.get("direction", ""),
+                int(t.get("episode", 1)),
+            )
+            for t in d["turns"]
+        ],
         shots=[
             Shot(
                 s["id"],
@@ -274,12 +300,15 @@ def project_from_dict(d: dict[str, Any]) -> Project:
                 s["dialogue"],
                 tuple(s["source_turn_ids"]),
                 s["duration_ms"],
+                int(s.get("episode", 1)),
             )
             for s in d["shots"]
         ],
         panels=panels,
         narrations={
-            n["session"]: Narration(n["session"], MediaRef(n["recording"]), n["duration_ms"])
+            n["session"]: Narration(
+                n["session"], MediaRef(n["recording"]), n["duration_ms"], n.get("voice"), n.get("language")
+            )
             for n in d.get("narrations", [])
         },
         animatic=_animatic(d.get("animatic")),

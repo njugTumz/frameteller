@@ -27,6 +27,7 @@ class Shot:
     dialogue: str
     source_turn_ids: tuple[str, ...]
     duration_ms: int
+    episode: int = 1  # shots are numbered through the whole story; the studio counts them per episode
 
     def __post_init__(self) -> None:
         if self.number < 1:

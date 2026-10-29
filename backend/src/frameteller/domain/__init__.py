@@ -42,6 +42,7 @@ from frameteller.domain.review import (
     SupervisorEntry,
     Verdict,
 )
+from frameteller.domain.script import Episode, Script, ScriptBeat, ScriptFormat, parse_script
 from frameteller.domain.shots import Framing, Shot
 from frameteller.domain.style import PanelStyle
 from frameteller.domain.timing import MIN_SHOT_MS, split_duration
@@ -63,6 +64,7 @@ __all__ = [
     "Composite",
     "Decision",
     "DomainError",
+    "Episode",
     "Framing",
     "InvalidValueError",
     "Issue",
@@ -81,6 +83,9 @@ __all__ = [
     "Point",
     "Project",
     "RevisionOrderError",
+    "Script",
+    "ScriptBeat",
+    "ScriptFormat",
     "Severity",
     "SheetReview",
     "Shot",
@@ -94,6 +99,7 @@ __all__ = [
     "UnknownTurnError",
     "Verdict",
     "motion_for",
+    "parse_script",
     "plate_key",
     "session_of",
     "split_duration",

@@ -15,6 +15,8 @@ class Narration:
     session: str
     recording: MediaRef
     duration_ms: int
+    voice: str | None = None  # a synthesized narration's voice ("en-US-BrandonMultilingualNeural"); None: the user
+    language: str | None = None  # its language ("fr-FR")
 
     def __post_init__(self) -> None:
         if not self.session or "-" in self.session or self.duration_ms <= 0:
