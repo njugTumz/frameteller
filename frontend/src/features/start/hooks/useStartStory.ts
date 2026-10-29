@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { ApiError } from '../../../shared/api/client'
 import { saveKeepAudio } from '../../../shared/consent'
 import { parseNames, saveNames } from '../../../shared/keywords'
+import { MAX_SCRIPT_CHARS, saveChoice } from '../../script/choice'
 import { createProject } from '../api'
 import { useStartStore } from '../store'
 
@@ -10,12 +11,17 @@ export function useStartStory(onCreated: (projectId: string) => void): () => Pro
   return useCallback(async () => {
     const s = useStartStore.getState()
     if (s.creating) return
+    if (s.mode !== 'narrate' && !s.script.trim()) return s.setError('Paste or upload your script first.')
+    if (s.script.length > MAX_SCRIPT_CHARS && s.mode !== 'narrate') {
+      return s.setError(`Scripts can be up to ${MAX_SCRIPT_CHARS.toLocaleString('en-US')} characters. Shorten this one, or split it into another story.`)
+    }
     s.setCreating(true)
     s.setError(null)
     try {
       const project = await createProject(s.title.trim() || 'Untitled story', s.style)
       saveNames(project.id, parseNames(s.names))
       saveKeepAudio(project.id, s.keepAudio)
+      saveChoice(project.id, { mode: s.mode, script: s.mode === 'narrate' ? '' : s.script, format: s.format, voice: s.voice, language: s.language })
       onCreated(project.id)
     } catch (e) {
       s.setError(e instanceof ApiError ? e.message : 'Something went wrong. Try again.')

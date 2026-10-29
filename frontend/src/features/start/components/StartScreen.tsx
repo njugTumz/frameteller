@@ -3,6 +3,12 @@ import type { PanelStyle } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
 import { STUDIO_FULL } from '../../../shared/status/store'
 import { Notice } from '../../../shared/ui/Notice'
+import type { ScriptFormat } from '../../../shared/events'
+import type { Voice, Voices } from '../../../shared/api/types'
+import { ScriptInput } from '../../script/components/ScriptInput'
+import { TellingChoice } from '../../script/components/TellingChoice'
+import { VoicePicker } from '../../script/components/VoicePicker'
+import type { TellingMode } from '../../script/store'
 import { CutoutArt, PencilArt, StyleCard } from './StyleCard'
 
 export interface StartForm {
@@ -10,13 +16,23 @@ export interface StartForm {
   style: PanelStyle
   names: string
   keepAudio: boolean
+  mode: TellingMode
+  script: string
+  format: ScriptFormat
+  voice: string
+  language: string
 }
+
+const NO_VOICES: Voices = { available: false, default: '', voices: [] }
 
 export function StartScreen({
   form,
   creating,
   error,
   full = false,
+  voices = NO_VOICES,
+  previewing = null,
+  onPreview = () => undefined,
   wakeNotice,
   onChange,
   onSubmit,
@@ -26,6 +42,10 @@ export function StartScreen({
   error: string | null
   /** The day's global spend cap is reached: no new stories until tomorrow. */
   full?: boolean
+  /** The voices "Read it to me" offers (GET /voices). */
+  voices?: Voices
+  previewing?: string | null
+  onPreview?: (voice: Voice, language: string) => void
   wakeNotice: ReactNode
   onChange: (patch: Partial<StartForm>) => void
   onSubmit: () => void
@@ -73,28 +93,22 @@ export function StartScreen({
           </div>
         </fieldset>
 
-        <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
-          <legend className="mb-3 text-lg font-bold">How you'll tell it</legend>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex cursor-pointer items-start gap-3 rounded-md border-2 border-ink bg-paper p-3 has-focus-visible:outline-3 has-focus-visible:outline-focus">
-              <input type="radio" name="mode" value="narrate" defaultChecked className="mt-1 size-4 accent-[var(--ink)]" />
-              <span>
-                <span className="block font-bold">Narrate</span>
-                <span className="text-sm text-muted">One voice tells the story and cuts the shots.</span>
-              </span>
-            </label>
-            <label className="flex cursor-not-allowed items-start gap-3 rounded-md border-2 border-dashed border-rule p-3 text-muted">
-              <input type="radio" name="mode" value="co_direct" disabled aria-describedby="co-direct-soon" className="mt-1 size-4" />
-              <span>
-                <span className="block font-bold">Co-direct</span>
-                <span id="co-direct-soon" className="text-sm">
-                  Two voices, labelled A and B. Coming soon.
-                </span>
-              </span>
-            </label>
-          </div>
-        </fieldset>
+        <TellingChoice mode={form.mode} readAvailable={voices.available} onChange={(mode) => onChange({ mode })} />
 
+        {form.mode !== 'narrate' && <ScriptInput text={form.script} onChange={(script, format) => onChange({ script, format })} />}
+
+        {form.mode === 'read' && voices.available && (
+          <VoicePicker
+            voices={voices.voices}
+            voice={form.voice}
+            language={form.language}
+            previewing={previewing}
+            onChange={(voice, language) => onChange({ voice, language })}
+            onPreview={onPreview}
+          />
+        )}
+
+        {form.mode !== 'read' && (
         <div className="flex flex-col gap-2">
           <label htmlFor="story-names" className="font-bold">
             Names in the story <span className="font-normal text-muted">(optional)</span>
@@ -112,7 +126,9 @@ export function StartScreen({
             Separate them with commas. They help the transcriber spell your characters and places right.
           </p>
         </div>
+        )}
 
+        {form.mode !== 'read' && (
         <div className="flex items-start gap-3">
           <input
             id="keep-audio"
@@ -131,6 +147,7 @@ export function StartScreen({
             </p>
           </div>
         </div>
+        )}
 
         {error && <Notice tone="error" title={error} />}
 
@@ -139,7 +156,8 @@ export function StartScreen({
             {creating ? 'Setting up the desk…' : 'Open the studio'}
           </Button>
           <span className="text-sm text-muted">
-            You'll allow the microphone next. <a href="/privacy">What we keep, and for how long</a>
+            {form.mode === 'read' ? 'The voice reads in the studio, so turn your sound on.' : "You'll allow the microphone next."}{' '}
+            <a href="/privacy">What we keep, and for how long</a>
           </span>
         </div>
       </form>
