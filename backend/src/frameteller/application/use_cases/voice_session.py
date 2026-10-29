@@ -47,6 +47,8 @@ AUDIO_BUFFER_FRAMES = 256  # about 20 s of 80 ms frames waiting for the transcri
 # A beat closes once the transcriber has processed this much audio past it (ADR 0008). The last word before a
 # pause reached the transcript up to 240 ms after the pause; the next sentence's first word, 840 ms or more.
 BEAT_GRACE_MS = 500
+# A beat with fewer real words than this is a stray noise ("Bacon."), not a shot: its words join the next beat.
+MIN_BEAT_WORDS = 2
 SILENCE_WARNING_MS = 8000  # audio received with no words and no level before we say we can't hear the narrator
 SILENT_LEVEL = 0.005  # RMS of full scale (about -46 dBFS): a muted or wrong microphone, not a quiet room
 MAX_KEPT_MS = 30 * 60 * 1000  # the narration kept for the animatic stops here (about 86 MB of PCM)
@@ -149,6 +151,10 @@ class _Heard:
         self.partial = []
         self._note_first_words()
 
+    def words_pending(self) -> int:
+        """Real words since the last boundary: tokens with a letter or digit, so "." or "-" never count."""
+        return sum(any(ch.isalnum() for ch in w) for w in (self.done + self.partial)[self.cursor :])
+
     def pending(self) -> str:
         """The words heard since the last boundary: the live line the narrator sees."""
         return " ".join((self.done + self.partial)[self.cursor :])
@@ -223,12 +229,15 @@ class RunVoiceSession:
         async def finish(turn: TranscriptTurn) -> None:
             counts["turns"] += 1
             await self._events.publish(project_id, TurnFinished(turn))
-            if turn.text.strip():
+            if any(ch.isalnum() for ch in turn.text):  # "." or "-" is noise, not a shot
                 work.put_nowait(turn)
 
-        async def close_beat(at_ms: int) -> None:
+        async def close_beat(at_ms: int, *, last: bool = False) -> None:
+            words = heard.words_pending()
+            if 0 < words < MIN_BEAT_WORDS and not last:
+                return  # a stray word: leave the stretch open so it joins the next beat
             text, start, end = heard.cut(at_ms)
-            if text:
+            if words:
                 counts["beats"] += 1
                 await finish(TranscriptTurn(f"{tag}-b{counts['beats']}", text, start, end))
                 await self._events.publish(project_id, TranscriptUpdated(heard.pending()))
@@ -324,7 +333,7 @@ class RunVoiceSession:
             discard.cancel()
             if beat_mode:  # the transcript is complete: close every waiting beat, then the last stretch
                 await close_beats_heard()
-                await close_beat(max(heard.speech_end_ms, heard.cut_ms))
+                await close_beat(max(heard.speech_end_ms, heard.cut_ms), last=True)
         except ApplicationError as e:
             await publish_failure(e.user_message, fatal=True)
         except BaseException:

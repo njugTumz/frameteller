@@ -265,3 +265,64 @@ async def test_beats_still_waiting_when_the_stream_ends_close_in_order() -> None
 
     # No progress events at all (another adapter, or a short stream): the beat closes when the transcript ends.
     assert s.turns() == [("s1-b1", "one two three", 0, 1000)]
+
+
+async def test_an_empty_beat_and_a_one_word_beat_join_the_next_beat_instead_of_becoming_shots() -> None:
+    """Rooftop test on production: beat 1 (0.1-3.1 s) heard only noise, beat 2 (4.5-6.1 s) only "Bacon.",
+    and 6 spoken paragraphs became 7 shots."""
+    speech = ScriptedSpeech(
+        [
+            TurnStarted("0", 100),
+            PartialTranscript("."),  # noise the transcriber wrote down as punctuation
+            TurnEnded("0", 3000),
+            TurnCompleted(TranscriptTurn("0", ".", 100, 3000)),
+            LISTEN,
+            AudioProgress(3700),  # closes the beat at 3100: nothing said, so no shot
+            TurnStarted("1", 4500),
+            PartialTranscript("Bacon."),
+            TurnEnded("1", 6000),
+            TurnCompleted(TranscriptTurn("1", "Bacon.", 4500, 6000)),
+            LISTEN,
+            AudioProgress(6700),  # the beat at 6100 heard one stray word: it stays open
+            TurnStarted("2", 7000),
+            PartialTranscript("On the rooftop a pigeon"),
+            TurnEnded("2", 10_000),
+            TurnCompleted(TranscriptTurn("2", "On the rooftop a pigeon waits", 7000, 10_000)),
+            LISTEN,
+            AudioProgress(11_000),  # closes the beat at 10 500
+            TurnStarted("3", 11_200),
+            PartialTranscript("It flies off"),
+            TurnEnded("3", 13_000),
+            TurnCompleted(TranscriptTurn("3", "It flies off", 11_200, 13_000)),
+        ]
+    )
+    director = FakeDirector({"b1": one_shot(), "b2": one_shot()})
+    s = Session(speech, director)
+
+    ended = await s.run.execute(
+        "p1", speech.paced(Beat(3100), CHUNK, Beat(6100), CHUNK, Beat(10_500), CHUNK), SpeechOptions()
+    )
+
+    assert s.turns() == [
+        ("s1-b1", "Bacon. On the rooftop a pigeon waits", 4500, 10_500),  # the stray word leads the next beat
+        ("s1-b2", "It flies off", 11_200, 13_000),
+    ]
+    assert ended.shots == 2
+
+
+async def test_a_one_word_last_stretch_still_becomes_a_shot() -> None:
+    """There is no next beat to join, so the narrator's last word is kept."""
+    speech = ScriptedSpeech(
+        [
+            PartialTranscript("A long story told"),
+            LISTEN,
+            AudioProgress(1600),
+            TurnCompleted(TranscriptTurn("0", "A long story told Goodnight.", 0, 3000)),
+        ]
+    )
+    director = FakeDirector({"b1": one_shot(), "b2": one_shot()})
+    s = Session(speech, director)
+
+    await s.run.execute("p1", speech.paced(Beat(1000), CHUNK), SpeechOptions())
+
+    assert [t[1] for t in s.turns()] == ["A long story told", "Goodnight."]
