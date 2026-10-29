@@ -34,32 +34,33 @@ There are no cold starts: production keeps one replica running. A new revision d
 120 s, so a live session or an export in progress finishes during a deploy. If the studio socket drops anyway,
 it shows "Updating the studio, your work is safe", refetches the project and carries on.
 
-## Warm Glimmer before a demo
+## Warm Glimmer for launch night, recording and judging
 
-The continuity supervisor's open-weight reviewer, Muse Glimmer, runs on one H100 on Modal (app `frameteller-glimmer`, workspace `geoftums`, [ADR 0013](adr/0013-glimmer-on-modal.md)). It scales to zero after 5 idle minutes. A cold start takes about **3.5 minutes** (measured: 221 s and 194 s). The GPU costs **USD 3.95 an hour** while a container is up.
+The continuity supervisor's open-weight reviewer, Muse Glimmer, runs on one H100 on Modal (app `frameteller-glimmer`, workspace `geoftums`, [ADR 0013](adr/0013-glimmer-on-modal.md)). It scales to zero after 5 idle minutes. A cold start takes about **3.5 minutes** (measured: 221, 194, 169 and 196 s).
 
-Production uses `REVIEWER=spark` by default, so Glimmer costs nothing until you switch it on. For a demo or a recording session:
+**Cost: USD 3.95 per hour while it is kept warm**, plus about USD 0.35 for the start and the 5-minute scale-down. A 2-hour launch night costs about USD 8.25.
 
-1. **Wake it** 10 minutes before. This polls `/health` (no token needed) until vLLM answers, then sends one authenticated test request:
+Production runs `REVIEWER=screen` (the GitHub `production` variable), but **visitors never wake the GPU**. Reviews go to Glimmer only while the warm-up script holds a lease on the backend. Without a lease, Spark reviews alone, and the badge says "Checked by Muse Spark". Any request to the Modal endpoint, even `/health`, would start a container, so the backend never asks it whether it is up.
+
+1. **Keep it warm** for the session, starting 10 minutes before. The script wakes Glimmer and checks it answers. Then, every 4 minutes, it sends one tiny request and renews a 10-minute lease on each backend:
    ```bash
-   python3 deploy/modal/warm.py --check     # "ready after ~200 s", then "chat: 'ready' in ~2 s"
+   python3 deploy/modal/warm.py --keep 120                     # production, for 2 hours
+   python3 deploy/modal/warm.py --keep 60 --api staging        # or staging, for a recording
+   python3 deploy/modal/warm.py --keep 90 --api production --api staging
    ```
-2. **Switch the reviewer to the screen.** Glimmer checks every review, its passes stand, and Spark decides whatever it flags ([eval](supervisor-eval.md)). This is a new revision, not a deploy:
-   ```bash
-   az containerapp update -g rg-frameteller-prod -n ca-frameteller-production --set-env-vars REVIEWER=screen
-   ```
-   Badges now say "Checked by Muse Glimmer". If Glimmer is cold, slow (over `GLIMMER_TIMEOUT_S`, 20 s) or failing, Spark reviews instead, and the badge says so.
-3. Every review keeps Glimmer awake. It scales to zero 5 minutes after the last one.
+   Leave the terminal open. Each renewal prints "lease https://api.frameteller.com: warm until …". Badges now say "Checked by Muse Glimmer" for every panel Glimmer passes. Spark decides whatever Glimmer flags ([eval](supervisor-eval.md)).
+2. **Stop it:** press Ctrl-C, or let `--keep` run out.
+   - The script revokes the leases, so reviews go back to Spark at once.
+   - The GPU scales to zero 5 minutes later.
+   - If the laptop sleeps or the script dies, the lease runs out by itself within 10 minutes. No visitor review can wake Glimmer after that.
+3. **If Glimmer fails during a lease** (a timeout over `GLIMMER_TIMEOUT_S`, 20 s, or an error), the backend revokes the lease itself and Spark reviews. The script's next renewal (up to 4 minutes later) brings Glimmer back once it answers again.
 
-**Stop it** after the demo:
-```bash
-az containerapp update -g rg-frameteller-prod -n ca-frameteller-production --set-env-vars REVIEWER=spark
-modal app stop frameteller-glimmer        # stops the container now; `modal deploy deploy/modal/glimmer.py` brings it back
-```
+To turn Glimmer off completely, set the GitHub `production` variable `REVIEWER` to `spark` and deploy, or switch the running app at once: `az containerapp update -g rg-frameteller-prod -n ca-frameteller-production --set-env-vars REVIEWER=spark`. `modal app stop frameteller-glimmer` stops a running container and undeploys the endpoint; `modal deploy deploy/modal/glimmer.py` brings it back.
 
 **Check the spend:**
 - `modal app list` shows whether a container is running.
 - The Modal dashboard's Usage page shows GPU time.
+- `modal billing report --for today` shows today's cost per app.
 - The workspace spend limit (USD 30) stops Glimmer if it runs away, and the supervisor then falls back to Spark.
 
 **Rotate the endpoint token.** It is ours, not a Meta key. Keep it out of shell history and logs:

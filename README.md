@@ -67,10 +67,11 @@ Every rule has a stable id (`CONT-04`), a severity and a one-line test. The file
 **Muse Glimmer on Modal, Muse Spark behind it** ([ADR 0013](docs/adr/0013-glimmer-on-modal.md)):
 - Meta's open-weight Muse Glimmer (30B, Apache 2.0, the official BF16 weights) runs on vLLM on one H100 that scales to zero. Weights are cached on a Volume, there is a bearer token, and at most one container runs.
 - The reviewer is chosen per environment:
-  - `spark`: Muse Spark alone (the production default).
+  - `spark`: Muse Spark alone.
   - `fallback`: Glimmer, with Spark when Glimmer is cold, slow or down.
-  - `screen`: as fallback, and Spark decides whatever Glimmer flags. This is what we use when Glimmer is warm for a demo.
-- A cold start takes about 3.5 minutes (221 s and 194 s measured); the [runbook](docs/runbook.md#warm-glimmer-before-a-demo) warms it before a demo.
+  - `screen` (production): as fallback, and Spark decides whatever Glimmer flags.
+- **Visitors never wake the GPU.** `fallback` and `screen` use Glimmer only while our warm-up script holds a short lease on the backend, for launch night, recordings and judging. The rest of the time Spark reviews alone.
+- A cold start takes about 3.5 minutes (169–221 s, measured four times). Keeping Glimmer warm costs USD 3.95 an hour ([runbook](docs/runbook.md#warm-glimmer-for-launch-night-recording-and-judging)).
 
 **How well it works.** We tested the reviewers on [our eval set](docs/supervisor-eval.md): 20 labelled sheets and panels from the lighthouse story, with 2 reproduced real failures and 9 controlled Muse Image variants:
 

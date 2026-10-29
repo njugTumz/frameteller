@@ -63,7 +63,7 @@ That profile suits a screen. With `REVIEWER=screen`, Glimmer's passes stand and 
 - It sends 14 of 20 reviews on to Spark, saving 30% of Spark's cost.
 - It costs latency (reviews run in the background, so this is acceptable) and GPU hours.
 
-So we use the screen when Glimmer is warm anyway, for a demo or a recording session (see the [runbook](runbook.md#warm-glimmer-before-a-demo)). We keep Spark alone when it is not. Waking a GPU for each casual visitor's first review would cost more than it saves.
+So we use the screen when Glimmer is warm anyway, for a demo or a recording session (see the [runbook](runbook.md#warm-glimmer-for-launch-night-recording-and-judging)). We keep Spark alone when it is not. Waking a GPU for each casual visitor's first review would cost more than it saves, so the backend only uses Glimmer while the warm-up script holds a lease (ADR 0013, amended).
 
 **Serving lesson.** The first Glimmer run scored 0/11 on rules: every answer came back without its `issues` array. vLLM accepted the strict JSON schema but did not enforce it for this model and reasoning parser. Answers contained extra keys (`"reason": "CONT-04: …"`), an `issues` object instead of an array, and fields in any order. Two changes fixed it:
 1. The Glimmer adapter now spells the answer's shape out in the prompt.

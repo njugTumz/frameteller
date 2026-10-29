@@ -21,8 +21,15 @@ The continuity supervisor ([ADR 0012](0012-continuity-supervisor.md)) reviews ev
   - The OpenAI-compatible endpoint requires a bearer token (`--api-key`). That token is ours, not a Meta key: Modal secret `frameteller-glimmer-token`, GitHub environment secret `GLIMMER_API_KEY`.
 - **Fallback** (`REVIEWER=fallback`). `FallbackReviewer` tries Glimmer once with a short timeout (`GLIMMER_TIMEOUT_S`, default 20 s). It falls back to Spark on a timeout (cold start), a 5xx, an open circuit or an unusable answer. Every verdict records the model that served it, and the badge says so ("Checked by Muse Glimmer"). A request to a cold endpoint also starts it, so the next reviews go to Glimmer.
 - **Screen** (`REVIEWER=screen`, chosen by the [eval](../supervisor-eval.md)). This is the fallback mode, plus one rule: whatever Glimmer flags goes to Spark, whose verdict decides, and Glimmer's passes stand. On the eval set, Glimmer as the only reviewer caught every failure but flagged 3 of 9 clean images. As a screen in front of Spark it scored as well as Spark alone, with 30% fewer Spark calls.
-- **Default `REVIEWER=spark`.** Spark alone is faster, needs no GPU, and scored best. The screen is switched on (one environment variable) when Glimmer is warm anyway, for a demo or a recording. Waking a GPU for every casual visitor's first review would cost more than it saves.
-- **Warm before a demo.** `python3 deploy/modal/warm.py --check` wakes the container and waits for it ([runbook](../runbook.md#warm-glimmer-before-a-demo)).
+- ~~**Default `REVIEWER=spark`.**~~ Amended the same day, see below.
+- **Warm before a demo.** `python3 deploy/modal/warm.py --check` wakes the container and waits for it ([runbook](../runbook.md#warm-glimmer-for-launch-night-recording-and-judging)).
+
+**Amendment (2026-10-29): Glimmer only while warm, `REVIEWER=screen` in production.** Waking a GPU for a casual visitor's first review would cost more than it saves. There is no free way to ask the endpoint whether it is up, because any request, even `/health`, starts a container. So the warm-up script holds a lease instead:
+- `deploy/modal/warm.py --keep MINUTES` wakes Glimmer and checks it answers. Every 4 minutes it sends a tiny request (the GPU stays up) and renews a 10-minute lease on the backend: `POST /internal/glimmer/lease`, authorised with the Glimmer endpoint token. When it stops, it revokes the lease.
+- `WarmGatedReviewer` sends a review to the screen only while the lease holds (`GlimmerLease`, stored in our storage so a restart keeps it). Otherwise Spark reviews alone, and Glimmer gets no request at all.
+- If Glimmer times out or fails during a lease, the backend revokes it, so the next reviews do not wait 20 s each.
+- `GLIMMER_ONLY_WHEN_WARM` (default true) turns the gate on for `fallback` and `screen`.
+- Production now runs `REVIEWER=screen`. Without a warm-up script running, it behaves exactly like `spark`.
 
 ## Consequences
 
