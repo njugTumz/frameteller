@@ -69,6 +69,7 @@ async def test_status_lists_the_limits(api: Api) -> None:
     assert (await api.client.get("/status")).json() == {
         "paused": False,
         "full": False,
+        "judge": False,
         "limits": {
             "projects_per_visitor_per_day": 3,
             "narration_minutes_per_session": 3,

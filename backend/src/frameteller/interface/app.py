@@ -11,13 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from frameteller.infrastructure.config import Settings
 from frameteller.interface import errors
 from frameteller.interface.container import Container, build_container
+from frameteller.interface.judge import JudgeMiddleware
 from frameteller.interface.middleware import (
     BodyLimitMiddleware,
     PauseMiddleware,
     RateLimitMiddleware,
     RequestContextMiddleware,
 )
-from frameteller.interface.routes import health, internal, media, projects, session, shares, voices
+from frameteller.interface.routes import health, internal, judge, media, projects, session, shares, voices
 from frameteller.interface.visitor import VISITOR_HEADER
 
 DESCRIPTION = """Frameteller turns spoken stories into storyboards.
@@ -46,7 +47,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     if container is not None:
         app.state.container = container
     errors.install(app)
-    routers = (projects, shares, media, health, session, internal, voices)
+    routers = (projects, shares, media, health, session, internal, voices, judge)
     for router in (r.router for r in routers):
         app.include_router(router)
 
@@ -59,6 +60,9 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         per_minute=config.rate_limit_per_minute if config else 120,
         costly_per_minute=config.rate_limit_costly_per_minute if config else 20,
     )
+    judge_token = config.judge_token if config else None
+    # Sets the lane (public or judge) for everything inside it: limits, budgets, queues.
+    app.add_middleware(JudgeMiddleware, token=lambda: judge_token.get_secret_value() if judge_token else None)
     if config and config.origins:
         app.add_middleware(
             CORSMiddleware,
@@ -66,6 +70,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
             allow_methods=["GET", "POST", "PATCH", "DELETE"],
             allow_headers=["Content-Type", "X-Request-ID", VISITOR_HEADER],
             expose_headers=["X-Request-ID"],
+            allow_credentials=True,  # the judge cookie; origins are an explicit list, never "*"
         )
     app.add_middleware(RequestContextMiddleware)
     return app

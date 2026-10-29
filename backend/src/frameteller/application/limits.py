@@ -11,6 +11,7 @@ import asyncio
 from dataclasses import dataclass
 
 from frameteller.application.errors import LimitReachedError
+from frameteller.application.lanes import is_judge
 from frameteller.application.ports import Clock, ProjectRepository, VisitorQuota
 from frameteller.domain import Project
 
@@ -77,13 +78,17 @@ class ProjectAllowance:
 
 
 class VisitorAllowance:
-    """Per-visitor daily allowances. One replica (ADR 0009), so a lock makes check-then-add atomic."""
+    """Per-visitor daily allowances. One replica (ADR 0009), so a lock makes check-then-add atomic.
+
+    Judges have none: their reserved budget is their limit."""
 
     def __init__(self, quota: VisitorQuota, clock: Clock, limits: DemoLimits) -> None:
         self._quota, self._clock, self._limits = quota, clock, limits
         self._lock = asyncio.Lock()
 
     async def take(self, visitor: str, kind: str = PROJECTS) -> None:
+        if is_judge():
+            return
         day = self._clock.now().date().isoformat()
         async with self._lock:
             if await self._quota.used(visitor, day, kind) >= self._limits.projects_per_visitor_per_day:
@@ -99,6 +104,8 @@ class SpeechAllowance:
         self._lock = asyncio.Lock()
 
     async def take(self, visitor: str | None, characters: int) -> None:
+        if is_judge():
+            return  # judges' speech is paid from their reserved budget, through the budget guard
         day = self._clock.now().date().isoformat()
         async with self._lock:
             if self._per_day and await self._quota.used(EVERYONE, day, SPEECH) + characters > self._per_day:

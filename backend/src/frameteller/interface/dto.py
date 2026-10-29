@@ -615,6 +615,7 @@ class StudioStatusOut(BaseModel):
         return cls(
             paused=s.paused,
             full=s.full,
+            judge=s.judge,
             limits=LimitsOut(
                 projects_per_visitor_per_day=s.limits.projects_per_visitor_per_day,
                 narration_minutes_per_session=s.limits.narration_ms_per_session / 60_000,
@@ -703,7 +704,7 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
             }
         case CastProposed(characters):
             return {"type": "cast.proposed", "characters": [CharacterOut.of(c).model_dump() for c in characters]}
-        case JobUpdated(kind, key, status, shot_id, revision, message, progress):
+        case JobUpdated(kind, key, status, shot_id, revision, message, progress, position, estimate_s):
             return {
                 "type": "job.updated",
                 "kind": kind,
@@ -713,6 +714,8 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
                 "revision": revision,
                 "message": message,
                 "progress": progress,
+                "position": position,
+                "estimate_s": estimate_s,
             }
         case SessionFailed(message, fatal):
             return error_message(message, fatal=fatal)
