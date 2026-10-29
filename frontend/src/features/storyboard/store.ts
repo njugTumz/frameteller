@@ -35,6 +35,8 @@ export interface StoryboardState {
   animatic: Animatic | null
   narrations: Narration[]
   shareToken: string | null
+  /** The share page may be indexed by search engines; otherwise it is unlisted. */
+  sharePublic: boolean
   /** A job finished: the project must be fetched again for the new image and masks. */
   stale: boolean
   loaded: boolean
@@ -53,6 +55,7 @@ export const initialStoryboard: StoryboardState = {
   animatic: null,
   narrations: [],
   shareToken: null,
+  sharePublic: false,
   stale: false,
   loaded: false,
 }
@@ -143,6 +146,7 @@ export function loadProject(state: StoryboardState, project: Project): Storyboar
     animatic: project.animatic,
     narrations: project.narrations,
     shareToken: project.share_token,
+    sharePublic: project.share_public,
     stale: false,
     loaded: true,
     sync: 'ready',

@@ -52,6 +52,7 @@ export function project(over: Partial<Project> = {}): Project {
     narrations: [],
     animatic: null,
     share_token: null,
+    share_public: false,
     ...over,
   }
 }

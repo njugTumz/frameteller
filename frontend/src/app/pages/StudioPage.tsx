@@ -113,8 +113,9 @@ export function StudioPage({ projectId }: { projectId: string }) {
             />
             <SharePanel
               link={board.shareToken ? shareUrl(board.shareToken) : null}
+              isPublic={board.sharePublic}
               busy={exporting.sharing}
-              onShare={() => void exporting.share()}
+              onShare={(isPublic) => void exporting.share(isPublic)}
               onRevoke={() => void exporting.unshare()}
             />
           </div>

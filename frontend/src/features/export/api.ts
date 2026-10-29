@@ -12,8 +12,9 @@ export function storyboardPdfUrl(projectId: string): string {
   return `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/exports/storyboard.pdf`
 }
 
-export function createShare(projectId: string): Promise<ShareLink> {
-  return call(() => api.POST('/projects/{project_id}/share', { params: { path: { project_id: projectId } } }))
+/** Turn the link on, or change whether search engines may index it. The link itself never changes. */
+export function createShare(projectId: string, isPublic = false): Promise<ShareLink> {
+  return call(() => api.POST('/projects/{project_id}/share', { params: { path: { project_id: projectId } }, body: { public: isPublic } }))
 }
 
 export async function revokeShare(projectId: string): Promise<void> {

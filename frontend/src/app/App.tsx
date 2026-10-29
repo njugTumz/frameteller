@@ -2,6 +2,7 @@ import { Button } from '../shared/ui/Button'
 import { StartPage } from './pages/StartPage'
 import { SharePage } from './pages/SharePage'
 import { StudioPage } from './pages/StudioPage'
+import { useNoindex } from '../shared/hooks/useNoindex'
 import { Notice } from '../shared/ui/Notice'
 import { navigate, parseRoute, usePathname } from './router'
 import { ThemeSwitch } from './ThemeSwitch'
@@ -10,6 +11,7 @@ import { useTheme } from './theme'
 
 export function App() {
   const route = parseRoute(usePathname())
+  useNoindex(route.name !== 'share') // the studio is an app, not content; share pages decide for themselves
   const [theme, setTheme] = useTheme()
   const themeSwitch = <ThemeSwitch value={theme} onChange={setTheme} />
 

@@ -30,12 +30,13 @@ export function useExport(projectId: string, onProject: (p: Project) => void) {
     [projectId],
   )
 
-  const share = useCallback(async () => {
+  /** Create the link, or switch it between unlisted and public. */
+  const share = useCallback(async (isPublic: boolean) => {
     setError(null)
     setSharing(true)
     try {
-      const link = await createShare(projectId)
-      useStoryboardStore.getState().set({ shareToken: link.token })
+      const link = await createShare(projectId, isPublic)
+      useStoryboardStore.getState().set({ shareToken: link.token, sharePublic: link.public })
     } catch (e) {
       setError(message(e))
     } finally {
@@ -48,7 +49,7 @@ export function useExport(projectId: string, onProject: (p: Project) => void) {
     setSharing(true)
     try {
       await revokeShare(projectId)
-      useStoryboardStore.getState().set({ shareToken: null })
+      useStoryboardStore.getState().set({ shareToken: null, sharePublic: false })
     } catch (e) {
       setError(message(e))
     } finally {

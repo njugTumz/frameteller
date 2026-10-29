@@ -190,6 +190,7 @@ async function storyBackend(page: Page) {
     ] as Json[],
     animatic: null as Json | null,
     shareToken: null as string | null,
+    sharePublic: false,
     narrations: [{ session: 't', duration_ms: 10400, url: '/media/projects/p1/narration/t.wav' }] as Json[],
     posted: [] as { method: string; path: string; body: Json | null }[],
     ws: null as WebSocketRoute | null,
@@ -204,6 +205,7 @@ async function storyBackend(page: Page) {
     narrations: state.narrations,
     animatic: state.animatic,
     share_token: state.shareToken,
+    share_public: state.sharePublic,
   })
   const send = (e: Json) => state.ws?.send(JSON.stringify(e))
   const recast = (from: string, to: string | null) => {
@@ -259,10 +261,12 @@ async function storyBackend(page: Page) {
     }
     if (path === '/projects/p1/share' && method === 'POST') {
       state.shareToken = 'tok123'
-      return json(200, { token: 'tok123', url: `${API}/s/tok123`, page_url: 'http://localhost:4173/s/tok123' })
+      state.sharePublic = Boolean((body as { public?: boolean } | null)?.public)
+      return json(200, { token: 'tok123', public: state.sharePublic, url: `${API}/s/tok123`, page_url: 'http://localhost:4173/s/tok123' })
     }
     if (path === '/projects/p1/share' && method === 'DELETE') {
       state.shareToken = null
+      state.sharePublic = false
       return route.fulfill({ status: 204 })
     }
     if (path === '/shares/tok123') {
@@ -272,6 +276,7 @@ async function storyBackend(page: Page) {
         style: 'pencil',
         shots: state.shots.map((s) => ({ number: s.number, framing: s.framing, action: s.action, dialogue: '', duration_ms: s.duration_ms, image_url: `/shares/tok123/panels/${s.number}` })),
         animatic: state.animatic ? { url: '/shares/tok123/animatic', duration_ms: 12400 } : null,
+        public: state.sharePublic,
       })
     }
     if (path.endsWith('.mp4') || path.endsWith('/animatic')) return route.fulfill({ status: 200, contentType: 'video/mp4', body: '' })
@@ -369,13 +374,26 @@ test('manage the cast, follow a reveal, hear the silence warning, move, export a
   await expect(page.getByRole('link', { name: 'Download storyboard PDF' })).toHaveAttribute('href', `${API}/projects/p1/exports/storyboard.pdf`)
   expect(backend.posted.find((p) => p.path.endsWith('/exports/animatic'))?.body).toEqual({ subtitles: true })
 
-  // Share: a link that previews on X, a read-only page, then turned off.
+  // Share: an unlisted link that previews on X, a read-only page, made public, then turned off.
+  const robots = page.locator('meta[name="robots"]')
+  await expect(robots).toHaveAttribute('content', 'noindex, nofollow') // the studio itself is never indexed
   await page.getByRole('button', { name: 'Create a share link' }).click()
   await expect(page.getByLabel('Share link')).toHaveValue(`${API}/s/tok123`)
+  await expect(page.getByLabel('Make public')).not.toBeChecked()
+  expect(backend.posted.find((p) => p.path.endsWith('/share'))?.body).toEqual({ public: false })
   await page.goto('/s/tok123')
   await expect(page.getByRole('heading', { name: 'The Lighthouse' })).toBeVisible()
   await expect(page.getByTestId('shared-shot')).toHaveCount(2)
   await expect(page.getByTestId('shared-animatic')).toBeVisible()
+  await expect(robots).toHaveAttribute('content', 'noindex, nofollow') // unlisted
+  await page.goto('/projects/p1')
+  await page.getByLabel('Make public').click() // it ticks once the backend confirms
+  await expect(page.getByLabel('Make public')).toBeChecked()
+  await expect(page.getByText('Search engines may list this page.')).toBeVisible()
+  await expect(page.getByLabel('Share link')).toHaveValue(`${API}/s/tok123`) // the same link
+  await page.goto('/s/tok123')
+  await expect(page.getByTestId('shared-shot')).toHaveCount(2)
+  await expect(robots).toHaveCount(0) // public: indexable
   await page.goto('/projects/p1')
   await page.getByRole('button', { name: 'Turn off the link' }).click()
   await expect(page.getByRole('button', { name: 'Create a share link' })).toBeVisible()
