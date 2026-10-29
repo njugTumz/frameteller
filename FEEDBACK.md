@@ -36,6 +36,8 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 - 2026-10-27 · Model API · good · GET /v1/models works with the key and lists all hosted models, including Contributor variants.
 - 2026-10-27 · muse-image-1.0 docs · issue · The images guide's mask parameter section is cut off mid-sentence; masked edits appear unsupported, which changed our SAM edit design.
 
+- 2026-10-29 · muse-image-1.0 · issue · A multi-turn edit chained on a panel drawn about two minutes earlier failed with 400 "referenced response not found or expired". The docs do not say how long a `previous_response_id` stays usable.
+
 <!-- e.g. - 2026-10-28 · muse-image-1.0 · issue · /v1/images/edits rejected a PNG mask with 400 "invalid_mask"; docs don't list mask format. -->
 
 ## Partner technologies: Fireworks, Modal, Baseten
