@@ -1,6 +1,16 @@
 {
   "routes": [
     {
+      "route": "/gallery",
+      "redirect": "https://app.frameteller.com/gallery",
+      "statusCode": 301
+    },
+    {
+      "route": "/gallery/",
+      "redirect": "https://app.frameteller.com/gallery",
+      "statusCode": 301
+    },
+    {
       "route": "/updates.json",
       "headers": {
         "Cache-Control": "no-store"
