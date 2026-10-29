@@ -32,7 +32,9 @@ Return:
   transcript says so. Be concrete. Never mention framing or actions. Never contradict the transcript.
 - shots: one or more shots per turn, in story order.
   framing is one of wide, medium, close_up, over_shoulder, insert. Honour explicit cues such as "wide shot"
-  or "close on". character_ids lists only characters visible in the shot, from the bible or new_characters.
+  or "close on". A turn from a written script may start with a scene heading ("Scene: EXT. ROOFTOP - NIGHT."):
+  use it for the setting, and never draw it as text. A turn that says '<Name> says: "..."' is dialogue.
+  character_ids lists only characters visible in the shot, from the bible or new_characters.
   setting is where and when, action is what we see, dialogue is the spoken words or "" if none.
   source_turn_ids lists the turn ids the shot comes from.
 A turn with no story content (hesitation, a correction to the operator) may produce no shots.
@@ -97,6 +99,15 @@ class CharactersOutput(BaseModel):
     characters: list[CharacterOut]
 
 
+TRANSLATE_PROMPT = """You translate the narration of an original, family-friendly story for a voice to read aloud.
+Translate each text into the requested language, keeping its meaning, tone and every name exactly. Write numbers
+and units as a narrator would say them. Return the translations in the same order, one per text, nothing else."""
+
+
+class TranslationOutput(BaseModel):
+    translations: list[str] = Field(max_length=40)
+
+
 class EditOutput(BaseModel):
     target: str = Field(min_length=1, max_length=120)
     parts: list[str] = Field(max_length=8)
@@ -127,6 +138,27 @@ class MetaSparkDirectorAdapter:
         out = await self._parse(messages, CharactersOutput, self._settings.director_effort_story, "characters", None)
         known_ids = {c.id for c in known}
         return [_character(c) for c in out.characters if c.id not in known_ids]
+
+    async def translate(self, texts: Sequence[str], language: str) -> list[str]:
+        """TranslatorPort: the narration only; shots are directed from the original (ADR 0015)."""
+        if not texts:
+            return []
+        messages = [
+            {"role": "system", "content": TRANSLATE_PROMPT},
+            {
+                "role": "user",
+                "content": f"Language: {language}\nTexts:\n" + json.dumps(list(texts), ensure_ascii=False),
+            },
+        ]
+
+        def check(out: TranslationOutput) -> list[str]:
+            if len(out.translations) != len(texts):
+                return [f"translations: expected {len(texts)} items, one per text, got {len(out.translations)}"]
+            return [f"translation {n} is empty" for n, t in enumerate(out.translations, 1) if not t.strip()]
+
+        effort = self._settings.director_effort_turn
+        out = await self._parse(messages, TranslationOutput, effort, "translate", check)
+        return [t.strip() for t in out.translations]
 
     async def interpret_edit(self, instruction: str, shot: Shot, cast: Sequence[Character]) -> EditIntent:
         shot_json = json.dumps(
@@ -267,7 +299,8 @@ def _bible_message(characters: Sequence[Character]) -> str:
 
 def _turns_json(turns: Sequence[TranscriptTurn]) -> str:
     return json.dumps(
-        [{"id": t.id, "start_ms": t.start_ms, "end_ms": t.end_ms, "text": t.text} for t in turns], ensure_ascii=False
+        [{"id": t.id, "start_ms": t.start_ms, "end_ms": t.end_ms, "text": t.for_director} for t in turns],
+        ensure_ascii=False,
     )
 
 

@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TypeVar
 
+import httpx2
 import openai
 import websockets.exceptions
 
@@ -105,6 +106,12 @@ def classify(model: str, exc: BaseException) -> tuple[ModelError, bool] | None:
         return ModelUnavailableError(model, "connection failed"), True
     if isinstance(exc, urllib.error.HTTPError):
         return _by_status(model, exc.code)
+    if isinstance(exc, httpx2.HTTPStatusError):
+        return _by_status(model, exc.response.status_code)
+    if isinstance(exc, httpx2.TimeoutException):
+        return ModelTimeoutError(model, "timed out"), True
+    if isinstance(exc, httpx2.TransportError):
+        return ModelUnavailableError(model, type(exc).__name__), True
     if isinstance(exc, urllib.error.URLError | ConnectionError | websockets.exceptions.ConnectionClosedError):
         return ModelUnavailableError(model, type(exc).__name__), True
     if isinstance(exc, websockets.exceptions.InvalidStatus):

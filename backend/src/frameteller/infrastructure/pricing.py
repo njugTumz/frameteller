@@ -24,6 +24,7 @@ TOKEN_PRICES = {
 IMAGE_USD = 0.01
 SAM_IMAGE_USD = 2.50 / 1000
 ASR_USD_PER_HOUR = 0.18
+TTS_USD_PER_CHARACTER = 15 / 1_000_000  # Azure AI Speech, neural voices, pay as you go
 
 
 def token_cost(model: str, input_tokens: int | None, output_tokens: int | None, cached_tokens: int | None) -> float:
