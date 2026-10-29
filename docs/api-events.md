@@ -91,8 +91,9 @@ Send `transcript.corrected` with a `turn_id` from a `turn.completed` event and t
 | 4400 | Missing or invalid start message |
 | 4404 | No such project |
 | 4409 | A voice session is already running for this project |
+| 4503 | The studio is paused (`DEMO_PAUSED`): closed straight after the handshake, with no `error` event |
 
-Before closing with a 44xx code, the server sends a fatal `error` with a user-facing message.
+Before closing with a 44xx code (not 4503), the server sends a fatal `error` with a user-facing message.
 
 ## REST endpoints that pair with the session
 
@@ -106,6 +107,19 @@ Before closing with a 44xx code, the server sends a fatal `error` with a user-fa
 | `POST /projects/{id}/exports/animatic` `{subtitles}` | 202 `export_animatic` ticket. When it succeeds, `GET /projects/{id}` has `animatic: {url, duration_ms, subtitles, voiced}`. The URL plays inline (it answers `Range` requests); `?download=1` saves it. |
 | `GET /projects/{id}/exports/storyboard.pdf` | The storyboard sheet (A4 landscape, six shots a page): panel, shot number, framing, action, dialogue and duration. Undrawn shots print as "Not drawn yet". |
 | `POST /projects/{id}/dictation` (body: WAV, mono 16-bit, 16 or 24 kHz, at most 30 s) | `{text}`: a spoken edit instruction, transcribed for the user to check before sending it to `.../panel/edit`. Nothing is directed. |
+| `GET /projects/{id}/jobs/{key}` | `{key, status, message}`, status `queued`, `running`, `succeeded`, `failed` or `unknown`. The fallback when `job.updated` events were missed (a dropped socket, a hidden tab, a new studio revision). `unknown` means this server never saw the job: re-read the project to see whether its result landed. |
+
+## Public-demo limits and the kill switch
+
+`GET /status` returns `{paused, full, limits}`. The studio checks it on load: `paused` shows the "back soon" page, `full` (the day's global spend cap is reached) says "The studio is full for today. Come back tomorrow." Shared storyboards stay viewable either way.
+
+| Response | When |
+|---|---|
+| 429 `limit_reached` | A visitor started 3 stories today (visitor = hash of IP and the `X-Visitor-Id` browser id; neither is stored raw), or a story used its 30 renders and edits, or its 3 exports. The message says what to do next. |
+| 503 `studio_full` | The day's global spend cap (`BUDGET_PER_DAY_USD`, USD 10 in production). |
+| 503 `paused` | `DEMO_PAUSED=true`. Everything but `/healthz`, `/readyz`, `/status`, `/s/*` and `/shares/*`; sessions close with 4503. |
+
+In a live session, the 12-shot limit, the 3-minute narration limit and a director refusal (a real person or a franchise character) arrive as non-fatal `error` events. At the narration limit the server ends the telling as if the narrator pressed Stop.
 
 ## Share links
 
