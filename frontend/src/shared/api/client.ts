@@ -1,10 +1,32 @@
 import createClient from 'openapi-fetch'
 import { API_BASE_URL } from '../../config'
+import { useStudioStatus } from '../status/store'
+import { visitorId } from '../visitor'
 import type { paths } from './schema'
 
 /** The typed REST client, generated from backend/openapi.json. The browser only ever talks to our backend. */
 // fetch is looked up per request (not captured once), so tests and polyfills can replace it.
 export const api = createClient<paths>({ baseUrl: API_BASE_URL, fetch: (request) => globalThis.fetch(request) })
+
+api.use({
+  onRequest({ request }) {
+    request.headers.set('X-Visitor-Id', visitorId())
+    return request
+  },
+  async onResponse({ response }) {
+    // Any request can learn that the studio was paused or filled up since the page loaded.
+    if (response.status === 503) {
+      const code = await response
+        .clone()
+        .json()
+        .then((b: { error?: { code?: string } }) => b.error?.code)
+        .catch(() => undefined)
+      if (code === 'paused') useStudioStatus.getState().set({ paused: true })
+      if (code === 'studio_full') useStudioStatus.getState().set({ full: true })
+    }
+    return response
+  },
+})
 
 /** A failed request, with a message written for the user (the backend's ErrorOut, or ours). */
 export class ApiError extends Error {
@@ -26,6 +48,7 @@ const FALLBACK: Record<number, string> = {
   413: 'That is too large to send.',
   422: 'The studio could not read that request.',
   429: 'That was a lot at once. Wait a few seconds and try again.',
+  503: 'The studio is busy right now. Try again in a minute.',
 }
 
 function messageOf(error: unknown): { code?: string; message?: string } {

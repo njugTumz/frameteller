@@ -6,6 +6,7 @@ describe('parseRoute', () => {
     ['/', { name: 'start' }],
     ['/projects/p1', { name: 'studio', projectId: 'p1' }],
     ['/s/0123abcd', { name: 'share', token: '0123abcd' }],
+    ['/privacy', { name: 'privacy' }],
     ['/s/../x', { name: 'missing' }],
     ['/elsewhere', { name: 'missing' }],
   ])('%s', (path, route) => {

@@ -61,7 +61,7 @@ export type ServerEvent =
 export type ServerEventOf<T extends ServerEvent['type']> = Extract<ServerEvent, { type: T }>
 
 /** Close codes from docs/api-events.md. */
-export const CLOSE = { normal: 1000, policy: 1008, badStart: 4400, notFound: 4404, busy: 4409 } as const
+export const CLOSE = { normal: 1000, policy: 1008, badStart: 4400, notFound: 4404, busy: 4409, paused: 4503 } as const
 
 // ---- runtime guard ----
 

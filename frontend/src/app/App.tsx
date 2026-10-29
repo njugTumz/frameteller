@@ -1,8 +1,13 @@
 import { Button } from '../shared/ui/Button'
+import { useEffect } from 'react'
+import { BackSoonPage } from './pages/BackSoonPage'
+import { PrivacyPage } from './pages/PrivacyPage'
 import { StartPage } from './pages/StartPage'
 import { SharePage } from './pages/SharePage'
 import { StudioPage } from './pages/StudioPage'
 import { useNoindex } from '../shared/hooks/useNoindex'
+import { checkStudioStatus } from '../shared/status/api'
+import { useStudioStatus } from '../shared/status/store'
 import { Notice } from '../shared/ui/Notice'
 import { navigate, parseRoute, usePathname } from './router'
 import { ThemeSwitch } from './ThemeSwitch'
@@ -14,6 +19,8 @@ export function App() {
   useNoindex(route.name !== 'share') // the studio is an app, not content; share pages decide for themselves
   const [theme, setTheme] = useTheme()
   const themeSwitch = <ThemeSwitch value={theme} onChange={setTheme} />
+  const paused = useStudioStatus((s) => s.paused)
+  useEffect(() => void checkStudioStatus(), [])
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -33,7 +40,11 @@ export function App() {
         <>
           <TopBar>{themeSwitch}</TopBar>
           <main id="main" className="flex-1">
-            {route.name === 'start' ? (
+            {paused && route.name !== 'share' && route.name !== 'privacy' ? (
+              <BackSoonPage />
+            ) : route.name === 'privacy' ? (
+              <PrivacyPage />
+            ) : route.name === 'start' ? (
               <StartPage />
             ) : route.name === 'share' ? (
               <SharePage key={route.token} token={route.token} />

@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from 'react'
 import type { PanelStyle } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
+import { STUDIO_FULL } from '../../../shared/status/store'
 import { Notice } from '../../../shared/ui/Notice'
 import { CutoutArt, PencilArt, StyleCard } from './StyleCard'
 
@@ -15,6 +16,7 @@ export function StartScreen({
   form,
   creating,
   error,
+  full = false,
   wakeNotice,
   onChange,
   onSubmit,
@@ -22,6 +24,8 @@ export function StartScreen({
   form: StartForm
   creating: boolean
   error: string | null
+  /** The day's global spend cap is reached: no new stories until tomorrow. */
+  full?: boolean
   wakeNotice: ReactNode
   onChange: (patch: Partial<StartForm>) => void
   onSubmit: () => void
@@ -39,6 +43,11 @@ export function StartScreen({
       <p className="mt-5 mb-8 max-w-[58ch] text-lg text-muted">
         Tell your story out loud. Press <strong className="text-ink">Next shot</strong> in the pause before each new shot, and the panels draw themselves, with the same characters in every frame.
       </p>
+      {full && (
+        <Notice tone="warn" title={STUDIO_FULL} className="mb-6">
+          So many stories were told today that the public demo has used its budget. Shared storyboards still open.
+        </Notice>
+      )}
       {wakeNotice && <div className="mb-6">{wakeNotice}</div>}
       <form onSubmit={submit} className="flex flex-col gap-8 rounded-md border-[1.5px] border-rule bg-sheet p-5 md:p-8">
         <div className="flex flex-col gap-2">
@@ -126,10 +135,12 @@ export function StartScreen({
         {error && <Notice tone="error" title={error} />}
 
         <div className="flex flex-wrap items-center gap-4">
-          <Button type="submit" variant="marker" size="lg" disabled={creating} className="font-extrabold wide">
+          <Button type="submit" variant="marker" size="lg" disabled={creating || full} className="font-extrabold wide">
             {creating ? 'Setting up the desk…' : 'Open the studio'}
           </Button>
-          <span className="text-sm text-muted">You'll allow the microphone next.</span>
+          <span className="text-sm text-muted">
+            You'll allow the microphone next. <a href="/privacy">What we keep, and for how long</a>
+          </span>
         </div>
       </form>
     </div>

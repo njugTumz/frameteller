@@ -429,3 +429,43 @@ test('a socket dropped mid-export (a new studio version) still ends with the fin
   await expect(page.getByRole('link', { name: 'Download MP4' })).toHaveAttribute('href', /animatic-1\.mp4\?download=1$/)
   await expect(page.getByText('Updating the studio, your work is safe')).toHaveCount(0)
 })
+
+async function statusBackend(page: Page, status: { paused: boolean; full: boolean }) {
+  const posted: string[] = []
+  await page.route(`${API}/**`, async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname
+    if (req.method() === 'POST') posted.push(path)
+    const json = (code: number, b: unknown) => route.fulfill({ status: code, contentType: 'application/json', body: JSON.stringify(b) })
+    if (path === '/healthz') return json(200, { status: 'ok' })
+    if (path === '/status') return json(200, { ...status, limits: {} })
+    if (path === '/shares/tok12345') return json(200, { title: 'The Lantern Cat', style: 'pencil', public: false, shots: [], animatic: null })
+    if (status.paused) return json(503, { error: { code: 'paused', message: 'Frameteller is taking a short break. Back soon.' } })
+    return json(404, { error: { code: 'not_found', message: 'nope' } })
+  })
+  return posted
+}
+
+test('the kill switch shows "back soon" but shared storyboards still open', async ({ page }) => {
+  await statusBackend(page, { paused: true, full: false })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Back soon.' })).toBeVisible()
+  await page.goto('/projects/p1')
+  await expect(page.getByRole('heading', { name: 'Back soon.' })).toBeVisible()
+  await page.goto('/s/tok12345')
+  await expect(page.getByText('The Lantern Cat').first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Back soon.' })).toHaveCount(0)
+})
+
+test('a full studio says come back tomorrow, and the privacy page is one click away', async ({ page }) => {
+  const posted = await statusBackend(page, { paused: false, full: true })
+  await page.goto('/')
+  await expect(page.getByText('The studio is full for today. Come back tomorrow.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open the studio' })).toBeDisabled()
+  expect(posted).toEqual([])
+
+  await page.getByRole('link', { name: 'What we keep, and for how long' }).click()
+  await expect(page.getByRole('heading', { name: 'Privacy', level: 1 })).toBeVisible()
+  await expect(page.getByText(/30 days after they were last/)).toBeVisible()
+  await expect(page.getByText(/does not use your content to train/)).toBeVisible()
+})

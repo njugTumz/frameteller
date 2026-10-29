@@ -43,6 +43,8 @@ export function closeMessage(code: number): string {
       return 'This storyboard no longer exists. Start a new story.'
     case CLOSE.policy:
       return 'The studio refused the connection from this address, or too many were opened at once. Wait a minute and try again.'
+    case CLOSE.paused:
+      return 'Frameteller is taking a short break. Back soon. Your storyboard is saved.'
     case CLOSE.badStart:
       return 'The studio did not understand how the session started. Reload the page and try again.'
     default:
