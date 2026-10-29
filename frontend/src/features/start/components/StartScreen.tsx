@@ -37,6 +37,7 @@ export function StartScreen({
   onChange,
   onSubmit,
   onSample,
+  guide = null,
 }: {
   form: StartForm
   creating: boolean
@@ -52,6 +53,8 @@ export function StartScreen({
   onSubmit: () => void
   /** "Try a sample story": the built-in script, read aloud, for visitors without a microphone. */
   onSample?: () => void
+  /** The first-visit guide, when this browser has not dismissed it. */
+  guide?: ReactNode
 }) {
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -72,6 +75,7 @@ export function StartScreen({
         </Notice>
       )}
       {wakeNotice && <div className="mb-6">{wakeNotice}</div>}
+      {guide}
       {onSample && (
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-md border-[1.5px] border-dashed border-rule p-4">
           <p className="m-0 flex-1 basis-60 text-sm">

@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 import { StartScreen } from '../../features/start/components/StartScreen'
+import { FirstVisitGuide } from '../../features/start/components/FirstVisitGuide'
+import { useFirstVisit } from '../../features/start/hooks/useFirstVisit'
 import { useSampleStory, useStartStory } from '../../features/start/hooks/useStartStory'
 import { useStartStore } from '../../features/start/store'
 import { useVoicePreview } from '../../features/script/hooks/useVoicePreview'
@@ -19,6 +21,7 @@ export function StartPage() {
   const open = useCallback((id: string) => navigate(studioPath(id)), [])
   const start = useStartStory(open)
   const sample = useSampleStory(open)
+  const guide = useFirstVisit()
   return (
     <StartScreen
       form={{ title, style, names, keepAudio, mode, script, format, voice, language }}
@@ -29,6 +32,7 @@ export function StartPage() {
       error={error}
       full={full}
       wakeNotice={<WakeNotice wake={wake} onRetry={retry} />}
+      guide={guide.show ? <FirstVisitGuide onDismiss={guide.dismiss} /> : null}
       onChange={(patch) => {
         if (patch.title !== undefined) setTitle(patch.title)
         if (patch.style !== undefined) setStyle(patch.style)

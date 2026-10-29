@@ -21,6 +21,7 @@ import { StoryboardGrid } from '../../features/storyboard/components/StoryboardG
 import { useAutoDraft } from '../../features/storyboard/hooks/useAutoDraft'
 import { usePanelRender } from '../../features/storyboard/hooks/usePanelRender'
 import { useProjectSync } from '../../features/storyboard/hooks/useProjectSync'
+import { boardProgress } from '../../features/storyboard/progress'
 import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
 import { mediaUrl } from '../../shared/api/client'
 import type { Project, Shot } from '../../shared/api/types'
@@ -55,6 +56,7 @@ const EditorZone = lazy(() => import('../studio/EditorZone').then((m) => ({ defa
 export function StudioPage({ projectId }: { projectId: string }) {
   const r = useRecordingStore()
   const board = useStoryboardStore()
+  const progress = boardProgress(board.shots, board.jobs, board.awaitingReview)
   const cast = useCastStore()
   const castNames = useMemo(() => cast.characters.map((c) => c.name), [cast.characters])
   const sync = useProjectSync(projectId, r.connected, projectLoaded)
@@ -158,6 +160,11 @@ export function StudioPage({ projectId }: { projectId: string }) {
       <div className="flex min-w-0 flex-col gap-6">
         {sync.status === 'loading' && <p className="m-0 text-muted">Opening the storyboard…</p>}
         <CastZone projectId={projectId} onProject={onProject} />
+        {progress && (
+          <p className="m-0 text-sm font-semibold" role="status" aria-live="polite" data-testid="board-progress">
+            {progress}
+          </p>
+        )}
         <StoryboardGrid count={board.shots.length} telling={r.telling === 'live'}>
           {episodes.flatMap(({ episode, shots, numbered }) => [
             ...(episodes.length > 1 ? [<EpisodeHeading key={`episode-${episode}`} episode={episode} />] : []),
