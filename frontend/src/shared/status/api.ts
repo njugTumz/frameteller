@@ -5,7 +5,7 @@ import { useStudioStatus } from './store'
 export async function checkStudioStatus(): Promise<void> {
   try {
     const status = await call(() => api.GET('/status'))
-    useStudioStatus.getState().set({ paused: status.paused, full: status.full })
+    useStudioStatus.getState().set({ paused: status.paused, full: status.full, judge: status.judge ?? false })
   } catch {
     // unreachable or asleep: the wake notice covers it
   }

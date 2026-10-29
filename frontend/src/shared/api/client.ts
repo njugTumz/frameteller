@@ -6,7 +6,8 @@ import type { paths } from './schema'
 
 /** The typed REST client, generated from backend/openapi.json. The browser only ever talks to our backend. */
 // fetch is looked up per request (not captured once), so tests and polyfills can replace it.
-export const api = createClient<paths>({ baseUrl: API_BASE_URL, fetch: (request) => globalThis.fetch(request) })
+// credentials: the judge pass is an HttpOnly cookie on the API's domain (only judges have one).
+export const api = createClient<paths>({ baseUrl: API_BASE_URL, credentials: 'include', fetch: (request) => globalThis.fetch(request) })
 
 api.use({
   onRequest({ request }) {

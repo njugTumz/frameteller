@@ -13,6 +13,8 @@ import { navigate, parseRoute, usePathname } from './router'
 import { ThemeSwitch } from './ThemeSwitch'
 import { TopBar } from './TopBar'
 import { useTheme } from './theme'
+import { JudgePage } from './pages/JudgePage'
+import { JudgeBadge } from '../shared/ui/JudgeBadge'
 
 export function App() {
   const route = parseRoute(usePathname())
@@ -20,6 +22,13 @@ export function App() {
   const [theme, setTheme] = useTheme()
   const themeSwitch = <ThemeSwitch value={theme} onChange={setTheme} />
   const paused = useStudioStatus((s) => s.paused)
+  const judge = useStudioStatus((s) => s.judge)
+  const bar = (
+    <TopBar>
+      {judge && <JudgeBadge />}
+      {themeSwitch}
+    </TopBar>
+  )
   useEffect(() => void checkStudioStatus(), [])
 
   return (
@@ -29,7 +38,7 @@ export function App() {
       </a>
       {route.name === 'missing' ? (
         <>
-          <TopBar>{themeSwitch}</TopBar>
+          {bar}
           <main id="main" className="mx-auto w-full max-w-xl p-4 py-16">
             <Notice tone="warn" title="There is no storyboard at this address." action={<Button onClick={() => navigate('/')}>Start a new story</Button>}>
               Check the link, or start a new story.
@@ -38,12 +47,14 @@ export function App() {
         </>
       ) : (
         <>
-          <TopBar>{themeSwitch}</TopBar>
+          {bar}
           <main id="main" className="flex-1">
             {paused && route.name !== 'share' && route.name !== 'privacy' ? (
               <BackSoonPage />
             ) : route.name === 'privacy' ? (
               <PrivacyPage />
+            ) : route.name === 'judge' ? (
+              <JudgePage />
             ) : route.name === 'start' ? (
               <StartPage />
             ) : route.name === 'share' ? (

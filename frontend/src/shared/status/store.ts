@@ -4,12 +4,15 @@ import { create } from 'zustand'
 export interface StudioStatusState {
   paused: boolean
   full: boolean
-  set(patch: Partial<Pick<StudioStatusState, 'paused' | 'full'>>): void
+  /** This browser has a valid judge pass: show the badge. */
+  judge: boolean
+  set(patch: Partial<Pick<StudioStatusState, 'paused' | 'full' | 'judge'>>): void
 }
 
 export const useStudioStatus = create<StudioStatusState>()((set) => ({
   paused: false,
   full: false,
+  judge: false,
   set: (patch) => set(patch),
 }))
 

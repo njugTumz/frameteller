@@ -14,7 +14,8 @@ export function PrivacyPage() {
         There are no accounts and no tracking or advertising cookies. Your browser keeps a random id and a few
         preferences (your theme, whether to keep your narration) in its own storage. The id is sent with each request
         so the public demo can limit how many stories one visitor starts a day. For that count we store only a
-        one-way hash of the id together with your IP address.
+        one-way hash of the id together with your IP address. Judges who open their private judge link get one
+        cookie, which only says that the browser may skip the public queue and limits until judging ends.
       </p>
 
       <h2>What we store, and why</h2>
