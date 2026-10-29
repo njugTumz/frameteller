@@ -47,6 +47,23 @@ export function useCastReview(projectId: string) {
     [projectId],
   )
 
+  /** A sheet that failed: draw it again with the description as the user has just edited it. */
+  const redrawWith = useCallback(
+    async (characterId: string) => {
+      const s = useCastStore.getState()
+      const text = s.edits[characterId]?.trim()
+      if (!text) return regenerate(characterId)
+      s.set({ redrawing: { ...s.redrawing, [characterId]: true }, status: 'draft', error: null })
+      try {
+        await approveCast(projectId, { [characterId]: text })
+      } catch (e) {
+        const { [characterId]: _gone, ...rest } = useCastStore.getState().redrawing
+        useCastStore.getState().set({ redrawing: rest, error: message(e) })
+      }
+    },
+    [projectId, regenerate],
+  )
+
   const edit = useCallback((id: string, description: string) => useCastStore.getState().edit(id, description), [])
-  return { approve, regenerate, edit }
+  return { approve, regenerate, redrawWith, edit }
 }

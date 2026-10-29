@@ -190,6 +190,18 @@
               }
             ],
             "description": "The continuity check of this reference sheet."
+          },
+          "sheet_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last sheet could not be drawn, in plain words; offer Try again and Edit.",
+            "title": "Sheet Error"
           }
         },
         "required": [
@@ -357,6 +369,47 @@
           "status"
         ],
         "title": "JobStatusOut",
+        "type": "object"
+      },
+      "JudgeIn": {
+        "properties": {
+          "token": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "JudgeIn",
+        "type": "object"
+      },
+      "JudgeOut": {
+        "properties": {
+          "judge": {
+            "title": "Judge",
+            "type": "boolean"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the pass runs out (ISO 8601, UTC).",
+            "title": "Until"
+          }
+        },
+        "required": [
+          "judge",
+          "until"
+        ],
+        "title": "JudgeOut",
         "type": "object"
       },
       "LanguageOut": {
@@ -1256,8 +1309,14 @@
         "description": "Whether the studio takes new work: the studio checks this before starting a story.",
         "properties": {
           "full": {
-            "description": "Today's global spend cap is reached: no new work until tomorrow (UTC).",
+            "description": "Today's spend cap is reached: no new work until midnight UTC+4.",
             "title": "Full",
+            "type": "boolean"
+          },
+          "judge": {
+            "default": false,
+            "description": "This browser has a valid judge pass (show the badge).",
+            "title": "Judge",
             "type": "boolean"
           },
           "limits": {
@@ -1589,6 +1648,80 @@
         "summary": "Healthz",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/judge": {
+      "delete": {
+        "operationId": "leave_judge_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Leave",
+        "tags": [
+          "judge"
+        ]
+      },
+      "post": {
+        "description": "Judges skip the per-visitor caps and the waiting room, and draw from a reserved daily budget.",
+        "operationId": "enter_judge_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JudgeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JudgeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enter",
+        "tags": [
+          "judge"
         ]
       }
     },

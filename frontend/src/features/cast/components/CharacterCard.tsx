@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import type { Character } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
 
@@ -12,6 +12,7 @@ export function CharacterCard({
   busy = false,
   onDescribe,
   onRegenerate,
+  onRedrawWith,
   onRename,
   onRemove,
   onMerge,
@@ -28,6 +29,8 @@ export function CharacterCard({
   busy?: boolean
   onDescribe: (text: string) => void
   onRegenerate: () => void
+  /** After a failed sheet: draw it with the edited description. */
+  onRedrawWith?: () => void
   onRename?: (name: string) => void
   onRemove?: () => void
   onMerge?: (into: string) => void
@@ -42,6 +45,9 @@ export function CharacterCard({
   const [into, setInto] = useState('')
   const changed = description.trim() !== character.description
   const done = () => setMode('view')
+  const describe = useRef<HTMLTextAreaElement>(null)
+  // The sheet could not be drawn (e.g. Muse Image's safety filter): say why, and how to go on.
+  const failed = !imageSrc && !redrawing && !!character.sheet_error
   return (
     <li className="arrive flex w-64 shrink-0 flex-col gap-2 rounded-md border-[1.5px] border-rule bg-sheet p-3" data-testid="character-card">
       <div className="frame aspect-square">
@@ -50,6 +56,19 @@ export function CharacterCard({
             <img src={imageSrc} alt={`Reference sheet for ${character.name}`} className="size-full object-cover" />
             {badge}
           </>
+        ) : failed ? (
+          <div className="flex size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm" role="alert" data-testid="sheet-failed">
+            <p className="m-0 font-bold text-danger">{character.name}’s sheet couldn’t be drawn.</p>
+            <p className="m-0 text-muted">{character.sheet_error}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button size="sm" variant="ink" onClick={changed ? onRedrawWith : onRegenerate}>
+                {changed ? 'Draw with this description' : 'Try again'}
+              </Button>
+              <Button size="sm" onClick={() => describe.current?.focus()}>
+                Edit description
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="grid size-full place-items-center p-4 text-center text-sm font-semibold text-muted" aria-live="polite">
             {redrawing ? `Redrawing ${character.name}…` : `Drawing ${character.name}’s sheet…`}
@@ -88,6 +107,7 @@ export function CharacterCard({
         Description of {character.name}
       </label>
       <textarea
+        ref={describe}
         id={id}
         rows={4}
         value={description}
@@ -96,8 +116,8 @@ export function CharacterCard({
         onChange={(e) => onDescribe(e.target.value)}
         className="resize-y rounded border-[1.5px] border-rule bg-paper px-2 py-1.5 text-sm leading-snug read-only:border-transparent read-only:bg-transparent focus:border-ink"
       />
-      {changed && !locked && <p className="m-0 text-xs text-muted">Approving redraws this sheet with your description first.</p>}
-      {!locked && (
+      {changed && !locked && !failed && <p className="m-0 text-xs text-muted">Approving redraws this sheet with your description first.</p>}
+      {!locked && !failed && (
         <Button size="sm" onClick={onRegenerate} disabled={redrawing}>
           Regenerate
         </Button>

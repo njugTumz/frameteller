@@ -11,7 +11,7 @@ import type { Project } from '../../shared/api/types'
 
 export function CastZone({ projectId, onProject }: { projectId: string; onProject: (p: Project) => void }) {
   const cast = useCastStore()
-  const { approve, regenerate, edit } = useCastReview(projectId)
+  const { approve, regenerate, redrawWith, edit } = useCastReview(projectId)
   const manage = useCastManage(projectId, onProject)
   const supervisor = useSupervisorActions(projectId, onProject)
   if (cast.characters.length === 0 && cast.expected.length === 0) return null
@@ -36,6 +36,7 @@ export function CastZone({ projectId, onProject }: { projectId: string; onProjec
           locked={locked}
           onDescribe={(text) => edit(c.id, text)}
           onRegenerate={() => void regenerate(c.id)}
+          onRedrawWith={() => void redrawWith(c.id)}
           others={cast.characters.filter((o) => o.id !== c.id)}
           busy={cast.managing}
           onRename={(name) => manage.rename(c.id, name)}

@@ -58,3 +58,25 @@ describe('CharacterCard cast management', () => {
     expect(screen.queryByRole('button', { name: 'Merge into…' })).toBeNull()
   })
 })
+
+describe('CharacterCard when a sheet failed', () => {
+  const failed = character('amara', { name: 'Amara', reference_url: null, sheet_error: "Muse Image's safety filter turned it down. Describe them by look and role (no ages), then try again." })
+
+  it('names the character, says why, and offers Try again and Edit description', async () => {
+    const props = card({ character: failed, locked: false, description: failed.description })
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain('Amara’s sheet couldn’t be drawn.')
+    expect(alert.textContent).toContain('safety filter')
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(props.onRegenerate).toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit description' }))
+    expect(document.activeElement).toBe(screen.getByLabelText('Description of Amara'))
+  })
+
+  it('draws with the edited description once it changed', async () => {
+    const onRedrawWith = vi.fn()
+    card({ character: failed, locked: false, description: 'a kite maker’s apprentice with an orange headscarf', onRedrawWith })
+    await userEvent.click(screen.getByRole('button', { name: 'Draw with this description' }))
+    expect(onRedrawWith).toHaveBeenCalled()
+  })
+})

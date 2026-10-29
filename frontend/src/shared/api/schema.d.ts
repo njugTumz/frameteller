@@ -24,6 +24,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/judge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enter
+         * @description Judges skip the per-visitor caps and the waiting room, and draw from a reserved daily budget.
+         */
+        post: operations["enter_judge_post"];
+        /** Leave */
+        delete: operations["leave_judge_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/{key}": {
         parameters: {
             query?: never;
@@ -707,6 +728,11 @@ export interface components {
             reference_url: string | null;
             /** @description The continuity check of this reference sheet. */
             review?: components["schemas"]["ReviewOut"] | null;
+            /**
+             * Sheet Error
+             * @description Why the last sheet could not be drawn, in plain words; offer Try again and Edit.
+             */
+            sheet_error?: string | null;
         };
         /** CharacterRename */
         CharacterRename: {
@@ -778,6 +804,21 @@ export interface components {
              * @enum {string}
              */
             status: "queued" | "running" | "succeeded" | "failed" | "unknown";
+        };
+        /** JudgeIn */
+        JudgeIn: {
+            /** Token */
+            token: string;
+        };
+        /** JudgeOut */
+        JudgeOut: {
+            /** Judge */
+            judge: boolean;
+            /**
+             * Until
+             * @description When the pass runs out (ISO 8601, UTC).
+             */
+            until: string | null;
         };
         /** LanguageOut */
         LanguageOut: {
@@ -1185,9 +1226,15 @@ export interface components {
         StudioStatusOut: {
             /**
              * Full
-             * @description Today's global spend cap is reached: no new work until tomorrow (UTC).
+             * @description Today's spend cap is reached: no new work until midnight UTC+4.
              */
             full: boolean;
+            /**
+             * Judge
+             * @description This browser has a valid judge pass (show the badge).
+             * @default false
+             */
+            judge: boolean;
             limits: components["schemas"]["LimitsOut"];
             /**
              * Paused
@@ -1331,6 +1378,75 @@ export interface operations {
                         [key: string]: string;
                     };
                 };
+            };
+        };
+    };
+    enter_judge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JudgeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JudgeOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_judge_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
