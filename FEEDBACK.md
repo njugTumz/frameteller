@@ -38,6 +38,9 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 - 2026-10-29 · muse-image-1.0 · issue · A multi-turn edit chained on a panel drawn about two minutes earlier failed with 400 "referenced response not found or expired". The docs do not say how long a `previous_response_id` stays usable.
 
+- 2026-10-29 · muse-image-1.0 · issue · Retention of `previous_response_id` looks unpredictable: one chain held at 49 min, while a response created from input images could not be chained at once, at 3 or at 6 min (400 "referenced response not found or expired"). We now always send our stored image instead (ADR 0014). A documented retention, or an error that says "not stored" vs "expired", would help.
+- 2026-10-29 · muse-image-1.0 · good · Editing from the stored image as the first `input_image` kept the layout better than a chain (0.17–0.21% structural change outside the object vs 0.6%), at the same flat price.
+
 <!-- e.g. - 2026-10-28 · muse-image-1.0 · issue · /v1/images/edits rejected a PNG mask with 400 "invalid_mask"; docs don't list mask format. -->
 
 ## Partner technologies: Fireworks, Modal, Baseten
