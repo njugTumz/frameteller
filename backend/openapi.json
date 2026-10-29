@@ -179,6 +179,17 @@
               }
             ],
             "title": "Reference Url"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The continuity check of this reference sheet."
           }
         },
         "required": [
@@ -278,6 +289,35 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IssueOut": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "rule_id": {
+            "description": "The rubric rule, e.g. CONT-04 (agents/*.md).",
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "blocker",
+              "major",
+              "minor"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "severity",
+          "description"
+        ],
+        "title": "IssueOut",
         "type": "object"
       },
       "JobStatusOut": {
@@ -555,6 +595,17 @@
             "title": "Outdated",
             "type": "boolean"
           },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The continuity check of this render, once done."
+          },
           "revision": {
             "description": "The model render the masks and layers belong to.",
             "title": "Revision",
@@ -634,6 +685,12 @@
           "cast": {
             "$ref": "#/components/schemas/CastOut"
           },
+          "continuity_checks": {
+            "default": true,
+            "description": "The continuity supervisor checks sheets and panels.",
+            "title": "Continuity Checks",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -678,6 +735,14 @@
             "title": "Style",
             "type": "string"
           },
+          "supervisor": {
+            "description": "The supervisor's decisions, oldest first (the last 100).",
+            "items": {
+              "$ref": "#/components/schemas/SupervisorEntryOut"
+            },
+            "title": "Supervisor",
+            "type": "array"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -703,6 +768,20 @@
           "share_public"
         ],
         "title": "ProjectOut",
+        "type": "object"
+      },
+      "ProjectSettings": {
+        "description": "Per-project settings. continuity_checks: the supervisor reviews every sheet and render (on by default).",
+        "properties": {
+          "continuity_checks": {
+            "title": "Continuity Checks",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "continuity_checks"
+        ],
+        "title": "ProjectSettings",
         "type": "object"
       },
       "RenderRequest": {
@@ -736,6 +815,72 @@
           "shot_ids"
         ],
         "title": "ReorderRequest",
+        "type": "object"
+      },
+      "ReviewOut": {
+        "description": "The continuity supervisor's word on a panel or a reference sheet (ADR 0012).",
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "fix_instruction": {
+            "description": "The suggested appearance edit; \"\" when an edit cannot fix it.",
+            "title": "Fix Instruction",
+            "type": "string"
+          },
+          "fixes": {
+            "description": "Automatic fixes applied before this verdict.",
+            "title": "Fixes",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueOut"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "model": {
+            "description": "The model that checked it, e.g. muse-glimmer or muse-spark-1.3.",
+            "title": "Model",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "checked",
+              "fixed",
+              "needs_user",
+              "accepted"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "rubrics": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Rubric id -> hash of the rubric text the check used.",
+            "title": "Rubrics",
+            "type": "object"
+          },
+          "summary": {
+            "description": "For the badge, e.g. \"Fixed: remove the blue vest\".",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "summary",
+          "issues",
+          "fix_instruction",
+          "model",
+          "confidence",
+          "fixes",
+          "rubrics"
+        ],
+        "title": "ReviewOut",
         "type": "object"
       },
       "SelectRequest": {
@@ -1053,6 +1198,77 @@
           "limits"
         ],
         "title": "StudioStatusOut",
+        "type": "object"
+      },
+      "SupervisorEntryOut": {
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "character_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Id"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "checked",
+              "fixed",
+              "needs_user",
+              "accepted"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "rule_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rule Ids",
+            "type": "array"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot Id"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "subject",
+          "outcome",
+          "message",
+          "rule_ids",
+          "model",
+          "shot_id",
+          "character_id"
+        ],
+        "title": "SupervisorEntryOut",
         "type": "object"
       },
       "TicketOut": {
@@ -1377,6 +1593,78 @@
           }
         },
         "summary": "Get Project",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "description": "Turn the continuity supervisor on or off for this project. Off: new sheets and renders are not reviewed.",
+        "operationId": "update_settings_projects__project_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Settings",
         "tags": [
           "projects"
         ]
@@ -1764,6 +2052,164 @@
           }
         },
         "summary": "Regenerate Reference",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/cast/{character_id}/review/accept": {
+      "post": {
+        "description": "Keep a flagged reference sheet as it is.",
+        "operationId": "accept_sheet_projects__project_id__cast__character_id__review_accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Accept Sheet",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/cast/{character_id}/review/apply": {
+      "post": {
+        "description": "\"Apply fix\" on a flagged reference sheet: redraw it with the supervisor's correction.",
+        "operationId": "apply_sheet_fix_projects__project_id__cast__character_id__review_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Apply Sheet Fix",
         "tags": [
           "projects"
         ]
@@ -2585,6 +3031,166 @@
           }
         },
         "summary": "Save Layer",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/shots/{n}/panel/review/accept": {
+      "post": {
+        "description": "\"Accept anyway\": keep the panel the supervisor flagged; its badge says the user accepted it.",
+        "operationId": "accept_panel_projects__project_id__shots__n__panel_review_accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "N",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Accept Panel",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/shots/{n}/panel/review/apply": {
+      "post": {
+        "description": "\"Apply suggested fix\": the supervisor's appearance edit on the current render (422 if it suggested none).",
+        "operationId": "apply_panel_fix_projects__project_id__shots__n__panel_review_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "N",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Apply Panel Fix",
         "tags": [
           "projects"
         ]

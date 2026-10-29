@@ -41,3 +41,25 @@ describe('parseServerEvent', () => {
     expect(parseServerEvent(new ArrayBuffer(4))).toBeNull()
   })
 })
+
+describe('supervisor events', () => {
+  const entry = {
+    at: '2026-10-29T12:00:00+00:00',
+    subject: 'Shot 4',
+    outcome: 'needs_user',
+    message: 'Shot 4 needs your eye: Pip is missing (CONT-01; an edit cannot fix this).',
+    rule_ids: ['CONT-01'],
+    model: 'muse-spark-1.3',
+    shot_id: 's4',
+    character_id: null,
+  }
+
+  it('parses the three supervisor events and refuses malformed ones', () => {
+    const issues = [{ rule_id: 'CONT-01', severity: 'blocker', description: 'Pip is missing' }]
+    expect(parseServerEvent(JSON.stringify({ type: 'supervisor.reviewed', entry, revision: 1 }))).not.toBeNull()
+    expect(parseServerEvent(JSON.stringify({ type: 'supervisor.fixed', entry, revision: 2, fixes: 1 }))).not.toBeNull()
+    expect(parseServerEvent(JSON.stringify({ type: 'supervisor.needs_user', entry, issues, fix_instruction: '', revision: 1 }))).not.toBeNull()
+    expect(parseServerEvent(JSON.stringify({ type: 'supervisor.fixed', entry, revision: null, fixes: 1 }))).toBeNull()
+    expect(parseServerEvent(JSON.stringify({ type: 'supervisor.reviewed', entry: { ...entry, outcome: 'great' }, revision: 1 }))).toBeNull()
+  })
+})

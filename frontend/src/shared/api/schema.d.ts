@@ -78,7 +78,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Settings
+         * @description Turn the continuity supervisor on or off for this project. Off: new sheets and renders are not reviewed.
+         */
+        patch: operations["update_settings_projects__project_id__patch"];
         trace?: never;
     };
     "/projects/{project_id}/cast/approve": {
@@ -156,6 +160,46 @@ export interface paths {
         put?: never;
         /** Regenerate Reference */
         post: operations["regenerate_reference_projects__project_id__cast__character_id__regenerate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/cast/{character_id}/review/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Sheet
+         * @description Keep a flagged reference sheet as it is.
+         */
+        post: operations["accept_sheet_projects__project_id__cast__character_id__review_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/cast/{character_id}/review/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Sheet Fix
+         * @description "Apply fix" on a flagged reference sheet: redraw it with the supervisor's correction.
+         */
+        post: operations["apply_sheet_fix_projects__project_id__cast__character_id__review_apply_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -359,6 +403,46 @@ export interface paths {
          * @description Save a move, resize or delete of a selected object. A compose_panel job applies it on a clean plate.
          */
         post: operations["save_layer_projects__project_id__shots__n__panel_layers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/shots/{n}/panel/review/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Panel
+         * @description "Accept anyway": keep the panel the supervisor flagged; its badge says the user accepted it.
+         */
+        post: operations["accept_panel_projects__project_id__shots__n__panel_review_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/shots/{n}/panel/review/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Panel Fix
+         * @description "Apply suggested fix": the supervisor's appearance edit on the current render (422 if it suggested none).
+         */
+        post: operations["apply_panel_fix_projects__project_id__shots__n__panel_review_apply_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -581,6 +665,8 @@ export interface components {
             name: string;
             /** Reference Url */
             reference_url: string | null;
+            /** @description The continuity check of this reference sheet. */
+            review?: components["schemas"]["ReviewOut"] | null;
         };
         /** CharacterRename */
         CharacterRename: {
@@ -618,6 +704,21 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IssueOut */
+        IssueOut: {
+            /** Description */
+            description: string;
+            /**
+             * Rule Id
+             * @description The rubric rule, e.g. CONT-04 (agents/*.md).
+             */
+            rule_id: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocker" | "major" | "minor";
         };
         /**
          * JobStatusOut
@@ -740,6 +841,8 @@ export interface components {
              * @description The shot changed after this was drawn; draw it again.
              */
             outdated: boolean;
+            /** @description The continuity check of this render, once done. */
+            review?: components["schemas"]["ReviewOut"] | null;
             /**
              * Revision
              * @description The model render the masks and layers belong to.
@@ -775,6 +878,12 @@ export interface components {
             /** @description The latest exported animatic. */
             animatic: components["schemas"]["AnimaticOut"] | null;
             cast: components["schemas"]["CastOut"];
+            /**
+             * Continuity Checks
+             * @description The continuity supervisor checks sheets and panels.
+             * @default true
+             */
+            continuity_checks: boolean;
             /** Id */
             id: string;
             /**
@@ -799,10 +908,23 @@ export interface components {
              * @enum {string}
              */
             style: "pencil" | "paper_cutout";
+            /**
+             * Supervisor
+             * @description The supervisor's decisions, oldest first (the last 100).
+             */
+            supervisor?: components["schemas"]["SupervisorEntryOut"][];
             /** Title */
             title: string;
             /** Turns */
             turns: components["schemas"]["TurnOut"][];
+        };
+        /**
+         * ProjectSettings
+         * @description Per-project settings. continuity_checks: the supervisor reviews every sheet and render (on by default).
+         */
+        ProjectSettings: {
+            /** Continuity Checks */
+            continuity_checks: boolean;
         };
         /** RenderRequest */
         RenderRequest: {
@@ -817,6 +939,48 @@ export interface components {
         ReorderRequest: {
             /** Shot Ids */
             shot_ids: string[];
+        };
+        /**
+         * ReviewOut
+         * @description The continuity supervisor's word on a panel or a reference sheet (ADR 0012).
+         */
+        ReviewOut: {
+            /** Confidence */
+            confidence: number;
+            /**
+             * Fix Instruction
+             * @description The suggested appearance edit; "" when an edit cannot fix it.
+             */
+            fix_instruction: string;
+            /**
+             * Fixes
+             * @description Automatic fixes applied before this verdict.
+             */
+            fixes: number;
+            /** Issues */
+            issues: components["schemas"]["IssueOut"][];
+            /**
+             * Model
+             * @description The model that checked it, e.g. muse-glimmer or muse-spark-1.3.
+             */
+            model: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "checked" | "fixed" | "needs_user" | "accepted";
+            /**
+             * Rubrics
+             * @description Rubric id -> hash of the rubric text the check used.
+             */
+            rubrics: {
+                [key: string]: string;
+            };
+            /**
+             * Summary
+             * @description For the badge, e.g. "Fixed: remove the blue vest".
+             */
+            summary: string;
         };
         /**
          * SelectRequest
@@ -950,6 +1114,28 @@ export interface components {
              * @description The kill switch is on: show the back-soon page (shared storyboards still open).
              */
             paused: boolean;
+        };
+        /** SupervisorEntryOut */
+        SupervisorEntryOut: {
+            /** At */
+            at: string;
+            /** Character Id */
+            character_id: string | null;
+            /** Message */
+            message: string;
+            /** Model */
+            model: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "checked" | "fixed" | "needs_user" | "accepted";
+            /** Rule Ids */
+            rule_ids: string[];
+            /** Shot Id */
+            shot_id: string | null;
+            /** Subject */
+            subject: string;
         };
         /**
          * TicketOut
@@ -1116,6 +1302,59 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_settings_projects__project_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectSettings"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1412,6 +1651,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_sheet_projects__project_id__cast__character_id__review_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    apply_sheet_fix_projects__project_id__cast__character_id__review_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketOut"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };
@@ -1990,6 +2338,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_panel_projects__project_id__shots__n__panel_review_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                n: number;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    apply_panel_fix_projects__project_id__shots__n__panel_review_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                n: number;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketOut"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };

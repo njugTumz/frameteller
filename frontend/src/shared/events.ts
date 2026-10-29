@@ -2,7 +2,7 @@
  * The live session WebSocket contract, hand-written from docs/api-events.md (OpenAPI cannot describe it).
  * Nested objects reuse the REST schemas: the backend serialises them with the same DTOs.
  */
-import type { Character, Shot, Turn } from './api/types'
+import type { Character, ReviewIssue, Shot, SupervisorEntry, Turn } from './api/types'
 
 // ---- client → server ----
 
@@ -32,7 +32,15 @@ export const MAX_KEYWORDS = 50
 
 // ---- server → client ----
 
-export type JobKind = 'generate_cast' | 'generate_panel' | 'pre_segment_panel' | 'edit_panel' | 'compose_panel' | 'export_animatic'
+export type JobKind =
+  | 'generate_cast'
+  | 'generate_panel'
+  | 'pre_segment_panel'
+  | 'edit_panel'
+  | 'compose_panel'
+  | 'export_animatic'
+  | 'supervise_panel'
+  | 'review_sheet'
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 
 export type ServerEvent =
@@ -57,6 +65,10 @@ export type ServerEvent =
   | { type: 'error'; message: string; fatal: boolean }
   | { type: 'audio.silent'; after_ms: number; level: number }
   | { type: 'session.ended'; turns: number; shots: number; heard?: boolean }
+  // The continuity supervisor (ADR 0012): the project carries the badge; the entry is the feed's line.
+  | { type: 'supervisor.reviewed'; entry: SupervisorEntry; revision: number | null }
+  | { type: 'supervisor.fixed'; entry: SupervisorEntry; revision: number; fixes: number }
+  | { type: 'supervisor.needs_user'; entry: SupervisorEntry; issues: ReviewIssue[]; fix_instruction: string; revision: number | null }
 
 export type ServerEventOf<T extends ServerEvent['type']> = Extract<ServerEvent, { type: T }>
 
@@ -98,7 +110,34 @@ export function isCharacter(v: unknown): v is Character {
   return isObj(v) && isStr(v.id) && isStr(v.name) && isStr(v.description) && isStrOrNull(v.reference_url)
 }
 
-const JOB_KINDS: readonly string[] = ['generate_cast', 'generate_panel', 'pre_segment_panel', 'edit_panel', 'compose_panel', 'export_animatic']
+const JOB_KINDS: readonly string[] = [
+  'generate_cast',
+  'generate_panel',
+  'pre_segment_panel',
+  'edit_panel',
+  'compose_panel',
+  'export_animatic',
+  'supervise_panel',
+  'review_sheet',
+]
+const OUTCOMES: readonly string[] = ['checked', 'fixed', 'needs_user', 'accepted']
+
+export function isSupervisorEntry(v: unknown): v is SupervisorEntry {
+  return (
+    isObj(v) &&
+    isStr(v.at) &&
+    isStr(v.subject) &&
+    isStr(v.outcome) &&
+    OUTCOMES.includes(v.outcome) &&
+    isStr(v.message) &&
+    isStrArr(v.rule_ids) &&
+    isStr(v.model) &&
+    isStrOrNull(v.shot_id) &&
+    isStrOrNull(v.character_id)
+  )
+}
+
+const isIssue = (v: unknown): v is ReviewIssue => isObj(v) && isStr(v.rule_id) && isStr(v.severity) && isStr(v.description)
 const JOB_STATUSES: readonly string[] = ['queued', 'running', 'succeeded', 'failed']
 
 function check(e: Json): boolean {
@@ -134,6 +173,18 @@ function check(e: Json): boolean {
       return isNum(e.after_ms) && isNum(e.level)
     case 'session.ended':
       return isNum(e.turns) && isNum(e.shots) && (e.heard === undefined || typeof e.heard === 'boolean')
+    case 'supervisor.reviewed':
+      return isSupervisorEntry(e.entry) && isNumOrNull(e.revision)
+    case 'supervisor.fixed':
+      return isSupervisorEntry(e.entry) && isNum(e.revision) && isNum(e.fixes)
+    case 'supervisor.needs_user':
+      return (
+        isSupervisorEntry(e.entry) &&
+        Array.isArray(e.issues) &&
+        e.issues.every(isIssue) &&
+        isStr(e.fix_instruction) &&
+        isNumOrNull(e.revision)
+      )
     default:
       return false // unknown types are ignored, as the backend's own clients do
   }
