@@ -25,3 +25,6 @@ param availabilityUrl = readEnvironmentVariable('AVAILABILITY_URL', 'https://api
 // Set by the deploy pipeline from its environment; never written in this file.
 param containerImage = readEnvironmentVariable('CONTAINER_IMAGE')
 param modelApiKey = readEnvironmentVariable('MODEL_API_KEY')
+// The continuity supervisor's Glimmer endpoint: a GitHub environment variable and secret, both optional.
+param glimmerBaseUrl = readEnvironmentVariable('GLIMMER_BASE_URL', '')
+param glimmerApiKey = readEnvironmentVariable('GLIMMER_API_KEY', '')

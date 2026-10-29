@@ -53,7 +53,7 @@ jobs:
             echo "$IMAGE already exists"
             exit 0
           fi
-          docker build backend --tag "$IMAGE" \
+          docker build backend --build-context agents=agents --tag "$IMAGE" \
             --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}"
           docker push "$IMAGE"
@@ -91,6 +91,8 @@ jobs:
       - name: Meta key is set
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
+          GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
         run: |
           if [ -z "$MODEL_API_KEY" ]; then
             echo "::error::The production environment has no MODEL_API_KEY secret. Set it with: read -s KEY && printf %s \"\$KEY\" | gh secret set MODEL_API_KEY --env production"
@@ -107,6 +109,8 @@ jobs:
       - name: What-if
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
+          GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
         run: >
           az deployment group what-if
           --resource-group "$RESOURCE_GROUP"
@@ -116,6 +120,8 @@ jobs:
       - name: Deploy infrastructure and image
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
+          GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
         run: |
           az deployment group create \
             --resource-group "$RESOURCE_GROUP" \

@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-# Frameteller backend. Build from backend/:  docker build -t frameteller-backend .
+# Frameteller backend. Build from the repo root, with the supervisor's rubrics as a named context:
+#   docker build backend --build-context agents=agents -t frameteller-backend
 
 # --- build: install the package and its dependencies into a virtualenv ---
 FROM python:3.12-slim AS build
@@ -18,10 +19,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 app
 COPY --from=build /opt/venv /opt/venv
+# The continuity supervisor's rubrics (ADR 0012): read at runtime, hashed into every verdict.
+COPY --from=agents --chown=root:root *.md /app/agents/
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LOCAL_STORAGE_DIR=/home/app/data
+    LOCAL_STORAGE_DIR=/home/app/data \
+    RUBRICS_DIR=/app/agents
 USER app
 WORKDIR /home/app
 EXPOSE 8000

@@ -7,6 +7,10 @@ param suffix string
 param containerImage string
 @secure()
 param modelApiKey string
+param reviewer string
+param glimmerBaseUrl string
+@secure()
+param glimmerApiKey string
 param allowedOrigins string
 param publicAppUrl string
 param storageAccountName string
@@ -80,12 +84,17 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           }
         ]
       }
-      secrets: [
+      secrets: concat([
         {
           name: 'model-api-key'
           value: modelApiKey
         }
-      ]
+      ], empty(glimmerApiKey) ? [] : [
+        {
+          name: 'glimmer-api-key'
+          value: glimmerApiKey
+        }
+      ])
     }
     template: {
       terminationGracePeriodSeconds: terminationGracePeriodSeconds
@@ -107,6 +116,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'PUBLIC_APP_URL', value: publicAppUrl }
             { name: 'LOG_LEVEL', value: 'INFO' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+            { name: 'REVIEWER', value: reviewer }
+            { name: 'GLIMMER_BASE_URL', value: glimmerBaseUrl }
+          ], empty(glimmerApiKey) ? [] : [
+            { name: 'GLIMMER_API_KEY', secretRef: 'glimmer-api-key' }
           ], extraEnv)
           probes: [
             {

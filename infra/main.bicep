@@ -41,6 +41,17 @@ param directorModel string = 'muse-spark-1.3'
 param apiDomain string = ''
 param apiCertificateName string = ''
 
+@description('Continuity supervisor reviewer (ADR 0012, 0013): spark, glimmer, fallback or screen (Glimmer, Spark confirms).')
+@allowed(['spark', 'glimmer', 'fallback', 'screen'])
+param reviewer string = 'spark'
+
+@description('Our Muse Glimmer endpoint on Modal (OpenAI-compatible, ending in /v1). Empty: no Glimmer.')
+param glimmerBaseUrl string = ''
+
+@secure()
+@description('Bearer token of our Glimmer endpoint (not a Meta key), stored only as a Container App secret.')
+param glimmerApiKey string = ''
+
 @description('Guardrail settings for a public demo, as name/value pairs (see the backend settings).')
 param guardrailEnv array = []
 
@@ -90,6 +101,9 @@ module app 'modules/containerapp.bicep' = {
     suffix: suffix
     containerImage: containerImage
     modelApiKey: modelApiKey
+    reviewer: reviewer
+    glimmerBaseUrl: glimmerBaseUrl
+    glimmerApiKey: glimmerApiKey
     allowedOrigins: allowedOrigins
     publicAppUrl: publicAppUrl
     storageAccountName: storage.outputs.accountName

@@ -82,7 +82,7 @@ jobs:
           persist-credentials: false
 
       - name: Build the image
-        run: docker build --tag frameteller-backend:ci backend
+        run: docker build --tag frameteller-backend:ci backend --build-context agents=agents
 
       - name: Container starts and passes its health check
         run: |
