@@ -1,0 +1,10 @@
+{
+ "text": "La nuit tombe sur les toits.",
+ "voice": "en-US-BrandonMultilingualNeural",
+ "language": "fr-FR",
+ "content_type": "audio/x-wav",
+ "channels": 1,
+ "sample_width": 2,
+ "rate": 24000,
+ "full_duration_ms": 1900
+}
