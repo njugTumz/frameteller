@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export type Route = { name: 'start' } | { name: 'privacy' } | { name: 'judge' } | { name: 'studio'; projectId: string } | { name: 'share'; token: string } | { name: 'missing' }
+export type Route = { name: 'start' } | { name: 'privacy' } | { name: 'judge' } | { name: 'gallery' } | { name: 'admin' } | { name: 'studio'; projectId: string } | { name: 'share'; token: string } | { name: 'missing' }
 
 const STUDIO = /^\/projects\/([A-Za-z0-9_-]{1,64})\/?$/
 const SHARE = /^\/s\/([A-Za-z0-9_-]{1,64})\/?$/
@@ -9,6 +9,8 @@ export function parseRoute(pathname: string): Route {
   if (pathname === '/' || pathname === '') return { name: 'start' }
   if (pathname === '/privacy' || pathname === '/privacy/') return { name: 'privacy' }
   if (pathname === '/judge' || pathname === '/judge/') return { name: 'judge' }
+  if (pathname === '/gallery' || pathname === '/gallery/') return { name: 'gallery' }
+  if (pathname === '/admin' || pathname === '/admin/') return { name: 'admin' }
   const studio = STUDIO.exec(pathname)
   if (studio?.[1]) return { name: 'studio', projectId: studio[1] }
   const share = SHARE.exec(pathname)

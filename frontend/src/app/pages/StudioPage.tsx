@@ -4,6 +4,8 @@ import { storyboardPdfUrl, shareUrl } from '../../features/export/api'
 import { ExportPanel } from '../../features/export/components/ExportPanel'
 import { SharePanel } from '../../features/export/components/SharePanel'
 import { useExport } from '../../features/export/hooks/useExport'
+import { GallerySubmit } from '../../features/gallery/components/GallerySubmit'
+import { useGallerySubmission } from '../../features/gallery/hooks/useGallerySubmission'
 import { Notices, ProblemNotice } from '../../features/recording/components/ProblemNotice'
 import { RecordingKept } from '../../features/recording/components/RecordingKept'
 import { SilenceNotice } from '../../features/recording/components/SilenceNotice'
@@ -84,6 +86,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
     projectLoaded(p)
   }, [])
   const exporting = useExport(projectId, onProject)
+  const gallery = useGallerySubmission(projectId)
   const supervisor = useSupervisorActions(projectId, onProject)
   const inputs = useAudioInputs(r.silent)
   const allDrawn = board.shots.length > 0 && board.shots.every((s) => s.panel?.status === 'ready')
@@ -190,7 +193,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
           ])}
         </StoryboardGrid>
         {board.shots.length > 0 && (
-          <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+          <div className="grid gap-4 xl:grid-cols-[1fr_320px_320px]">
             <ExportPanel
               ready={allDrawn}
               job={board.exportJob}
@@ -209,6 +212,16 @@ export function StudioPage({ projectId }: { projectId: string }) {
               busy={exporting.sharing}
               onShare={(isPublic) => void exporting.share(isPublic)}
               onRevoke={() => void exporting.unshare()}
+            />
+            <GallerySubmit
+              entry={gallery.entry}
+              ready={allDrawn}
+              voiceKept={kept > 0}
+              busy={gallery.busy}
+              error={gallery.error}
+              galleryHref="/gallery"
+              onSubmit={(audio) => void gallery.submit(audio)}
+              onWithdraw={() => void gallery.withdraw()}
             />
           </div>
         )}

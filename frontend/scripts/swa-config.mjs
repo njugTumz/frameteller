@@ -2,7 +2,8 @@
 // The CSP names the backend origin (REST, the session WebSocket, /media images and the animatic), taken from
 // VITE_API_BASE_URL, the same variable the build reads. Run after `npm run build`.
 // Also writes dist/robots.txt: with STUDIO_NOINDEX=1 (staging) it disallows everything and every response says
-// X-Robots-Tag: noindex; otherwise only share pages (/s/) may be crawled, and each decides with its meta tag.
+// X-Robots-Tag: noindex; otherwise only share pages (/s/) and the gallery may be crawled, share pages decide with
+// their meta tag, and the API's gallery sitemap (ADR 0017) lists the published ones.
 import { writeFileSync } from 'node:fs'
 
 const base = process.env.VITE_API_BASE_URL
@@ -48,5 +49,6 @@ const config = {
 }
 
 writeFileSync('dist/staticwebapp.config.json', `${JSON.stringify(config, null, 2)}\n`)
-writeFileSync('dist/robots.txt', noindex ? 'User-agent: *\nDisallow: /\n' : 'User-agent: *\nAllow: /s/\nDisallow: /\n')
-console.log(`dist/staticwebapp.config.json: API ${api.origin}, WebSocket ${ws}; robots.txt ${noindex ? 'disallows all' : 'allows /s/'}`)
+const robots = `User-agent: *\nAllow: /s/\nAllow: /gallery\nDisallow: /\n\nSitemap: ${api.origin}/gallery/sitemap.xml\n`
+writeFileSync('dist/robots.txt', noindex ? 'User-agent: *\nDisallow: /\n' : robots)
+console.log(`dist/staticwebapp.config.json: API ${api.origin}, WebSocket ${ws}; robots.txt ${noindex ? 'disallows all' : 'allows /s/ and /gallery'}`)
