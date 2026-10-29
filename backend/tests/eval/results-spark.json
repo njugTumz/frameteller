@@ -1,0 +1,351 @@
+{
+ "reviewer": "spark",
+ "summary": {
+  "items": 20,
+  "errors": 0,
+  "precision": 1.0,
+  "recall": 1.0,
+  "rule_hits": "11/11",
+  "false_flags": "0/9",
+  "false_fixes": "0/9",
+  "fix_when_fixable": "8/8",
+  "median_latency_ms": 4652,
+  "cost_per_review_usd": 0.0061
+ },
+ "rows": [
+  {
+   "image": "sheet-ada.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.95,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 7688,
+   "cost_usd": 0.008016
+  },
+  {
+   "image": "sheet-pip.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.97,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 4036,
+   "cost_usd": 0.004545
+  },
+  {
+   "image": "shot1.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.99,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 3294,
+   "cost_usd": 0.003692
+  },
+  {
+   "image": "shot2.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.97,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 4487,
+   "cost_usd": 0.005456
+  },
+  {
+   "image": "shot3.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.9,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 7280,
+   "cost_usd": 0.007511
+  },
+  {
+   "image": "shot4.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.97,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 3693,
+   "cost_usd": 0.005859
+  },
+  {
+   "image": "shot5.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.97,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 4924,
+   "cost_usd": 0.006947
+  },
+  {
+   "image": "shot6.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.98,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 3507,
+   "cost_usd": 0.005568
+  },
+  {
+   "image": "shot5-more-rain.webp",
+   "expected_rules": [],
+   "fixable": false,
+   "decision": "pass",
+   "confidence": 0.97,
+   "serious": [],
+   "minor": [],
+   "issues": [],
+   "fix": "",
+   "latency_ms": 7360,
+   "cost_usd": 0.0073
+  },
+  {
+   "image": "sheet-pip-sweater.webp",
+   "expected_rules": [
+    "CAST-04"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.95,
+   "serious": [
+    "CAST-04"
+   ],
+   "minor": [],
+   "issues": [
+    "CAST-04: Pip wears a green sweater that is not named in his description."
+   ],
+   "fix": "remove the green sweater, Pip wears no clothing",
+   "latency_ms": 5810,
+   "cost_usd": 0.006194
+  },
+  {
+   "image": "sheet-ada-scarf.webp",
+   "expected_rules": [
+    "CAST-04"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.92,
+   "serious": [
+    "CAST-04",
+    "CAST-05"
+   ],
+   "minor": [],
+   "issues": [
+    "CAST-04: Ada wears a red scarf that is not named in her description.",
+    "CAST-05: Ada sheet uses two accent colours, green and red, instead of one."
+   ],
+   "fix": "remove the red scarf, Ada wears only the green sweater",
+   "latency_ms": 6014,
+   "cost_usd": 0.00599
+  },
+  {
+   "image": "shot4-pip-vest.webp",
+   "expected_rules": [
+    "CONT-04"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.97,
+   "serious": [
+    "CONT-04"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-04: Pip wears a blue vest that is not on his reference sheet."
+   ],
+   "fix": "remove the blue vest, Pip wears no clothing",
+   "latency_ms": 4166,
+   "cost_usd": 0.006535
+  },
+  {
+   "image": "shot2-ada-hat.webp",
+   "expected_rules": [
+    "CONT-04"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.95,
+   "serious": [
+    "CONT-04"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-04: Ada wears a brown hat that is not on her reference sheet."
+   ],
+   "fix": "remove the brown hat, Ada wears no hat as on her reference sheet",
+   "latency_ms": 4485,
+   "cost_usd": 0.006476
+  },
+  {
+   "image": "shot2-ada-glasses.webp",
+   "expected_rules": [
+    "CONT-04",
+    "CONT-06"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.92,
+   "serious": [
+    "CONT-04"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-04: Ada wears round glasses that are not on her reference sheet."
+   ],
+   "fix": "remove the glasses, Ada wears no glasses",
+   "latency_ms": 4516,
+   "cost_usd": 0.004037
+  },
+  {
+   "image": "shot2-ada-black-hair.webp",
+   "expected_rules": [
+    "CONT-05",
+    "CONT-06"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.95,
+   "serious": [
+    "CONT-05"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-05: Ada has black hair in the panel but silver hair on her reference sheet."
+   ],
+   "fix": "change Ada's hair to silver-white to match her reference sheet",
+   "latency_ms": 3924,
+   "cost_usd": 0.003816
+  },
+  {
+   "image": "shot6-ada-red-sweater.webp",
+   "expected_rules": [
+    "CONT-05",
+    "CONT-04"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.95,
+   "serious": [
+    "CONT-05"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-05: Ada wears a red sweater that is green on her reference sheet."
+   ],
+   "fix": "recolor the sweater from red to green to match the reference sheet",
+   "latency_ms": 4647,
+   "cost_usd": 0.007476
+  },
+  {
+   "image": "shot5-extra-cat.webp",
+   "expected_rules": [
+    "CONT-02"
+   ],
+   "fixable": true,
+   "decision": "fix",
+   "confidence": 0.96,
+   "serious": [
+    "CONT-02"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-02: A small gray cat sits by the fireplace but the shot lists only Ada and Pip."
+   ],
+   "fix": "remove the gray cat sitting by the fireplace, leaving only Ada and Pip",
+   "latency_ms": 5991,
+   "cost_usd": 0.008371
+  },
+  {
+   "image": "shot6-no-pip.webp",
+   "expected_rules": [
+    "CONT-01"
+   ],
+   "fixable": false,
+   "decision": "ask",
+   "confidence": 0.97,
+   "serious": [
+    "CONT-01",
+    "SHOT-02"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-01: Pip is listed in the shot but is not visible anywhere in the panel with Ada.",
+    "SHOT-02: The action of Ada and Pip sitting together is not depicted because Pip is missing."
+   ],
+   "fix": "",
+   "latency_ms": 4657,
+   "cost_usd": 0.006699
+  },
+  {
+   "image": "shot4-pip-cat.webp",
+   "expected_rules": [
+    "CONT-03"
+   ],
+   "fixable": false,
+   "decision": "ask",
+   "confidence": 0.95,
+   "serious": [
+    "CONT-03"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-03: Pip appears as a striped orange cat in the window instead of the tiny orange fox on his reference sheet."
+   ],
+   "fix": "",
+   "latency_ms": 4865,
+   "cost_usd": 0.004585
+  },
+  {
+   "image": "shot3-photoreal-pip.webp",
+   "expected_rules": [
+    "CONT-07",
+    "CONT-03"
+   ],
+   "fixable": false,
+   "decision": "ask",
+   "confidence": 0.92,
+   "serious": [
+    "CONT-07"
+   ],
+   "minor": [],
+   "issues": [
+    "CONT-07: Pip is rendered in photorealistic painted detail that does not match the pencil sketch style of the reference sheet."
+   ],
+   "fix": "",
+   "latency_ms": 5375,
+   "cost_usd": 0.006955
+  }
+ ]
+}

@@ -1,0 +1,253 @@
+{
+ "about": "Supervisor eval set (docs/supervisor-eval.md). Images: the lighthouse story (our synthetic story) at 768 px; variants are one Muse Image edit each (tests/eval/make_set.py). rules: the blocker/major rules a correct review names (any one counts); [] means the image should pass. fixable: one appearance edit can repair it.",
+ "style": "pencil",
+ "characters": {
+  "ada": {
+   "name": "Ada",
+   "description": "elderly human woman with silver hair, wearing a thick green sweater"
+  },
+  "pip": {
+   "name": "Pip",
+   "description": "a tiny young orange fox with fluffy wet fur and a white-tipped tail"
+  }
+ },
+ "shots": {
+  "1": {
+   "framing": "wide",
+   "characters": [],
+   "setting": "A rock in the middle of a stormy sea",
+   "action": "A tiny lighthouse stands on a rock while waves crash all around it in a stormy sea"
+  },
+  "2": {
+   "framing": "medium",
+   "characters": [
+    "ada"
+   ],
+   "setting": "inside the lighthouse",
+   "action": "Ada polishes the big lamp inside the lighthouse"
+  },
+  "3": {
+   "framing": "close_up",
+   "characters": [
+    "pip"
+   ],
+   "setting": "lighthouse window in a storm at night",
+   "action": "Wind batters the lighthouse window as Pip the small orange fox flaps against the glass outside"
+  },
+  "4": {
+   "framing": "medium",
+   "characters": [
+    "ada",
+    "pip"
+   ],
+   "setting": "inside the lighthouse by the window at night during the storm",
+   "action": "Ada opens the lighthouse window as Pip the soaked little fox tumbles inside and shakes rain off his fur"
+  },
+  "5": {
+   "framing": "medium",
+   "characters": [
+    "ada",
+    "pip"
+   ],
+   "setting": "Inside the lighthouse by the fire during the storm",
+   "action": "Ada wraps Pip in a blanket by the fire as they both watch the storm"
+  },
+  "6": {
+   "framing": "wide",
+   "characters": [
+    "ada",
+    "pip"
+   ],
+   "setting": "on the rock outside the lighthouse at dawn",
+   "action": "Ada and Pip sit together on the rock by the lighthouse watching the sunrise over the calm sea"
+  }
+ },
+ "items": [
+  {
+   "image": "sheet-ada.webp",
+   "kind": "sheet",
+   "character": "ada",
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "sheet-pip.webp",
+   "kind": "sheet",
+   "character": "pip",
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "shot1.webp",
+   "kind": "panel",
+   "shot": 1,
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "shot2.webp",
+   "kind": "panel",
+   "shot": 2,
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "shot3.webp",
+   "kind": "panel",
+   "shot": 3,
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "shot4.webp",
+   "kind": "panel",
+   "shot": 4,
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "shot5.webp",
+   "kind": "panel",
+   "shot": 5,
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "shot6.webp",
+   "kind": "panel",
+   "shot": 6,
+   "rules": [],
+   "fixable": false,
+   "origin": "clean render"
+  },
+  {
+   "image": "shot5-more-rain.webp",
+   "kind": "panel",
+   "shot": 5,
+   "rules": [],
+   "fixable": false,
+   "origin": "control edit: heavier rain, nothing wrong"
+  },
+  {
+   "image": "sheet-pip-sweater.webp",
+   "kind": "sheet",
+   "character": "pip",
+   "rules": [
+    "CAST-04"
+   ],
+   "fixable": true,
+   "origin": "reproduced real failure: Pip's sheet in Ada's green sweater"
+  },
+  {
+   "image": "sheet-ada-scarf.webp",
+   "kind": "sheet",
+   "character": "ada",
+   "rules": [
+    "CAST-04"
+   ],
+   "fixable": true,
+   "origin": "variant: red scarf not in the description"
+  },
+  {
+   "image": "shot4-pip-vest.webp",
+   "kind": "panel",
+   "shot": 4,
+   "rules": [
+    "CONT-04"
+   ],
+   "fixable": true,
+   "origin": "reproduced real failure: Pip in a blue vest"
+  },
+  {
+   "image": "shot2-ada-hat.webp",
+   "kind": "panel",
+   "shot": 2,
+   "rules": [
+    "CONT-04"
+   ],
+   "fixable": true,
+   "origin": "variant: added hat"
+  },
+  {
+   "image": "shot2-ada-glasses.webp",
+   "kind": "panel",
+   "shot": 2,
+   "rules": [
+    "CONT-04",
+    "CONT-06"
+   ],
+   "fixable": true,
+   "origin": "variant: added glasses"
+  },
+  {
+   "image": "shot2-ada-black-hair.webp",
+   "kind": "panel",
+   "shot": 2,
+   "rules": [
+    "CONT-05",
+    "CONT-06"
+   ],
+   "fixable": true,
+   "origin": "variant: wrong hair colour"
+  },
+  {
+   "image": "shot6-ada-red-sweater.webp",
+   "kind": "panel",
+   "shot": 6,
+   "rules": [
+    "CONT-05",
+    "CONT-04"
+   ],
+   "fixable": true,
+   "origin": "variant: wrong sweater colour"
+  },
+  {
+   "image": "shot5-extra-cat.webp",
+   "kind": "panel",
+   "shot": 5,
+   "rules": [
+    "CONT-02"
+   ],
+   "fixable": true,
+   "origin": "variant: extra character"
+  },
+  {
+   "image": "shot6-no-pip.webp",
+   "kind": "panel",
+   "shot": 6,
+   "rules": [
+    "CONT-01"
+   ],
+   "fixable": false,
+   "origin": "variant: missing character"
+  },
+  {
+   "image": "shot4-pip-cat.webp",
+   "kind": "panel",
+   "shot": 4,
+   "rules": [
+    "CONT-03"
+   ],
+   "fixable": false,
+   "origin": "variant: wrong species"
+  },
+  {
+   "image": "shot3-photoreal-pip.webp",
+   "kind": "panel",
+   "shot": 3,
+   "rules": [
+    "CONT-07",
+    "CONT-03"
+   ],
+   "fixable": false,
+   "origin": "variant: wrong art style"
+  }
+ ]
+}
