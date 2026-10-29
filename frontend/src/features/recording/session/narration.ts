@@ -1,4 +1,4 @@
-import { MAX_KEYWORDS, type ServerEvent } from '../../../shared/events'
+import { MAX_KEYWORDS, type ScriptFormat, type ServerEvent, type StartMessage } from '../../../shared/events'
 import { micError, openMicrophone, type MicError, type Microphone } from '../../../shared/audio/microphone'
 import type { ProblemKind, RecordingState, useRecordingStore } from '../store'
 import { SessionSocket, closeMessage, sessionUrl, type SocketFactory } from './sessionSocket'
@@ -34,6 +34,8 @@ export interface NarrationHandlers {
   onEvent(e: ServerEvent): void
   /** Names to bias recognition with, beyond the ones the narrator typed (e.g. the cast). */
   extraKeywords: readonly string[]
+  /** Teleprompter (ADR 0015): the script read aloud; each paragraph is cut when the reader reaches its end. */
+  script?: { text: string; format: ScriptFormat } | null
 }
 
 /**
@@ -76,9 +78,13 @@ export class Narration {
   }
 
   private async connect(onDrop: (code: number) => void): Promise<SocketSession> {
+    const script = this.handlers.script
+    const start: StartMessage = script
+      ? { mode: 'teleprompter', keywords: this.keywords(), keep_audio: this.state.keepAudio, script: script.text, script_format: script.format }
+      : { mode: 'narrate', keywords: this.keywords(), keep_audio: this.state.keepAudio }
     const s: SocketSession = new SessionSocket(
       sessionUrl(this.projectId),
-      { mode: 'narrate', keywords: this.keywords(), keep_audio: this.state.keepAudio },
+      start,
       {
         onEvent: (e) => {
           this.state.apply(e)

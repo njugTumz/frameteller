@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ServerEvent } from '../../../shared/events'
+import type { ScriptFormat, ServerEvent } from '../../../shared/events'
 import { Narration, type NarrationDeps } from '../session/narration'
 import { useRecordingStore } from '../store'
 
@@ -9,9 +9,10 @@ export function useNarration(
   extraKeywords: readonly string[],
   onEvent: (e: ServerEvent) => void,
   overrides: Pick<NarrationDeps, 'openMic' | 'socketFactory'> = {},
+  script: { text: string; format: ScriptFormat } | null = null,
 ): Narration {
   const [narration] = useState(() => new Narration(projectId, { store: useRecordingStore, ...overrides }))
-  useEffect(() => narration.use({ onEvent, extraKeywords }))
+  useEffect(() => narration.use({ onEvent, extraKeywords, script }))
   useEffect(() => {
     narration.attach()
     return () => narration.dispose()
