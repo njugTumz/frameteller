@@ -52,6 +52,15 @@ const props = (over: Partial<Parameters<typeof StartScreen>[0]> = {}) => ({
 })
 
 describe('StartScreen', () => {
+  it('offers a sample story when a voice can read it', () => {
+    const onSample = vi.fn()
+    const { rerender } = render(<StartScreen {...props()} />)
+    expect(screen.queryByRole('button', { name: 'Try a sample story' })).toBeNull()
+    rerender(<StartScreen {...props({ onSample })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Try a sample story' }))
+    expect(onSample).toHaveBeenCalledOnce()
+  })
+
   it('links to the privacy page', () => {
     render(<StartScreen {...props()} />)
     expect(screen.getByRole('link', { name: 'What we keep, and for how long' }).getAttribute('href')).toBe('/privacy')

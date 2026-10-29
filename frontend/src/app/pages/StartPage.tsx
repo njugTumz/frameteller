@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { StartScreen } from '../../features/start/components/StartScreen'
-import { useStartStory } from '../../features/start/hooks/useStartStory'
+import { useSampleStory, useStartStory } from '../../features/start/hooks/useStartStory'
 import { useStartStore } from '../../features/start/store'
 import { useVoicePreview } from '../../features/script/hooks/useVoicePreview'
 import { useVoices } from '../../features/script/hooks/useVoices'
@@ -16,7 +16,9 @@ export function StartPage() {
   const preview = useVoicePreview()
   const { wake, retry } = useBackendWake()
   const full = useStudioStatus((s) => s.full)
-  const start = useStartStory(useCallback((id: string) => navigate(studioPath(id)), []))
+  const open = useCallback((id: string) => navigate(studioPath(id)), [])
+  const start = useStartStory(open)
+  const sample = useSampleStory(open)
   return (
     <StartScreen
       form={{ title, style, names, keepAudio, mode, script, format, voice, language }}
@@ -36,6 +38,7 @@ export function StartPage() {
         set(Object.fromEntries(Object.entries({ mode: m, script: t, format: f, voice: v, language: l }).filter(([, x]) => x !== undefined)))
       }}
       onSubmit={() => void start()}
+      onSample={voices.available ? () => void sample() : undefined}
     />
   )
 }

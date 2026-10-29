@@ -36,6 +36,7 @@ export function StartScreen({
   wakeNotice,
   onChange,
   onSubmit,
+  onSample,
 }: {
   form: StartForm
   creating: boolean
@@ -49,6 +50,8 @@ export function StartScreen({
   wakeNotice: ReactNode
   onChange: (patch: Partial<StartForm>) => void
   onSubmit: () => void
+  /** "Try a sample story": the built-in script, read aloud, for visitors without a microphone. */
+  onSample?: () => void
 }) {
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -69,6 +72,16 @@ export function StartScreen({
         </Notice>
       )}
       {wakeNotice && <div className="mb-6">{wakeNotice}</div>}
+      {onSample && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-md border-[1.5px] border-dashed border-rule p-4">
+          <p className="m-0 flex-1 basis-60 text-sm">
+            <strong>No microphone, or just curious?</strong> Watch a short story about a girl and a rooftop robot become a storyboard, read aloud by a voice.
+          </p>
+          <Button onClick={onSample} disabled={creating || full}>
+            Try a sample story
+          </Button>
+        </div>
+      )}
       <form onSubmit={submit} className="flex flex-col gap-8 rounded-md border-[1.5px] border-rule bg-sheet p-5 md:p-8">
         <div className="flex flex-col gap-2">
           <label htmlFor="story-title" className="text-lg font-bold">
