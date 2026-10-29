@@ -1,6 +1,8 @@
 // Writes dist/staticwebapp.config.json for Azure Static Web Apps: SPA fallback and security headers.
 // The CSP names the backend origin (REST, the session WebSocket, /media images and the animatic), taken from
 // VITE_API_BASE_URL, the same variable the build reads. Run after `npm run build`.
+// Also writes dist/robots.txt: with STUDIO_NOINDEX=1 (staging) it disallows everything and every response says
+// X-Robots-Tag: noindex; otherwise only share pages (/s/) may be crawled, and each decides with its meta tag.
 import { writeFileSync } from 'node:fs'
 
 const base = process.env.VITE_API_BASE_URL
@@ -26,6 +28,8 @@ const csp = [
   "frame-ancestors 'none'",
 ].join('; ')
 
+const noindex = process.env.STUDIO_NOINDEX === '1'
+
 const config = {
   navigationFallback: {
     rewrite: '/index.html',
@@ -39,8 +43,10 @@ const config = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Cross-Origin-Opener-Policy': 'same-origin',
+    ...(noindex ? { 'X-Robots-Tag': 'noindex, nofollow' } : {}),
   },
 }
 
 writeFileSync('dist/staticwebapp.config.json', `${JSON.stringify(config, null, 2)}\n`)
-console.log(`dist/staticwebapp.config.json: API ${api.origin}, WebSocket ${ws}`)
+writeFileSync('dist/robots.txt', noindex ? 'User-agent: *\nDisallow: /\n' : 'User-agent: *\nAllow: /s/\nDisallow: /\n')
+console.log(`dist/staticwebapp.config.json: API ${api.origin}, WebSocket ${ws}; robots.txt ${noindex ? 'disallows all' : 'allows /s/'}`)

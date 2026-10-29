@@ -3,6 +3,8 @@ name: Deploy frontend to staging
 # Builds the studio and uploads it to the staging Static Web App (infra/modules/staticwebapp.bicep).
 # Azure auth is OIDC. The SWA deployment token is read at deploy time through RBAC, masked, and never stored.
 # VITE_API_BASE_URL is a staging environment variable (not a secret: it is baked into the public bundle).
+# STUDIO_NOINDEX=1 keeps staging out of search engines: a robots meta tag, X-Robots-Tag and a robots.txt
+# disallowing everything.
 
 on:
   push:
@@ -36,6 +38,7 @@ jobs:
       id-token: write # OIDC token for azure/login
     env:
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      STUDIO_NOINDEX: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -110,3 +113,6 @@ jobs:
             echo "::error::The CSP does not name $VITE_API_BASE_URL"
             exit 1
           }
+          grep -qi '^x-robots-tag: noindex' /tmp/headers || { echo "::error::Staging is missing X-Robots-Tag: noindex"; exit 1; }
+          curl -sf --max-time 20 "$URL/" | grep -q '<meta name="robots" content="noindex' || { echo "::error::Staging is missing the robots noindex tag"; exit 1; }
+          curl -sf --max-time 20 "$URL/robots.txt" | grep -qx 'Disallow: /' || { echo "::error::Staging robots.txt does not disallow all"; exit 1; }
