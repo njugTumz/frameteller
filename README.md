@@ -22,10 +22,67 @@ Built for indie filmmakers, YouTubers, animators, comic and game writers, and ad
 | Direct | `muse-spark-1.3` | Turns transcript turns into a validated shot list and keeps a character bible. Routes voice edit commands. |
 | Draw | `muse-image-1.0` | Generates a reference sheet per character, then every panel from those references so characters stay consistent. |
 | Select | `sam-3.1` | Segments a clicked object so it can be moved, swapped or edited in isolation. |
+| Check | Muse Glimmer (open weights, on our own GPU) with `muse-spark-1.3` | The continuity supervisor: reviews every reference sheet and panel against versioned rubrics, fixes drafts it can, and asks about the rest. |
 
 The animatic is rendered with ffmpeg: each panel shows for its shot's spoken time (leading silence trimmed), and your own recording, kept only if you agree, is cut into the same segments so picture and voice stay in sync. Gentle camera moves by framing, short crossfades, optional subtitles, a title card and an end card ([ADR 0011](docs/adr/0011-animatic-export.md)).
 
 Moving or resizing an object is saved on the panel: the first move asks Muse Image for a clean plate (the picture with only that object removed), and the server composites the SAM cut-out onto it at its new place ([ADR 0010](docs/adr/0010-clean-plates.md)). You can also download a storyboard sheet as a PDF and share a read-only link whose preview shows on X.
+
+## Continuity supervisor
+
+Reference sheets keep characters consistent, but not every time. In our own runs, a fox's reference sheet came back in the other character's green sweater, and a panel put him in a blue vest. The continuity supervisor is an agent that checks every frame so the creator doesn't have to ([ADR 0012](docs/adr/0012-continuity-supervisor.md)).
+
+```mermaid
+flowchart LR
+  R[Draft or final render] --> J[supervise_panel job]
+  S[New reference sheet] --> K[review_sheet job]
+  J --> V{Reviewer + rubrics}
+  K --> V
+  V -- pass --> C[Checked]
+  V -- "fix (draft, sure, ≤ 2 tries, in budget)" --> E[Muse Image appearance edit] --> V
+  V -- "ask (final, unsure, unfixable, tries or budget out)" --> U[Needs your eye: Apply suggested fix / Accept anyway / Redraw]
+  subgraph Reviewer [REVIEWER=screen]
+    G[Muse Glimmer on Modal] -- flags --> P[Muse Spark 1.3 decides]
+    G -. cold, slow or down .-> P
+  end
+```
+
+**What it does:**
+- **Every draft and final render** is reviewed in a background job, so drawing is never blocked.
+  - A blocker or major issue that one appearance edit can repair, on a draft, with confidence, is fixed automatically: one Muse Image edit, then a re-review against the rubrics plus `edit.md`. There are at most 2 tries per render, within the project's budget.
+  - Everything else waits for you. **Finals are never changed automatically, only reported.**
+- **Every reference sheet** is reviewed before you approve the cast. Its issues show on the sheet, with "Apply fix".
+- **Panel badges** say "Checked", "Fixed: <reason>" or "Needs your eye". Hover over a badge to see which model checked it.
+- **The Supervisor feed** lists every decision in order, e.g. "Shot 4: remove the blue vest (CONT-04, Pip wears a blue vest that is not on his reference sheet). Fixed in 1 try."
+- "Continuity checks" is a per-project switch, on by default.
+
+**Rubrics as code.** [`agents/`](agents/) holds one versioned markdown rubric per pipeline step:
+- [`cast.md`](agents/cast.md)
+- [`panel-continuity.md`](agents/panel-continuity.md)
+- [`shot.md`](agents/shot.md)
+- [`edit.md`](agents/edit.md)
+
+Every rule has a stable id (`CONT-04`), a severity and a one-line test. The files are read at runtime. The reviewer answers in a strict JSON schema whose rule ids are an enum of the rubric's own, and every verdict records the hash of the rubric text it used.
+
+**Muse Glimmer on Modal, Muse Spark behind it** ([ADR 0013](docs/adr/0013-glimmer-on-modal.md)):
+- Meta's open-weight Muse Glimmer (30B, Apache 2.0, the official BF16 weights) runs on vLLM on one H100 that scales to zero. Weights are cached on a Volume, there is a bearer token, and at most one container runs.
+- The reviewer is chosen per environment:
+  - `spark`: Muse Spark alone (the production default).
+  - `fallback`: Glimmer, with Spark when Glimmer is cold, slow or down.
+  - `screen`: as fallback, and Spark decides whatever Glimmer flags. This is what we use when Glimmer is warm for a demo.
+- A cold start takes about 3.5 minutes (221 s and 194 s measured); the [runbook](docs/runbook.md#warm-glimmer-before-a-demo) warms it before a demo.
+
+**How well it works.** We tested the reviewers on [our eval set](docs/supervisor-eval.md): 20 labelled sheets and panels from the lighthouse story, with 2 reproduced real failures and 9 controlled Muse Image variants:
+
+| | Muse Spark 1.3 | Muse Glimmer | Screen (Glimmer, Spark confirms) |
+|---|---|---|---|
+| Precision / recall, blocker + major | 1.00 / 1.00 | 0.79 / 1.00 | 1.00 / 1.00 |
+| Names an expected rule | 11/11 | 11/11 | 11/11 |
+| False flags / false fixes on 9 clean images | 0 / 0 | 3 / 0 | 0 / 0 |
+| Median latency per review | 4.7 s | 10.0 s | 12.8 s |
+| Model cost per review | USD 0.0061 | GPU time (USD 3.95/h) | USD 0.0043 + GPU |
+
+Spark is the better reviewer on this set. Glimmer missed nothing and never proposed a wrong edit, but it raised 3 false alarms. That makes it a good screen in front of Spark, not a replacement for it. The [eval write-up](docs/supervisor-eval.md) has the details and the limits.
 
 ## Architecture
 
@@ -198,6 +255,8 @@ Everything in this repository was built during the event. The commit history is 
 - [x] Saved moves on clean plates, composited server-side ([ADR 0010](docs/adr/0010-clean-plates.md))
 - [x] Animatic MP4 export voiced by the narrator, with progress and an inline player ([ADR 0011](docs/adr/0011-animatic-export.md))
 - [x] Storyboard sheet PDF, and revocable read-only share links that preview on X
+- [x] The continuity supervisor: versioned rubrics, automatic draft fixes, badges and a feed, Muse Glimmer on Modal with a Muse Spark fallback, and a labelled eval set ([ADR 0012](docs/adr/0012-continuity-supervisor.md), [ADR 0013](docs/adr/0013-glimmer-on-modal.md))
+- [x] Stray beats: a beat with no words or one stray word joins the next beat instead of becoming a shot
 - [ ] TODO: list features as they ship
 
 ## License
