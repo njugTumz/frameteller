@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     # `az containerapp update --set-env-vars DEMO_PAUSED=true` (a new revision, no redeploy; docs/runbook.md).
     demo_paused: bool = False
 
+    # Continuity supervisor (ADR 0012, 0013). reviewer: "spark" (the director's model: paid outside local),
+    # "glimmer" (our Modal endpoint only), "fallback" (Glimmer first, Spark when Glimmer is cold, slow or down)
+    # or "screen" (as fallback, and Spark confirms whatever Glimmer flags: the eval's choice when Glimmer is on).
+    reviewer: Literal["spark", "glimmer", "fallback", "screen"] = "spark"
+    reviewer_effort: Effort = "low"
+    glimmer_base_url: str = ""  # https://<workspace>--frameteller-glimmer-serve.modal.run/v1
+    glimmer_api_key: SecretStr | None = None  # the endpoint's bearer token, never the Meta key
+    glimmer_model: str = "muse-glimmer"
+    glimmer_timeout_s: float = Field(default=20, gt=0)  # past this (a cold start), Spark reviews instead
+    rubrics_dir: Path | None = None  # agents/; found next to the repo when unset
+
     text_timeout_s: float = Field(default=60, gt=0)
     image_timeout_s: float = Field(default=120, gt=0)
     sam_timeout_s: float = Field(default=60, gt=0)
@@ -86,7 +97,9 @@ class Settings(BaseSettings):
     def _empty_means_full_size(cls, value: object) -> object:
         return None if isinstance(value, str) and value.strip().lower() in ("", "none") else value
 
-    @field_validator("azure_storage_connection_string", "azure_storage_api_version", mode="before")
+    @field_validator(
+        "azure_storage_connection_string", "azure_storage_api_version", "glimmer_api_key", "rubrics_dir", mode="before"
+    )
     @classmethod
     def _empty_means_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
@@ -97,6 +110,12 @@ class Settings(BaseSettings):
             self.director_model = CONTRIBUTOR_DIRECTOR if self.app_env == "local" else PAID_DIRECTOR
         if self.app_env != "local" and self.director_model.endswith("-contributor"):
             raise ValueError("contributor models are for synthetic local data only, not staging or production")
+        return self
+
+    @model_validator(mode="after")
+    def _glimmer_needs_an_endpoint(self) -> Settings:
+        if self.reviewer != "spark" and not (self.glimmer_base_url.strip() and self.glimmer_api_key):
+            raise ValueError(f"REVIEWER={self.reviewer} needs GLIMMER_BASE_URL and GLIMMER_API_KEY")
         return self
 
     @model_validator(mode="after")
@@ -124,6 +143,13 @@ class Settings(BaseSettings):
             renders_per_project=self.limit_renders_per_project,
             exports_per_project=self.limit_exports_per_project,
         )
+
+    @property
+    def rubrics_path(self) -> Path:
+        """agents/: RUBRICS_DIR in the container image, else the repo's own folder (local runs and tests)."""
+        if self.rubrics_dir is not None:
+            return self.rubrics_dir
+        return Path(__file__).resolve().parents[4] / "agents"  # backend/src/frameteller/infrastructure -> repo
 
     @property
     def director(self) -> str:
