@@ -168,7 +168,7 @@ async def save_layer(project_id: ProjectId, n: ShotNumber, body: LayerRequest, c
 )
 async def export_animatic(project_id: ProjectId, body: AnimaticRequest, c: Deps) -> TicketOut:
     """Queue the MP4 animatic. job.updated carries progress; the project's `animatic` holds the result."""
-    return TicketOut.of(await c.request_animatic.execute(project_id, subtitles=body.subtitles))
+    return TicketOut.of(await c.request_animatic.execute(project_id, body.options()))
 
 
 @router.get(

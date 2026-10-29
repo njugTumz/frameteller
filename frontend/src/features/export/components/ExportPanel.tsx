@@ -4,6 +4,7 @@ import { seconds } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
 import type { ExportJob } from '../../storyboard/store'
+import { type AnimaticChoice, CAPTION_LANGUAGES } from '../captions'
 
 /** "Export animatic": progress while ffmpeg runs, then an inline player and a download. Plus the PDF sheet. */
 export function ExportPanel({
@@ -12,6 +13,7 @@ export function ExportPanel({
   animatic,
   videoSrc,
   downloadHref,
+  captionsHref = null,
   pdfHref,
   voiceKept,
   error,
@@ -23,13 +25,16 @@ export function ExportPanel({
   animatic: Animatic | null
   videoSrc: string | null
   downloadHref: string | null
+  /** The captions as an .srt file. */
+  captionsHref?: string | null
   pdfHref: string
   voiceKept: boolean
   error: string | null
-  onExport: (subtitles: boolean) => void
+  onExport: (choice: AnimaticChoice) => void
 }) {
   const id = useId()
-  const [subtitles, setSubtitles] = useState(false)
+  const [subtitles, setSubtitles] = useState(true)
+  const [captionLanguage, setCaptionLanguage] = useState('')
   const running = job?.status === 'queued' || job?.status === 'running'
   const percent = Math.round((job?.progress ?? 0) * 100)
   return (
@@ -47,12 +52,28 @@ export function ExportPanel({
         {voiceKept ? ', with your own voice.' : '. Your recording was not kept, so it will be silent.'}
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ink" onClick={() => onExport(subtitles)} disabled={!ready || running}>
+        <Button variant="ink" onClick={() => onExport({ subtitles, captionLanguage: captionLanguage || null })} disabled={!ready || running}>
           {running ? 'Exporting…' : animatic ? 'Export again' : 'Export animatic'}
         </Button>
         <label htmlFor={`${id}-subs`} className="flex items-center gap-2 text-sm">
           <input id={`${id}-subs`} type="checkbox" checked={subtitles} onChange={(e) => setSubtitles(e.target.checked)} className="size-4 accent-[var(--ink)]" />
-          Burn in subtitles
+          Captions in the picture
+        </label>
+        <label htmlFor={`${id}-lang`} className="flex items-center gap-2 text-sm">
+          Captions in
+          <select
+            id={`${id}-lang`}
+            value={captionLanguage}
+            onChange={(e) => setCaptionLanguage(e.target.value)}
+            className="rounded-sm border-[1.5px] border-rule bg-paper px-2 py-1"
+          >
+            <option value="">the language spoken</option>
+            {CAPTION_LANGUAGES.map((l) => (
+              <option key={l.locale} value={l.locale}>
+                {l.name}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       {!ready && <p className="m-0 text-sm text-muted">Every shot needs a panel first.</p>}
@@ -70,14 +91,22 @@ export function ExportPanel({
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
             <span>
               {seconds(animatic.duration_ms)}
-              {animatic.subtitles ? ' · subtitles' : ''}
+              {animatic.subtitles ? ' · captions' : ''}
+              {animatic.caption_language ? ` · ${CAPTION_LANGUAGES.find((l) => l.locale === animatic.caption_language)?.name ?? animatic.caption_language}` : ''}
               {animatic.voiced ? ' · your voice' : ' · silent'}
             </span>
-            {downloadHref && (
-              <a href={downloadHref} className="font-semibold text-ink underline" download>
-                Download MP4
-              </a>
-            )}
+            <span className="flex flex-wrap gap-3">
+              {captionsHref && (
+                <a href={captionsHref} className="font-semibold text-ink underline" download>
+                  Captions (.srt)
+                </a>
+              )}
+              {downloadHref && (
+                <a href={downloadHref} className="font-semibold text-ink underline" download>
+                  Download MP4
+                </a>
+              )}
+            </span>
           </div>
         </div>
       )}

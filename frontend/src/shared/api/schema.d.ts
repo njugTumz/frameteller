@@ -647,9 +647,23 @@ export interface components {
     schemas: {
         /** AnimaticOut */
         AnimaticOut: {
+            /**
+             * Caption Language
+             * @description The captions' locale when translated; empty: as spoken.
+             * @default
+             */
+            caption_language: string;
+            /**
+             * Captions Url
+             * @description The captions as an .srt file (?download=1 saves it).
+             */
+            captions_url?: string | null;
             /** Duration Ms */
             duration_ms: number;
-            /** Subtitles */
+            /**
+             * Subtitles
+             * @description Captions are burned into the picture.
+             */
             subtitles: boolean;
             /**
              * Url
@@ -665,9 +679,14 @@ export interface components {
         /** AnimaticRequest */
         AnimaticRequest: {
             /**
+             * Caption Language
+             * @description Translate the captions (Muse Spark) into this locale, e.g. fr-FR. None: as spoken.
+             */
+            caption_language?: string | null;
+            /**
              * Subtitles
-             * @description Burn the narration's words into the picture.
-             * @default false
+             * @description Burn the captions into the picture (English, French, Spanish, Portuguese). The MP4 always has them as a soft track, and an .srt is kept beside it.
+             * @default true
              */
             subtitles: boolean;
         };

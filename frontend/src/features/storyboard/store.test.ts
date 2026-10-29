@@ -107,7 +107,7 @@ describe('reveals, saved moves and exports', () => {
     s = reduceStoryboard(s, exportJob('succeeded', null))
     expect(s.exportJob?.progress).toBe(0.25)
     expect(s.stale).toBe(true)
-    const animatic = { url: '/media/projects/p1/exports/a.mp4', duration_ms: 12000, subtitles: false, voiced: true }
+    const animatic = { url: '/media/projects/p1/exports/a.mp4', duration_ms: 12000, subtitles: false, voiced: true, caption_language: '' }
     s = loadProject(s, project({ animatic, share_token: 'tok', narrations: [{ session: 't', duration_ms: 9000, url: '/media/x.wav' }] }))
     expect(s).toMatchObject({ animatic, shareToken: 'tok' })
     expect(s.narrations).toHaveLength(1)
@@ -173,7 +173,7 @@ describe('shotsToDraft (cast approval gating)', () => {
 })
 
 describe('missed job updates (a dropped socket, a new studio version)', () => {
-  const animatic = { url: '/media/projects/p1/exports/new.mp4', duration_ms: 12000, subtitles: false, voiced: true }
+  const animatic = { url: '/media/projects/p1/exports/new.mp4', duration_ms: 12000, subtitles: false, voiced: true, caption_language: '' }
   const exporting = (from: string | null): StoryboardState => ({
     ...initialStoryboard,
     exportJob: { status: 'running', progress: 0.5, message: null, key: 'export_animatic:p1:abc', from },

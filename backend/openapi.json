@@ -3,11 +3,30 @@
     "schemas": {
       "AnimaticOut": {
         "properties": {
+          "caption_language": {
+            "default": "",
+            "description": "The captions' locale when translated; empty: as spoken.",
+            "title": "Caption Language",
+            "type": "string"
+          },
+          "captions_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The captions as an .srt file (?download=1 saves it).",
+            "title": "Captions Url"
+          },
           "duration_ms": {
             "title": "Duration Ms",
             "type": "integer"
           },
           "subtitles": {
+            "description": "Captions are burned into the picture.",
             "title": "Subtitles",
             "type": "boolean"
           },
@@ -33,9 +52,22 @@
       },
       "AnimaticRequest": {
         "properties": {
+          "caption_language": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Translate the captions (Muse Spark) into this locale, e.g. fr-FR. None: as spoken.",
+            "title": "Caption Language"
+          },
           "subtitles": {
-            "default": false,
-            "description": "Burn the narration's words into the picture.",
+            "default": true,
+            "description": "Burn the captions into the picture (English, French, Spanish, Portuguese). The MP4 always has them as a soft track, and an .srt is kept beside it.",
             "title": "Subtitles",
             "type": "boolean"
           }

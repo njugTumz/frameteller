@@ -11,5 +11,7 @@ from frameteller.domain.media import MediaRef
 class AnimaticExport:
     video: MediaRef
     duration_ms: int
-    subtitles: bool
+    subtitles: bool  # captions burned into the picture
     voiced: bool  # False when no narration was kept: the animatic is silent
+    captions: MediaRef | None = None  # the same captions as an .srt file (also a soft track in the MP4)
+    caption_language: str = ""  # the captions' locale when translated ("fr-FR"); "" as spoken

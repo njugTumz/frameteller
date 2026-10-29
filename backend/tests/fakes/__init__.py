@@ -15,6 +15,7 @@ from frameteller.application.audio import wav_bytes
 from frameteller.application.errors import ModelUnavailableError, ProjectNotFoundError
 from frameteller.application.events import ProjectEvent
 from frameteller.application.ports import (
+    CaptionTrack,
     CutoutLayer,
     DirectedTurn,
     EditIntent,
@@ -272,10 +273,10 @@ class FakeVideoRenderer:
         frames: Mapping[str, bytes],
         recordings: Mapping[str, bytes],
         *,
-        subtitles: bool,
+        captions: CaptionTrack | None = None,
         on_progress: Progress | None = None,
     ) -> bytes:
-        self.rendered.append((animatic, dict(frames), dict(recordings), subtitles))
+        self.rendered.append((animatic, dict(frames), dict(recordings), captions))
         if on_progress is not None:
             for done in (0.02, 0.3, 0.6, 1.0):
                 await on_progress(done)

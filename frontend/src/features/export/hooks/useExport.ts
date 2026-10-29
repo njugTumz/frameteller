@@ -3,6 +3,7 @@ import { ApiError } from '../../../shared/api/client'
 import type { Project } from '../../../shared/api/types'
 import { useStoryboardStore } from '../../storyboard/store'
 import { createShare, deleteNarration, exportAnimatic, revokeShare } from '../api'
+import type { AnimaticChoice } from '../captions'
 
 const message = (e: unknown) => (e instanceof ApiError ? e.message : 'The studio did not answer. Try again.')
 
@@ -15,12 +16,12 @@ export function useExport(projectId: string, onProject: (p: Project) => void) {
   const [sharing, setSharing] = useState(false)
 
   const animatic = useCallback(
-    async (subtitles: boolean) => {
+    async (choice: AnimaticChoice) => {
       setError(null)
       const from = useStoryboardStore.getState().animatic?.url ?? null
       useStoryboardStore.getState().set({ exportJob: { status: 'queued', progress: 0, message: null, from }, lastJobAt: Date.now() })
       try {
-        const ticket = await exportAnimatic(projectId, subtitles)
+        const ticket = await exportAnimatic(projectId, choice)
         const current = useStoryboardStore.getState().exportJob
         if (current) useStoryboardStore.getState().set({ exportJob: { ...current, key: ticket.key } })
         // The same storyboard was already exported: nothing new runs, so fetch it again for the result.

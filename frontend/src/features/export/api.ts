@@ -1,10 +1,12 @@
 import { API_BASE_URL } from '../../config'
 import { api, call } from '../../shared/api/client'
 import type { Project, ShareLink, Ticket } from '../../shared/api/types'
+import type { AnimaticChoice } from './captions'
 
 /** Queue the MP4 animatic. Progress arrives as job.updated (export_animatic). */
-export function exportAnimatic(projectId: string, subtitles: boolean): Promise<Ticket> {
-  return call(() => api.POST('/projects/{project_id}/exports/animatic', { params: { path: { project_id: projectId } }, body: { subtitles } }))
+export function exportAnimatic(projectId: string, options: AnimaticChoice): Promise<Ticket> {
+  const body = { subtitles: options.subtitles, caption_language: options.captionLanguage }
+  return call(() => api.POST('/projects/{project_id}/exports/animatic', { params: { path: { project_id: projectId } }, body }))
 }
 
 /** The storyboard sheet: a plain link, so the browser downloads it. */

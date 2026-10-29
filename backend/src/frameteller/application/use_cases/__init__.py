@@ -8,7 +8,7 @@ from frameteller.application.use_cases.correct_transcript import CorrectTranscri
 from frameteller.application.use_cases.direct_turn import DirectedShots, DirectTurn
 from frameteller.application.use_cases.edit_panel_appearance import EditPanelAppearance
 from frameteller.application.use_cases.edit_panel_by_command import EditPanelByCommand
-from frameteller.application.use_cases.export_animatic import ExportAnimatic, RequestAnimaticExport
+from frameteller.application.use_cases.export_animatic import AnimaticOptions, ExportAnimatic, RequestAnimaticExport
 from frameteller.application.use_cases.export_storyboard_pdf import ExportStoryboardPdf
 from frameteller.application.use_cases.generate_character_reference import GenerateCharacterReference
 from frameteller.application.use_cases.generate_panel import GeneratePanel
@@ -43,6 +43,7 @@ from frameteller.application.use_cases.voices import ListVoices, OfferedVoice, P
 __all__ = [
     "MAX_DICTATION_MS",
     "AcceptReview",
+    "AnimaticOptions",
     "ApplySuggestedFix",
     "ApproveCast",
     "Beat",

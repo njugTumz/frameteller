@@ -14,6 +14,7 @@ from frameteller.domain import (
     Animatic,
     Box,
     Character,
+    Cue,
     Framing,
     Issue,
     MaskBitmap,
@@ -339,6 +340,15 @@ class JobQueuePort(Protocol):
 Progress = Callable[[float], Awaitable[None]]
 
 
+@dataclass(frozen=True, slots=True)
+class CaptionTrack:
+    """The animatic's captions, on the video's own timeline (title card included)."""
+
+    cues: tuple[Cue, ...]
+    language: str  # a locale ("en-US"), for the soft track's language tag
+    burn: bool  # also burned into the picture (large, on a soft dark band)
+
+
 class VideoRendererPort(Protocol):
     async def render(
         self,
@@ -346,10 +356,12 @@ class VideoRendererPort(Protocol):
         frames: Mapping[str, bytes],
         recordings: Mapping[str, bytes],
         *,
-        subtitles: bool,
+        captions: CaptionTrack | None = None,
         on_progress: Progress | None = None,
     ) -> bytes:
-        """The MP4 animatic. `frames` by shot id, `recordings` by media key; progress is 0-1 of the timeline."""
+        """The MP4 animatic. `frames` by shot id, `recordings` by media key; progress is 0-1 of the timeline.
+
+        With captions, the MP4 carries them as a soft subtitle track, and burned into the picture if `burn`."""
         ...
 
 

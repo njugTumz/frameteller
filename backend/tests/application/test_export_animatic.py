@@ -1,7 +1,7 @@
 import pytest
 
 from frameteller.application.events import JobUpdated
-from frameteller.application.use_cases import ExportAnimatic, GeneratePanel, RequestAnimaticExport
+from frameteller.application.use_cases import AnimaticOptions, ExportAnimatic, GeneratePanel, RequestAnimaticExport
 from frameteller.domain import MediaRef, Narration, PanelNotReadyError
 from tests.application.conftest import World
 from tests.fakes import FakeVideoRenderer, RecordingPublisher
@@ -27,14 +27,18 @@ async def test_export_renders_every_panel_with_the_kept_voice_and_keeps_the_resu
     world.storage.files[TAKE.key] = (b"RIFF-voice", "audio/wav")
     renderer, events = FakeVideoRenderer(), RecordingPublisher()
 
-    result = await export(world, renderer, events).execute("p1", subtitles=True, job_key="k")
+    result = await export(world, renderer, events).execute("p1", AnimaticOptions(subtitles=True), job_key="k")
 
-    animatic, frames, recordings, subtitles = renderer.rendered[0]
+    animatic, frames, recordings, captions = renderer.rendered[0]
     assert [c.shot_id for c in animatic.clips] == ["s1", "s2", "s3"]
     assert set(frames) == {"s1", "s2", "s3"}
     assert recordings == {TAKE.key: b"RIFF-voice"}
-    assert subtitles
+    assert captions is not None
+    assert captions.burn
+    assert captions.cues[0].start_ms == 1000  # after the title card
     assert (result.duration_ms, result.subtitles, result.voiced) == (12000, True, True)
+    assert result.captions is not None
+    assert world.storage.files[result.captions.key][0].startswith(b"1\n00:00:01,000 --> ")
     assert world.project().animatic == result
     assert world.storage.files[result.video.key][1] == "video/mp4"
     updates = [e for e in events.of(JobUpdated) if isinstance(e, JobUpdated)]
@@ -46,7 +50,7 @@ async def test_a_new_export_replaces_the_previous_file(world: World) -> None:
     await drawn(world)
     use_case = export(world, FakeVideoRenderer(), RecordingPublisher())
     first = await use_case.execute("p1")
-    second = await use_case.execute("p1", subtitles=True)
+    second = await use_case.execute("p1", AnimaticOptions(subtitles=False))
     assert first.video != second.video
     assert first.video.key not in world.storage.files
     assert not second.voiced
@@ -60,10 +64,37 @@ async def test_request_checks_panels_and_dedupes_an_unchanged_storyboard(world: 
 
     first = await request.execute("p1")
     again = await request.execute("p1")
-    subtitled = await request.execute("p1", subtitles=True)
+    subtitled = await request.execute("p1", AnimaticOptions(subtitles=False))
 
     assert first.kind == "export_animatic"
     assert first.enqueued
     assert not again.enqueued
     assert subtitled.enqueued
     assert world.jobs.jobs[-1].payload["job_key"] == subtitled.key
+
+
+async def test_captions_in_another_language_are_translated_and_tagged(world: World) -> None:
+    from tests.fakes import FakeTranslator
+
+    await drawn(world)
+    renderer = FakeVideoRenderer()
+    use_case = ExportAnimatic(world.repo, world.storage, renderer, RecordingPublisher(), FakeTranslator(), world.budget)
+    result = await use_case.execute("p1", AnimaticOptions(caption_language="hi-IN"))
+    track = renderer.rendered[0][3]
+    assert track is not None
+    assert track.language == "hi-IN"
+    assert not track.burn  # Devanagari is a soft track and an .srt, never burned with a Latin-only font
+    assert result.caption_language == "hi-IN"
+    assert ("p1", 0.003, "caption translation") in world.budget.charges
+
+
+async def test_without_audio_the_animatic_is_silent(world: World) -> None:
+    await drawn(world)
+    p = world.project()
+    p.keep_narration(Narration("t1", TAKE, 4000))
+    await world.repo.save(p)
+    world.storage.files[TAKE.key] = (b"RIFF-voice", "audio/wav")
+    renderer = FakeVideoRenderer()
+    result = await export(world, renderer, RecordingPublisher()).execute("p1", AnimaticOptions(audio="none"))
+    assert renderer.rendered[0][2] == {}
+    assert not result.voiced

@@ -12,6 +12,7 @@ from frameteller.application.events import SessionEnded, SessionFailed, ShotCrea
 from frameteller.application.limits import EXPORTS, RENDERS, DemoLimits, ProjectAllowance, VisitorAllowance
 from frameteller.application.ports import DirectedTurn, ShotDraft, SpeechOptions
 from frameteller.application.use_cases import (
+    AnimaticOptions,
     CorrectTranscript,
     CreateProject,
     DirectTurn,
@@ -106,9 +107,11 @@ async def test_exports_per_project_are_limited(world: World) -> None:
 
     await export.execute("p1")
     await export.execute("p1")  # the same export again, still under the limit: free
-    await export.execute("p1", subtitles=True)
+    await export.execute("p1", AnimaticOptions(subtitles=False))
     with pytest.raises(LimitReachedError, match="exported 2 times"):
-        await export.execute("p1", subtitles=True)  # at the limit even a repeat is refused: download it instead
+        await export.execute(
+            "p1", AnimaticOptions(subtitles=False)
+        )  # at the limit even a repeat is refused: download it instead
     assert world.project().usage == {EXPORTS: 2}
 
 

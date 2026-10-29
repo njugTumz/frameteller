@@ -197,10 +197,11 @@ export function StudioPage({ projectId }: { projectId: string }) {
               animatic={board.animatic}
               videoSrc={mediaUrl(board.animatic?.url)}
               downloadHref={board.animatic ? `${mediaUrl(board.animatic.url)}?download=1` : null}
+              captionsHref={board.animatic?.captions_url ? `${mediaUrl(board.animatic.captions_url)}?download=1` : null}
               pdfHref={storyboardPdfUrl(projectId)}
               voiceKept={kept > 0}
               error={exporting.error}
-              onExport={(subtitles) => void exporting.animatic(subtitles)}
+              onExport={(choice) => void exporting.animatic(choice)}
             />
             <SharePanel
               link={board.shareToken ? shareUrl(board.shareToken) : null}

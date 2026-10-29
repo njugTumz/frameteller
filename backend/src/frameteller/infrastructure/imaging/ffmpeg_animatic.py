@@ -3,6 +3,10 @@
 One segment per shot between a title card and an end card. Each segment is a still panel with a gentle
 zoompan move, cross-faded into the next. A segment is lengthened by the fade, so every shot still starts at
 its own time and the voice (cut per shot from the kept narration) stays in sync to the frame.
+
+Captions are a soft mov_text track, and optionally burned in: one overlay per caption line, shown only while
+that line is spoken, large and on a soft dark band inside the bottom title-safe area. ffmpeg runs at a lower
+priority with few threads, so an export never slows live sessions on the same replica (ADR 0016).
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ import asyncio
 import contextlib
 import io
 import itertools
+import shutil
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -18,13 +23,19 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from frameteller.application.ports import Progress
-from frameteller.domain import Animatic, AudioCut, Motion
+from frameteller.application.ports import CaptionTrack, Progress
+from frameteller.domain import END_MS, TITLE_MS, Animatic, AudioCut, Motion, to_srt
 from frameteller.infrastructure.imaging.text import INK, MUTED, PAPER, font, line_height, wrap
 
 WIDTH, HEIGHT, FPS = 1536, 1024, 24
 FADE_FRAMES = 6  # 0.25 s cross-fades
-TITLE_MS, END_MS = 1000, 1500
+CAPTION_SIZE = 52  # px on a 1536x1024 frame: readable on a phone
+SAFE_BOTTOM = 0.08  # captions sit above the bottom 8% (title-safe)
+THREADS = "2"
+# Below the API process, which serves live sessions (coreutils nice; absent elsewhere, then no change).
+_NICE = ("nice", "-n", "10") if shutil.which("nice") else ()
+# ISO 639-2 tags for the soft track, by language.
+ISO639_2 = {"en": "eng", "fr": "fra", "es": "spa", "hi": "hin", "ar": "ara", "pt": "por"}
 SAMPLE_RATE = 48_000
 PRODUCT = "Frameteller"  # the working name (CLAUDE.md): change it here for the end card
 
@@ -38,8 +49,14 @@ class _Segment:
     still: Path
     frames: int  # frames this segment owns on the timeline
     motion: Motion
-    caption: Path | None
     audio: tuple[AudioCut, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _Captions:
+    srt: Path
+    language: str
+    burned: tuple[tuple[Path, float, float], ...]  # (overlay, start s, end s)
 
 
 class FfmpegVideoRenderer:
@@ -52,20 +69,22 @@ class FfmpegVideoRenderer:
         frames: Mapping[str, bytes],
         recordings: Mapping[str, bytes],
         *,
-        subtitles: bool,
+        captions: CaptionTrack | None = None,
         on_progress: Progress | None = None,
     ) -> bytes:
         with tempfile.TemporaryDirectory(prefix="animatic-") as tmp:
             work = Path(tmp)
-            segments, audio_files = await asyncio.to_thread(_prepare, animatic, frames, recordings, subtitles, work)
-            args = _command(self._ffmpeg, segments, audio_files, work / "animatic.mp4")
+            segments, audio_files, track = await asyncio.to_thread(
+                _prepare, animatic, frames, recordings, captions, work
+            )
+            args = _command(self._ffmpeg, segments, audio_files, work / "animatic.mp4", track)
             total_s = sum(s.frames for s in segments) / FPS
             await self._run(args, total_s, on_progress)
             return (work / "animatic.mp4").read_bytes()
 
     async def _run(self, args: list[str], total_s: float, on_progress: Progress | None) -> None:
         process = await asyncio.create_subprocess_exec(
-            *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *_NICE, *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         assert process.stderr is not None
 
@@ -91,8 +110,12 @@ class FfmpegVideoRenderer:
 
 
 def _prepare(
-    animatic: Animatic, frames: Mapping[str, bytes], recordings: Mapping[str, bytes], subtitles: bool, work: Path
-) -> tuple[list[_Segment], dict[str, Path]]:
+    animatic: Animatic,
+    frames: Mapping[str, bytes],
+    recordings: Mapping[str, bytes],
+    captions: CaptionTrack | None,
+    work: Path,
+) -> tuple[list[_Segment], dict[str, Path], _Captions | None]:
     """Stills, caption overlays and audio files on disk, and every segment's frame count."""
     audio_files = {}
     for i, (key, data) in enumerate(recordings.items()):
@@ -108,22 +131,37 @@ def _prepare(
 
     title = work / "title.png"
     _title_card(animatic.title).save(title)
-    segments = [_Segment(title, counts[0], Motion.STATIC, None, ())]
+    segments = [_Segment(title, counts[0], Motion.STATIC, ())]
     for i, clip in enumerate(animatic.clips):
         still = work / f"shot{i}.png"
         _still(frames[clip.shot_id]).save(still)
-        caption = None
-        if subtitles and clip.caption.strip():
-            caption = work / f"caption{i}.png"
-            _caption(clip.caption).save(caption)
-        segments.append(_Segment(still, counts[i + 1], clip.motion, caption, clip.audio))
+        segments.append(_Segment(still, counts[i + 1], clip.motion, clip.audio))
     end = work / "end.png"
     _end_card().save(end)
-    segments.append(_Segment(end, counts[-1], Motion.STATIC, None, ()))
-    return segments, audio_files
+    segments.append(_Segment(end, counts[-1], Motion.STATIC, ()))
+
+    track = None
+    if captions is not None and captions.cues:
+        srt = work / "captions.srt"
+        srt.write_text(to_srt(captions.cues), "utf-8")
+        burned = []
+        if captions.burn:
+            for n, cue in enumerate(captions.cues):
+                overlay = work / f"caption{n}.png"
+                _caption(cue.text).save(overlay)
+                burned.append((overlay, cue.start_ms / 1000, cue.end_ms / 1000))
+        language = ISO639_2.get(captions.language.split("-")[0].lower(), "und")
+        track = _Captions(srt, language, tuple(burned))
+    return segments, audio_files, track
 
 
-def _command(ffmpeg: str, segments: list[_Segment], audio_files: Mapping[str, Path], out: Path) -> list[str]:
+def _command(
+    ffmpeg: str,
+    segments: list[_Segment],
+    audio_files: Mapping[str, Path],
+    out: Path,
+    captions: _Captions | None = None,
+) -> list[str]:
     inputs: list[str] = []
     graph: list[str] = []
 
@@ -141,12 +179,7 @@ def _command(ffmpeg: str, segments: list[_Segment], audio_files: Mapping[str, Pa
         length = s.frames + (0 if last else FADE_FRAMES)  # overlap the next segment by the fade
         still = add_input("-i", str(s.still))
         graph.append(f"[{still}:v]{_move(s.motion, length)}[z{i}]")
-        video = f"z{i}"
-        if s.caption is not None:
-            caption = add_input("-i", str(s.caption))
-            graph.append(f"[{video}][{caption}:v]overlay=0:0[c{i}]")
-            video = f"c{i}"
-        graph.append(f"[{video}]format=yuv420p,setsar=1,settb=1/{FPS}[v{i}]")
+        graph.append(f"[z{i}]format=yuv420p,setsar=1,settb=1/{FPS}[v{i}]")
 
         seconds = s.frames / FPS
         parts = []
@@ -173,7 +206,15 @@ def _command(ffmpeg: str, segments: list[_Segment], audio_files: Mapping[str, Pa
             f"[{chained}][v{i}]xfade=transition=fade:duration={FADE_FRAMES / FPS:.4f}:offset={offset:.4f}[x{i}]"
         )
         chained = f"x{i}"
+    for n, (overlay, start, end) in enumerate(captions.burned if captions else ()):
+        source = add_input("-i", str(overlay))
+        graph.append(f"[{chained}][{source}:v]overlay=0:0:enable='between(t,{start:.3f},{end:.3f})'[cap{n}]")
+        chained = f"cap{n}"
     graph.append("".join(f"[a{i}]" for i in range(len(segments))) + f"concat=n={len(segments)}:v=0:a=1[aout]")
+    subtitle_args: list[str] = []
+    if captions is not None:
+        source = add_input("-i", str(captions.srt))
+        subtitle_args = ["-map", f"{source}:s", "-c:s", "mov_text", "-metadata:s:s:0", f"language={captions.language}"]
 
     return [
         ffmpeg,
@@ -190,6 +231,7 @@ def _command(ffmpeg: str, segments: list[_Segment], audio_files: Mapping[str, Pa
         f"[{chained}]",
         "-map",
         "[aout]",
+        *subtitle_args,
         "-c:v",
         "libx264",
         "-preset",
@@ -204,6 +246,8 @@ def _command(ffmpeg: str, segments: list[_Segment], audio_files: Mapping[str, Pa
         "aac",
         "-b:a",
         "128k",
+        "-threads",
+        THREADS,
         "-movflags",
         "+faststart",
         "-progress",
@@ -259,13 +303,13 @@ def _end_card() -> Image.Image:
 
 
 def _caption(text: str) -> Image.Image:
-    """Subtitles: up to two lines in a soft dark band near the bottom, on a transparent overlay."""
+    """One caption line (wrapped to two at most) in a soft dark band above the bottom safe area."""
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    size = 40
+    size = CAPTION_SIZE
     lines = wrap(draw, text, size, WIDTH - 240, max_lines=2)
     height = len(lines) * line_height(size) + 36
-    top = HEIGHT - 60 - height
+    top = HEIGHT - round(HEIGHT * SAFE_BOTTOM) - height
     widest = max(draw.textlength(line, font=font(size)) for line in lines)
     left = (WIDTH - widest) / 2 - 28
     draw.rounded_rectangle((left, top, WIDTH - left, top + height), radius=14, fill=(20, 18, 16, 170))

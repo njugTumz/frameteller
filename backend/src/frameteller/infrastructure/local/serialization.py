@@ -187,6 +187,8 @@ def project_to_dict(p: Project) -> dict[str, Any]:
                 "duration_ms": p.animatic.duration_ms,
                 "subtitles": p.animatic.subtitles,
                 "voiced": p.animatic.voiced,
+                "captions": p.animatic.captions.key if p.animatic.captions else None,
+                "caption_language": p.animatic.caption_language,
             }
             if p.animatic
             else None
@@ -339,4 +341,9 @@ def project_from_dict(d: dict[str, Any]) -> Project:
 
 
 def _animatic(d: dict[str, Any] | None) -> AnimaticExport | None:
-    return AnimaticExport(MediaRef(d["video"]), d["duration_ms"], d["subtitles"], d["voiced"]) if d else None
+    if not d:
+        return None
+    captions = MediaRef(d["captions"]) if d.get("captions") else None
+    return AnimaticExport(
+        MediaRef(d["video"]), d["duration_ms"], d["subtitles"], d["voiced"], captions, d.get("caption_language", "")
+    )

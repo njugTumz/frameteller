@@ -1,6 +1,7 @@
 """Domain: entities, value objects and story rules. Pure Python, no I/O, no frameworks."""
 
-from frameteller.domain.animatic import Animatic, AnimaticClip, AudioCut, Motion, motion_for
+from frameteller.domain.animatic import END_MS, TITLE_MS, Animatic, AnimaticClip, AudioCut, Motion, motion_for
+from frameteller.domain.captions import Cue, caption_cues, caption_lines, to_srt
 from frameteller.domain.characters import CastStatus, Character, CharacterBible
 from frameteller.domain.errors import (
     CastNotApprovedError,
@@ -49,7 +50,9 @@ from frameteller.domain.timing import MIN_SHOT_MS, split_duration
 from frameteller.domain.transcript import TranscriptTurn
 
 __all__ = [
+    "END_MS",
     "MIN_SHOT_MS",
+    "TITLE_MS",
     "Animatic",
     "AnimaticClip",
     "AnimaticExport",
@@ -62,6 +65,7 @@ __all__ = [
     "CharacterBible",
     "CleanPlate",
     "Composite",
+    "Cue",
     "Decision",
     "DomainError",
     "Episode",
@@ -98,9 +102,12 @@ __all__ = [
     "UnknownShotError",
     "UnknownTurnError",
     "Verdict",
+    "caption_cues",
+    "caption_lines",
     "motion_for",
     "parse_script",
     "plate_key",
     "session_of",
     "split_duration",
+    "to_srt",
 ]

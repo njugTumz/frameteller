@@ -35,6 +35,7 @@ from frameteller.application.ports import (
 )
 from frameteller.application.use_cases import (
     AcceptReview,
+    AnimaticOptions,
     ApplySuggestedFix,
     ApproveCast,
     ComposePanel,
@@ -263,9 +264,9 @@ def wire(
     handlers[job_kinds.COMPOSE_PANEL] = handler(
         lambda p: compose_panel.execute(p["project_id"], p["shot_id"], int(p["revision"]))
     )
-    export_animatic = ExportAnimatic(repo, storage, renderer, hub)
+    export_animatic = ExportAnimatic(repo, storage, renderer, hub, translator, budget)
     handlers[job_kinds.EXPORT_ANIMATIC] = handler(
-        lambda p: export_animatic.execute(p["project_id"], subtitles=bool(p["subtitles"]), job_key=p["job_key"])
+        lambda p: export_animatic.execute(p["project_id"], AnimaticOptions.of(p), job_key=p["job_key"])
     )
     handlers[job_kinds.EDIT_PANEL] = handler(
         lambda p: edit_by_command.execute(p["project_id"], p["shot_id"], p["instruction"])

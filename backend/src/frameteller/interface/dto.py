@@ -29,6 +29,7 @@ from frameteller.application.events import (
 )
 from frameteller.application.ports import Quality, SpeechMode, SpeechOptions
 from frameteller.application.use_cases import (
+    AnimaticOptions,
     Beat,
     CastReview,
     JobTicket,
@@ -123,7 +124,19 @@ class LayerRequest(BaseModel):
 
 
 class AnimaticRequest(BaseModel):
-    subtitles: bool = Field(default=False, description="Burn the narration's words into the picture.")
+    subtitles: bool = Field(
+        default=True,
+        description="Burn the captions into the picture (English, French, Spanish, Portuguese). The MP4 always has "
+        "them as a soft track, and an .srt is kept beside it.",
+    )
+    caption_language: str | None = Field(
+        default=None,
+        pattern=r"^[a-z]{2}(-[A-Z]{2})?$",
+        description="Translate the captions (Muse Spark) into this locale, e.g. fr-FR. None: as spoken.",
+    )
+
+    def options(self) -> AnimaticOptions:
+        return AnimaticOptions(self.subtitles, self.caption_language)
 
 
 class ReorderRequest(BaseModel):
@@ -426,12 +439,21 @@ class NarrationOut(BaseModel):
 class AnimaticOut(BaseModel):
     url: str = Field(description="Plays inline; add ?download=1 to save it.")
     duration_ms: int
-    subtitles: bool
+    subtitles: bool = Field(description="Captions are burned into the picture.")
     voiced: bool = Field(description="False when no narration was kept: the animatic is silent.")
+    captions_url: str | None = Field(default=None, description="The captions as an .srt file (?download=1 saves it).")
+    caption_language: str = Field(default="", description="The captions' locale when translated; empty: as spoken.")
 
     @classmethod
     def of(cls, a: AnimaticExport) -> AnimaticOut:
-        return cls(url=f"/media/{a.video.key}", duration_ms=a.duration_ms, subtitles=a.subtitles, voiced=a.voiced)
+        return cls(
+            url=f"/media/{a.video.key}",
+            duration_ms=a.duration_ms,
+            subtitles=a.subtitles,
+            voiced=a.voiced,
+            captions_url=f"/media/{a.captions.key}" if a.captions else None,
+            caption_language=a.caption_language,
+        )
 
 
 class ProjectOut(BaseModel):

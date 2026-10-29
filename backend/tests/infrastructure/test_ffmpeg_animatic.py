@@ -12,11 +12,13 @@ import pytest
 from PIL import Image
 
 from frameteller.application.audio import wav_bytes
-from frameteller.domain import Animatic, AnimaticClip, AudioCut, MediaRef, Motion
-from frameteller.infrastructure.imaging.ffmpeg_animatic import END_MS, TITLE_MS, FfmpegVideoRenderer
+from frameteller.application.ports import CaptionTrack
+from frameteller.domain import END_MS, TITLE_MS, Animatic, AnimaticClip, AudioCut, Cue, MediaRef, Motion
+from frameteller.infrastructure.imaging.ffmpeg_animatic import FfmpegVideoRenderer
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is not installed")
 TAKE = MediaRef("projects/p1/narration/t1.wav")
+TRACK = CaptionTrack((Cue(1000, 1700, "A lighthouse"), Cue(1700, 2200, "at dusk.")), "en-US", burn=True)
 
 
 def panel(colour: tuple[int, int, int]) -> bytes:
@@ -51,12 +53,14 @@ async def test_mp4_is_h264_aac_1536x1024_at_24_fps_with_picture_and_voice_the_sa
         seen.append(done)
 
     video = await FfmpegVideoRenderer().render(
-        Animatic("p1", "The Lighthouse", clips), frames, {TAKE.key: voice}, subtitles=True, on_progress=progress
+        Animatic("p1", "The Lighthouse", clips), frames, {TAKE.key: voice}, captions=TRACK, on_progress=progress
     )
 
     out = tmp_path / "a.mp4"
     out.write_bytes(video)
-    picture, sound = sorted(probe(out), key=lambda s: s["codec_type"], reverse=True)
+    streams = {s["codec_type"]: s for s in probe(out)}
+    picture, sound, text = streams["video"], streams["audio"], streams["subtitle"]
+    assert (text["codec_name"], text["tags"]["language"]) == ("mov_text", "eng")
     assert (picture["codec_name"], picture["width"], picture["height"]) == ("h264", 1536, 1024)
     assert (picture["pix_fmt"], picture["r_frame_rate"]) == ("yuv420p", "24/1")
     assert sound["codec_name"] == "aac"
@@ -70,6 +74,4 @@ async def test_mp4_is_h264_aac_1536x1024_at_24_fps_with_picture_and_voice_the_sa
 async def test_a_broken_frame_fails_with_a_clear_error() -> None:
     clips = (AnimaticClip("s1", 1, MediaRef("a"), 0, 500),)
     with pytest.raises(Exception, match="cannot identify image"):
-        await asyncio.wait_for(
-            FfmpegVideoRenderer().render(Animatic("p1", "x", clips), {"s1": b"nope"}, {}, subtitles=False), 60
-        )
+        await asyncio.wait_for(FfmpegVideoRenderer().render(Animatic("p1", "x", clips), {"s1": b"nope"}, {}), 60)

@@ -12,6 +12,9 @@ from frameteller.domain.narration import session_of
 from frameteller.domain.project import Project
 from frameteller.domain.shots import Framing, Shot
 
+TITLE_MS = 1000  # the title card before the first shot
+END_MS = 1500  # the "Made with Frameteller" card after the last
+
 
 class Motion(StrEnum):
     """A gentle camera move on the still panel, chosen by framing."""
