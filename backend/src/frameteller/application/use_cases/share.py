@@ -19,9 +19,9 @@ class ShareProject:
     def __init__(self, repo: ProjectRepository, index: ShareIndex, ids: IdGenerator) -> None:
         self._repo, self._index, self._ids = repo, index, ids
 
-    async def execute(self, project_id: str) -> str:
+    async def execute(self, project_id: str, *, public: bool = False) -> str:
         offered = self._ids.new_id()
-        token = await self._repo.update(project_id, lambda p: p.share(offered))
+        token = await self._repo.update(project_id, lambda p: p.share(offered, public=public))
         await self._index.put(token, project_id)  # again for an existing link: repairs a lost index entry
         return token
 

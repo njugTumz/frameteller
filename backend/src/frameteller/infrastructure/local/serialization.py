@@ -131,6 +131,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             for n in p.narrations.values()
         ],
         "share_token": p.share_token,
+        "share_public": p.share_public,
         "animatic": (
             {
                 "video": p.animatic.video.key,
@@ -203,6 +204,7 @@ def project_from_dict(d: dict[str, Any]) -> Project:
         },
         animatic=_animatic(d.get("animatic")),
         share_token=d.get("share_token"),
+        share_public=bool(d.get("share_public", False)),
     )
 
 

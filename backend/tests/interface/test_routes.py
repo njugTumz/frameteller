@@ -341,3 +341,31 @@ async def test_share_link_previews_on_x_and_shows_a_read_only_storyboard(make_ap
     gone = await api.client.get(f"/s/{token}")
     assert gone.status_code == 404
     assert "url=https://studio.example/s/" in gone.text  # the share page explains
+
+
+async def test_a_share_link_is_unlisted_until_the_owner_makes_it_public(api: Api) -> None:
+    await api.client.post("/projects/p1/shots/1/panel", json={})
+    await api.settle()
+    link = (await api.client.post("/projects/p1/share")).json()
+    token = link["token"]
+    assert link["public"] is False
+    assert (await api.client.get("/projects/p1")).json()["share_public"] is False
+    stub = await api.client.get(f"/s/{token}")
+    assert '<meta name="robots" content="noindex, nofollow">' in stub.text
+    for path in (f"/s/{token}", f"/shares/{token}", f"/shares/{token}/panels/1", f"/shares/{token}/og.png"):
+        assert (await api.client.get(path)).headers["x-robots-tag"] == "noindex, nofollow", path
+    assert (await api.client.get(f"/shares/{token}")).json()["public"] is False
+
+    public = (await api.client.post("/projects/p1/share", json={"public": True})).json()
+    assert public == {**link, "public": True}  # the same link, now listed
+    stub = await api.client.get(f"/s/{token}")
+    assert 'name="robots"' not in stub.text
+    assert "x-robots-tag" not in stub.headers
+    assert "x-robots-tag" not in (await api.client.get(f"/shares/{token}/panels/1")).headers
+    assert (await api.client.get(f"/shares/{token}")).json()["public"] is True
+
+    await api.client.post("/projects/p1/share", json={"public": False})
+    assert (await api.client.get(f"/shares/{token}")).headers["x-robots-tag"] == "noindex, nofollow"
+    await api.client.delete("/projects/p1/share")
+    gone = await api.client.get(f"/s/{token}")
+    assert gone.headers["x-robots-tag"] == "noindex, nofollow"

@@ -45,6 +45,7 @@ async def test_repository_round_trips_a_full_project(tmp_path: Path) -> None:
     panel.record_composite(1, MediaRef("panels/s2/r1/composites/b.webp"), Size(1920, 1280))
     p.reorder_shots(["s3", "s1", "s2"])
     p.record_animatic(AnimaticExport(MediaRef("projects/p1/exports/animatic-x.mp4"), 12000, True, False))
+    p.share("tok", public=True)
 
     repo = JsonFileProjectRepository(tmp_path)
     await repo.save(p)

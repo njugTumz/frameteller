@@ -37,6 +37,19 @@ async def test_share_is_stable_until_revoked_and_then_gone(world: World) -> None
     assert await share.execute("p1") != token  # sharing again makes a new link
 
 
+async def test_a_link_is_unlisted_unless_made_public_and_revoking_unlists_it(world: World) -> None:
+    index = InMemoryShareIndex()
+    share = ShareProject(world.repo, index, world.ids)
+    token = await share.execute("p1")
+    assert world.project().share_public is False
+    assert await share.execute("p1", public=True) == token  # same link, now public
+    assert world.project().share_public is True
+    await RevokeShare(world.repo, index).execute("p1")
+    assert world.project().share_public is False
+    await share.execute("p1")
+    assert world.project().share_public is False  # a new link starts unlisted
+
+
 async def test_a_lingering_index_entry_does_not_reopen_a_revoked_link(world: World) -> None:
     index = InMemoryShareIndex()
     token = await ShareProject(world.repo, index, world.ids).execute("p1")

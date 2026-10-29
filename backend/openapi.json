@@ -574,6 +574,11 @@
             "title": "Narrations",
             "type": "array"
           },
+          "share_public": {
+            "description": "Search engines may index the share page. Unlisted (noindex) when false.",
+            "title": "Share Public",
+            "type": "boolean"
+          },
           "share_token": {
             "anyOf": [
               {
@@ -622,7 +627,8 @@
           "shots",
           "narrations",
           "animatic",
-          "share_token"
+          "share_token",
+          "share_public"
         ],
         "title": "ProjectOut",
         "type": "object"
@@ -721,6 +727,10 @@
             "title": "Page Url",
             "type": "string"
           },
+          "public": {
+            "title": "Public",
+            "type": "boolean"
+          },
           "token": {
             "title": "Token",
             "type": "string"
@@ -733,10 +743,23 @@
         },
         "required": [
           "token",
+          "public",
           "url",
           "page_url"
         ],
         "title": "ShareOut",
+        "type": "object"
+      },
+      "ShareRequest": {
+        "properties": {
+          "public": {
+            "default": false,
+            "description": "Let search engines index the share page. Off: the page is unlisted (noindex).",
+            "title": "Public",
+            "type": "boolean"
+          }
+        },
+        "title": "ShareRequest",
         "type": "object"
       },
       "SharedAnimaticOut": {
@@ -770,6 +793,11 @@
               }
             ]
           },
+          "public": {
+            "description": "Indexable by search engines; otherwise the page must say noindex.",
+            "title": "Public",
+            "type": "boolean"
+          },
           "shots": {
             "items": {
               "$ref": "#/components/schemas/SharedShotOut"
@@ -794,7 +822,8 @@
           "title",
           "style",
           "shots",
-          "animatic"
+          "animatic",
+          "public"
         ],
         "title": "SharedProjectOut",
         "type": "object"
@@ -1972,7 +2001,7 @@
         ]
       },
       "post": {
-        "description": "Turn on the read-only link. Calling it again returns the same link.",
+        "description": "Turn on the read-only link, unlisted unless `public`. Calling it again keeps the link and sets `public`.",
         "operationId": "share_project_projects__project_id__share_post",
         "parameters": [
           {
@@ -1986,6 +2015,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ShareRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

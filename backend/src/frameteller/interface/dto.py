@@ -302,6 +302,7 @@ class ProjectOut(BaseModel):
     narrations: list[NarrationOut] = Field(description="Kept recordings, one per live session, for the animatic.")
     animatic: AnimaticOut | None = Field(description="The latest exported animatic.")
     share_token: str | None = Field(description="The live share link's token: {api}/s/{token}. None when off.")
+    share_public: bool = Field(description="Search engines may index the share page. Unlisted (noindex) when false.")
 
     @classmethod
     def of(cls, p: Project) -> ProjectOut:
@@ -320,11 +321,19 @@ class ProjectOut(BaseModel):
             ],
             animatic=AnimaticOut.of(p.animatic) if p.animatic else None,
             share_token=p.share_token,
+            share_public=p.share_public,
         )
+
+
+class ShareRequest(BaseModel):
+    public: bool = Field(
+        default=False, description="Let search engines index the share page. Off: the page is unlisted (noindex)."
+    )
 
 
 class ShareOut(BaseModel):
     token: str
+    public: bool
     url: str = Field(description="The link to post: it previews on X and sends browsers to the share page.")
     page_url: str = Field(description="The read-only page in the studio.")
 
@@ -350,6 +359,7 @@ class SharedProjectOut(BaseModel):
     style: Literal["pencil", "paper_cutout"]
     shots: list[SharedShotOut]
     animatic: SharedAnimaticOut | None
+    public: bool = Field(description="Indexable by search engines; otherwise the page must say noindex.")
 
     @classmethod
     def of(cls, p: Project, token: str) -> SharedProjectOut:
@@ -369,7 +379,7 @@ class SharedProjectOut(BaseModel):
                 )
             )
         animatic = SharedAnimaticOut(url=f"{base}/animatic", duration_ms=p.animatic.duration_ms) if p.animatic else None
-        return cls(title=p.title, style=p.style.value, shots=shots, animatic=animatic)
+        return cls(title=p.title, style=p.style.value, shots=shots, animatic=animatic, public=p.share_public)
 
 
 class CastReviewOut(BaseModel):

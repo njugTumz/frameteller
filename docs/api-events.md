@@ -113,9 +113,11 @@ A share link is read-only, unguessable and revocable. It never contains or revea
 
 | Endpoint | Returns |
 |---|---|
-| `POST /projects/{id}/share` | `{token, url, page_url}`. Post `url` (`{api}/s/{token}`): it previews on X and redirects browsers to `page_url` (`{studio}/s/{token}`). Calling it again returns the same link. |
+| `POST /projects/{id}/share` | Body `{public?: bool}` (default false). Returns `{token, public, url, page_url}`. Post `url` (`{api}/s/{token}`): it previews on X and redirects browsers to `page_url` (`{studio}/s/{token}`). Calling it again returns the same link and sets `public`. |
 | `DELETE /projects/{id}/share` | 204. The link stops working within a minute (share responses are cached for 60 s). |
 | `GET /s/{token}` | HTML with `og:` and `twitter:` tags (title, description, a 1200x630 `og.png`) and a no-script redirect to the share page. A revoked link redirects too, with status 404, so the page can explain. |
-| `GET /shares/{token}` | `{title, style, shots: [{number, framing, action, dialogue, duration_ms, image_url}], animatic: {url, duration_ms} \| null}`. Media URLs are under `/shares/{token}/`. |
+| `GET /shares/{token}` | `{title, style, shots: [{number, framing, action, dialogue, duration_ms, image_url}], animatic: {url, duration_ms} \| null, public}`. Media URLs are under `/shares/{token}/`. |
 | `GET /shares/{token}/panels/{n}`, `/animatic`, `/og.png` | The panel as shown, the animatic (with `Range` support) and the preview image. |
+
+**Unlisted by default.** Until the owner ticks "Make public", every share response carries `X-Robots-Tag: noindex, nofollow`, the stub has a robots meta tag and the studio's share page adds one, so search engines leave it out. Link previews on X still work: noindex keeps a page out of search results, not out of preview crawlers. A public link drops all three. On staging the whole studio is noindex (`STUDIO_NOINDEX=1`), public or not.
 

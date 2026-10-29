@@ -34,6 +34,7 @@ class Project:
     narrations: dict[str, Narration] = field(default_factory=dict)  # by session tag, kept only with consent
     animatic: AnimaticExport | None = None  # the latest export
     share_token: str | None = None  # the read-only share link, until revoked
+    share_public: bool = False  # the owner let search engines index the share page
 
     # ---- transcript and characters ----
 
@@ -132,15 +133,17 @@ class Project:
 
     # ---- sharing ----
 
-    def share(self, token: str) -> str:
-        """Turn the read-only link on. Sharing again keeps the link people already have."""
+    def share(self, token: str, *, public: bool = False) -> str:
+        """Turn the read-only link on, or change whether it is public. Sharing again keeps the link people
+        already have. A link is unlisted (never indexed) unless the owner makes it public."""
         if self.share_token is None:
             self.share_token = token
+        self.share_public = public
         return self.share_token
 
     def unshare(self) -> str | None:
         """Turn the link off. Returns the revoked token so the caller can forget it."""
-        token, self.share_token = self.share_token, None
+        token, self.share_token, self.share_public = self.share_token, None, False
         return token
 
     # ---- exports ----

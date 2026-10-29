@@ -252,7 +252,7 @@ export interface paths {
         put?: never;
         /**
          * Share Project
-         * @description Turn on the read-only link. Calling it again returns the same link.
+         * @description Turn on the read-only link, unlisted unless `public`. Calling it again keeps the link and sets `public`.
          */
         post: operations["share_project_projects__project_id__share_post"];
         /**
@@ -708,6 +708,11 @@ export interface components {
              */
             narrations: components["schemas"]["NarrationOut"][];
             /**
+             * Share Public
+             * @description Search engines may index the share page. Unlisted (noindex) when false.
+             */
+            share_public: boolean;
+            /**
              * Share Token
              * @description The live share link's token: {api}/s/{token}. None when off.
              */
@@ -765,6 +770,8 @@ export interface components {
              * @description The read-only page in the studio.
              */
             page_url: string;
+            /** Public */
+            public: boolean;
             /** Token */
             token: string;
             /**
@@ -772,6 +779,15 @@ export interface components {
              * @description The link to post: it previews on X and sends browsers to the share page.
              */
             url: string;
+        };
+        /** ShareRequest */
+        ShareRequest: {
+            /**
+             * Public
+             * @description Let search engines index the share page. Off: the page is unlisted (noindex).
+             * @default false
+             */
+            public: boolean;
         };
         /** SharedAnimaticOut */
         SharedAnimaticOut: {
@@ -786,6 +802,11 @@ export interface components {
          */
         SharedProjectOut: {
             animatic: components["schemas"]["SharedAnimaticOut"] | null;
+            /**
+             * Public
+             * @description Indexable by search engines; otherwise the page must say noindex.
+             */
+            public: boolean;
             /** Shots */
             shots: components["schemas"]["SharedShotOut"][];
             /**
@@ -1525,7 +1546,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ShareRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
