@@ -5,6 +5,7 @@ from pathlib import Path
 from frameteller.application.rubrics import Rubric, RubricError, parse_rubric
 from frameteller.infrastructure.review.fallback import FallbackReviewer
 from frameteller.infrastructure.review.reviewer import ChatReviewer, GlimmerReviewerAdapter, SparkReviewerAdapter
+from frameteller.infrastructure.review.warmth import GlimmerLease, WarmGatedReviewer
 
 
 class FileRubricLibrary:
@@ -32,6 +33,8 @@ __all__ = [
     "ChatReviewer",
     "FallbackReviewer",
     "FileRubricLibrary",
+    "GlimmerLease",
     "GlimmerReviewerAdapter",
     "SparkReviewerAdapter",
+    "WarmGatedReviewer",
 ]

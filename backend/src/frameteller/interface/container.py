@@ -100,8 +100,10 @@ from frameteller.infrastructure.resilience import Breakers, ModelCaller, RetryPo
 from frameteller.infrastructure.review import (
     FallbackReviewer,
     FileRubricLibrary,
+    GlimmerLease,
     GlimmerReviewerAdapter,
     SparkReviewerAdapter,
+    WarmGatedReviewer,
 )
 from frameteller.infrastructure.system import RandomIds, SystemClock
 from frameteller.interface.hub import ActiveSessions, EventHub
@@ -144,6 +146,7 @@ class Container:
     continuity_checks: SetContinuityChecks
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
+    glimmer_lease: GlimmerLease | None = None  # set by the warm-up script (POST /internal/glimmer/lease)
 
 
 def wire(
@@ -165,6 +168,7 @@ def wire(
     renderer: VideoRendererPort | None = None,
     shares: ShareIndex,
     quota: VisitorQuota | None = None,
+    glimmer_lease: GlimmerLease | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
@@ -292,13 +296,20 @@ def wire(
         accept_review=AcceptReview(repo),
         continuity_checks=SetContinuityChecks(repo),
         readiness=readiness or {},
+        glimmer_lease=glimmer_lease,
     )
 
 
 def build_reviewer(
-    settings: Settings, client: AsyncOpenAI, caller: ModelCaller, storage: MediaStoragePort
+    settings: Settings,
+    client: AsyncOpenAI,
+    caller: ModelCaller,
+    storage: MediaStoragePort,
+    lease: GlimmerLease | None = None,
 ) -> ReviewerPort:
-    """REVIEWER: Muse Spark on Meta's API, Muse Glimmer on our Modal endpoint, or Glimmer with Spark behind it."""
+    """REVIEWER: Muse Spark on Meta's API, Muse Glimmer on our Modal endpoint, or Glimmer with Spark behind it.
+
+    With a lease, fallback and screen use Glimmer only while the lease says it is warm, and Spark otherwise."""
     spark = SparkReviewerAdapter(
         client,
         caller,
@@ -321,7 +332,17 @@ def build_reviewer(
     # One short try: a cold or slow Glimmer hands the review to Spark at once instead of retrying.
     quick = RetryPolicy(1, settings.glimmer_timeout_s)
     glimmer = GlimmerReviewerAdapter(glimmer_client, caller, storage, settings.glimmer_model, quick)
-    return FallbackReviewer(glimmer, spark, confirm_flags=settings.reviewer == "screen")
+    screen = settings.reviewer == "screen"
+    if lease is None:
+        return FallbackReviewer(glimmer, spark, confirm_flags=screen)
+    warm = FallbackReviewer(glimmer, spark, confirm_flags=screen, on_primary_failed=lease.lost)
+    return WarmGatedReviewer(warm, spark, lease)
+
+
+def glimmer_lease(settings: Settings, storage: MediaStoragePort) -> GlimmerLease | None:
+    if settings.reviewer in ("fallback", "screen") and settings.glimmer_only_when_warm:
+        return GlimmerLease(storage, SystemClock())
+    return None
 
 
 def build_container(settings: Settings) -> Container:
@@ -345,6 +366,7 @@ def build_container(settings: Settings) -> Container:
         quota = FileVisitorQuota(root)
     caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s))
     client = meta_client(settings)
+    lease = glimmer_lease(settings, storage)
     return wire(
         settings,
         repo=repo,
@@ -353,7 +375,8 @@ def build_container(settings: Settings) -> Container:
         images=MetaImageAdapter(client, caller, storage, settings),
         segmentation=MetaSamAdapter(client, caller, storage, settings),
         speech=MetaVoiceTranscribeAdapter(caller, settings),
-        reviewer=build_reviewer(settings, client, caller, storage),
+        reviewer=build_reviewer(settings, client, caller, storage, lease),
+        glimmer_lease=lease,
         rubrics=FileRubricLibrary(settings.rubrics_path),
         ledger=ledger,
         readiness={"storage": check},

@@ -12,6 +12,7 @@ verdict names the model that served it, so the badge and the eval show which one
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 
 from frameteller.application.errors import ApplicationError
 from frameteller.application.ports import ReviewerPort, ReviewRequest
@@ -28,15 +29,18 @@ class FallbackReviewer:
         *,
         primary_name: str = "glimmer",
         confirm_flags: bool = False,
+        on_primary_failed: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._primary, self._fallback, self._primary_name = primary, fallback, primary_name
-        self._confirm_flags = confirm_flags
+        self._confirm_flags, self._on_primary_failed = confirm_flags, on_primary_failed
 
     async def review(self, request: ReviewRequest) -> Verdict:
         try:
             verdict = await self._primary.review(request)
         except ApplicationError as e:  # timeout, cold start, 5xx, circuit open, unusable answer
             log.warning("reviewer fell back", extra={"primary": self._primary_name, "reason": str(e)[:200]})
+            if self._on_primary_failed:
+                await self._on_primary_failed(str(e))
             return await self._fallback.review(request)
         if self._confirm_flags and verdict.decision is not Decision.PASS:
             return await self._fallback.review(request)  # the screen flagged it: the stronger reviewer decides

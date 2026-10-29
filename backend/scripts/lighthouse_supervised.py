@@ -54,6 +54,8 @@ async def main() -> None:
     if settings.director.endswith("-contributor"):
         raise SystemExit("Use the paid director for the user's story: DIRECTOR_MODEL=muse-spark-1.3")
     c = build_container(settings)
+    if c.glimmer_lease:
+        await c.glimmer_lease.grant(30)  # warmed by deploy/modal/warm.py just before this run
     ledger = FileSpendLedger(settings.local_storage_dir)
     director = MetaSparkDirectorAdapter(meta_client(settings), ModelCaller(ledger, Breakers()), settings)
     direct = DirectTurn(JsonFileProjectRepository(settings.local_storage_dir), director, RandomIds())

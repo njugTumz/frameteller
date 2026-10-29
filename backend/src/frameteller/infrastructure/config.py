@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     glimmer_api_key: SecretStr | None = None  # the endpoint's bearer token, never the Meta key
     glimmer_model: str = "muse-glimmer"
     glimmer_timeout_s: float = Field(default=20, gt=0)  # past this (a cold start), Spark reviews instead
+    # fallback and screen use Glimmer only while the warm-up script holds a lease, so visitors never wake the GPU.
+    glimmer_only_when_warm: bool = True
     rubrics_dir: Path | None = None  # agents/; found next to the repo when unset
 
     text_timeout_s: float = Field(default=60, gt=0)
