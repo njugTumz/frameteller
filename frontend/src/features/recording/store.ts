@@ -39,6 +39,9 @@ export interface RecordingState {
   micLabel: string
   /** The microphone the narrator picked; null means the system default. */
   deviceId: string | null
+  /** The session socket dropped unexpectedly (usually a new studio version going live) and the project is
+   * being fetched again: "Updating the studio, your work is safe". */
+  updating: boolean
 }
 
 export const initialRecording: RecordingState = {
@@ -57,6 +60,7 @@ export const initialRecording: RecordingState = {
   heardNothing: false,
   micLabel: '',
   deviceId: null,
+  updating: false,
 }
 
 const MAX_NOTICES = 3

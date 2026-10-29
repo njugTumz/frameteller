@@ -7,6 +7,8 @@ export interface PanelJob {
   status: JobStatus
   revision: number | null
   message: string | null
+  /** The job's idempotency key, to ask GET /projects/{id}/jobs/{key} when its events stop. */
+  key?: string
 }
 
 export type SyncStatus = 'loading' | 'ready' | 'missing' | 'unreachable'
@@ -16,7 +18,17 @@ export interface ExportJob {
   status: JobStatus
   progress: number | null
   message: string | null
+  key?: string
+  /** The animatic URL when the export started: a different one in the project means it finished. */
+  from?: string | null
 }
+
+/** A job the server no longer knows (it ran on a revision that was replaced) and whose result never arrived. */
+export const EXPORT_INTERRUPTED = 'The export stopped while the studio was updating. Export again.'
+export const DRAW_INTERRUPTED = 'Drawing stopped while the studio was updating. Draw it again.'
+
+/** What a job status check says: the server's statuses, plus unknown for a job it never saw. */
+export type ResolvedStatus = JobStatus | 'unknown'
 
 export interface StoryboardState {
   sync: SyncStatus
@@ -30,6 +42,10 @@ export interface StoryboardState {
   requested: Record<string, true>
   /** Saved moves being composited on a clean plate (compose_panel), per shot (ADR 0010). */
   composing: Record<string, JobStatus>
+  /** The compose_panel job key per shot, for the job status fallback. */
+  composingKeys: Record<string, string>
+  /** When the last job.updated arrived or a job was queued (ms since epoch): 20 s of silence triggers a check. */
+  lastJobAt: number
   /** The latest animatic export job, if one ran in this visit. */
   exportJob: ExportJob | null
   animatic: Animatic | null
@@ -51,6 +67,8 @@ export const initialStoryboard: StoryboardState = {
   jobs: {},
   requested: {},
   composing: {},
+  composingKeys: {},
+  lastJobAt: 0,
   exportJob: null,
   animatic: null,
   narrations: [],
@@ -107,21 +125,82 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent): St
     case 'job.updated': {
       const done = event.status === 'succeeded' || event.status === 'failed'
       if (event.kind === 'export_animatic') {
-        const exportJob: ExportJob = { status: event.status, progress: event.progress ?? state.exportJob?.progress ?? null, message: event.message }
+        const exportJob: ExportJob = {
+          ...state.exportJob,
+          status: event.status,
+          progress: event.progress ?? state.exportJob?.progress ?? null,
+          message: event.message,
+          key: event.key,
+        }
         return { ...state, exportJob, stale: state.stale || event.status === 'succeeded' }
       }
       if (!event.shot_id) return state
       if (event.kind === 'compose_panel') {
-        return { ...state, composing: { ...state.composing, [event.shot_id]: event.status }, stale: state.stale || done }
+        return {
+          ...state,
+          composing: { ...state.composing, [event.shot_id]: event.status },
+          composingKeys: { ...state.composingKeys, [event.shot_id]: event.key },
+          stale: state.stale || done,
+        }
       }
       if (event.kind === 'pre_segment_panel') return event.status === 'succeeded' ? { ...state, stale: true } : state
       if (!PANEL_JOBS.includes(event.kind)) return state
-      const job: PanelJob = { kind: event.kind, status: event.status, revision: event.revision, message: event.message }
+      const job: PanelJob = { kind: event.kind, status: event.status, revision: event.revision, message: event.message, key: event.key }
       return { ...state, jobs: { ...state.jobs, [event.shot_id]: job }, stale: state.stale || done }
     }
     default:
       return state
   }
+}
+
+const inFlight = (status: JobStatus | undefined) => status === 'queued' || status === 'running'
+
+/** Work this page is waiting for: a job.updated should arrive for each. */
+export function hasJobsInFlight(state: StoryboardState): boolean {
+  return (
+    inFlight(state.exportJob?.status) ||
+    Object.values(state.composing).some(inFlight) ||
+    Object.values(state.jobs).some((j) => inFlight(j.status)) ||
+    state.shots.some((s) => s.panel?.status === 'pending')
+  )
+}
+
+/** Keys of in-flight jobs whose status can be asked for. */
+export function inFlightKeys(state: StoryboardState): string[] {
+  const keys = [
+    inFlight(state.exportJob?.status) ? state.exportJob?.key : undefined,
+    ...Object.entries(state.composing).map(([shot, status]) => (inFlight(status) ? state.composingKeys[shot] : undefined)),
+    ...Object.values(state.jobs).map((j) => (inFlight(j.status) ? j.key : undefined)),
+  ]
+  return keys.filter((k): k is string => !!k)
+}
+
+/**
+ * GET /jobs/{key} answered for a job whose events were missed. Unknown means the server that ran it was
+ * replaced: what it finished is already in the fetched project, and anything else stopped.
+ */
+export function resolveJob(state: StoryboardState, key: string, status: ResolvedStatus, message: string | null): StoryboardState {
+  if (status === 'queued' || status === 'running') return state
+  const failed = status === 'failed' || status === 'unknown'
+  if (state.exportJob?.key === key && inFlight(state.exportJob.status)) {
+    const exportJob: ExportJob = failed
+      ? { ...state.exportJob, status: 'failed', message: message ?? EXPORT_INTERRUPTED }
+      : { ...state.exportJob, status: 'succeeded', progress: 1 }
+    return { ...state, exportJob, stale: state.stale || !failed }
+  }
+  const shot = Object.entries(state.composingKeys).find(([, k]) => k === key)?.[0]
+  if (shot && inFlight(state.composing[shot])) {
+    // A lost compose leaves the panel as the project shows it; moving again composes again.
+    return { ...state, composing: omit(state.composing, [shot]), stale: true }
+  }
+  const panelShot = Object.entries(state.jobs).find(([, j]) => j.key === key && inFlight(j.status))?.[0]
+  if (panelShot) {
+    const job = state.jobs[panelShot]
+    if (!job) return state
+    const next: PanelJob = failed ? { ...job, status: 'failed', message: message ?? DRAW_INTERRUPTED } : { ...job, status: 'succeeded' }
+    return { ...state, jobs: { ...state.jobs, [panelShot]: next }, stale: true }
+  }
+  return state
 }
 
 /** A fresh copy of the project: shots and panels from the server win; finished jobs are forgotten. */
@@ -143,6 +222,11 @@ export function loadProject(state: StoryboardState, project: Project): Storyboar
     jobs,
     // A finished composite is in the project now; one still running keeps its badge.
     composing: Object.fromEntries(Object.entries(state.composing).filter(([, status]) => status === 'queued' || status === 'running')),
+    // The export finished while its events were missed (a dropped socket): the project has the new animatic.
+    exportJob:
+      state.exportJob && inFlight(state.exportJob.status) && project.animatic && project.animatic.url !== state.exportJob.from
+        ? { ...state.exportJob, status: 'succeeded', progress: 1 }
+        : state.exportJob,
     animatic: project.animatic,
     narrations: project.narrations,
     shareToken: project.share_token,
@@ -179,6 +263,8 @@ export function panelPhase(shot: Shot, job: PanelJob | undefined, castReady: boo
 interface StoryboardActions {
   apply(event: ServerEvent): void
   load(project: Project): void
+  /** The job status fallback answered for a job whose events were missed. */
+  resolve(key: string, status: ResolvedStatus, message: string | null): void
   markRequested(shotId: string, requested: boolean): void
   jobStarted(shotId: string, job: PanelJob): void
   set(patch: Partial<StoryboardState>): void
@@ -188,11 +274,13 @@ interface StoryboardActions {
 
 export const useStoryboardStore = create<StoryboardState & StoryboardActions>()((set) => ({
   ...initialStoryboard,
-  apply: (event) => set((s) => reduceStoryboard(s, event)),
+  apply: (event) =>
+    set((s) => ({ ...reduceStoryboard(s, event), ...(event.type === 'job.updated' ? { lastJobAt: Date.now() } : {}) })),
   load: (project) => set((s) => loadProject(s, project)),
+  resolve: (key, status, message) => set((s) => resolveJob(s, key, status, message)),
   markRequested: (shotId, requested) =>
     set((s) => ({ requested: requested ? { ...s.requested, [shotId]: true } : omit(s.requested, [shotId]) })),
-  jobStarted: (shotId, job) => set((s) => ({ jobs: { ...s.jobs, [shotId]: job } })),
+  jobStarted: (shotId, job) => set((s) => ({ jobs: { ...s.jobs, [shotId]: job }, lastJobAt: Date.now() })),
   set: (patch) => set(patch),
   setSync: (sync) => set({ sync }),
   reset: () => set(initialStoryboard),

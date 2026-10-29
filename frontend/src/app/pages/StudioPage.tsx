@@ -7,6 +7,7 @@ import { useExport } from '../../features/export/hooks/useExport'
 import { Notices, ProblemNotice } from '../../features/recording/components/ProblemNotice'
 import { RecordingKept } from '../../features/recording/components/RecordingKept'
 import { SilenceNotice } from '../../features/recording/components/SilenceNotice'
+import { UpdatingNotice } from '../../features/recording/components/UpdatingNotice'
 import { useAudioInputs } from '../../features/recording/hooks/useAudioInputs'
 import { TellingControls } from '../../features/recording/components/TellingControls'
 import { TranscriptRail } from '../../features/recording/components/TranscriptRail'
@@ -63,6 +64,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
   return (
     <div className="grid gap-6 p-4 lg:grid-cols-[340px_1fr] lg:p-6">
       <aside className="flex flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
+        {r.updating && <UpdatingNotice />}
         {r.problem && <ProblemNotice problem={r.problem} onRetry={() => void narration.start()} onDismiss={() => r.setProblem(null)} />}
         {r.silent && (
           <SilenceNotice

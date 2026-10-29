@@ -17,9 +17,12 @@ export function useExport(projectId: string, onProject: (p: Project) => void) {
   const animatic = useCallback(
     async (subtitles: boolean) => {
       setError(null)
-      useStoryboardStore.getState().set({ exportJob: { status: 'queued', progress: 0, message: null } })
+      const from = useStoryboardStore.getState().animatic?.url ?? null
+      useStoryboardStore.getState().set({ exportJob: { status: 'queued', progress: 0, message: null, from }, lastJobAt: Date.now() })
       try {
         const ticket = await exportAnimatic(projectId, subtitles)
+        const current = useStoryboardStore.getState().exportJob
+        if (current) useStoryboardStore.getState().set({ exportJob: { ...current, key: ticket.key } })
         // The same storyboard was already exported: nothing new runs, so fetch it again for the result.
         if (!ticket.enqueued) useStoryboardStore.getState().set({ exportJob: { status: 'succeeded', progress: 1, message: null }, stale: true })
       } catch (e) {

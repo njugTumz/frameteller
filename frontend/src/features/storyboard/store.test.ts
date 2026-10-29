@@ -2,7 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { panel, project, shot, turn } from '../../test/builders'
 import { shotsToDraft } from './hooks/useAutoDraft'
 import type { ServerEvent } from '../../shared/events'
-import { initialStoryboard, loadProject, panelPhase, reduceStoryboard, replaceShots, type StoryboardState } from './store'
+import {
+  DRAW_INTERRUPTED,
+  EXPORT_INTERRUPTED,
+  hasJobsInFlight,
+  inFlightKeys,
+  initialStoryboard,
+  loadProject,
+  panelPhase,
+  reduceStoryboard,
+  replaceShots,
+  resolveJob,
+  type StoryboardState,
+} from './store'
 
 const job = (status: 'queued' | 'running' | 'succeeded' | 'failed', over: object = {}) =>
   ({ type: 'job.updated', kind: 'generate_panel', key: 'k', status, shot_id: 's1', revision: 1, message: null, ...over }) as const
@@ -90,7 +102,7 @@ describe('reveals, saved moves and exports', () => {
     const exportJob = (status: 'running' | 'succeeded', progress: number | null) =>
       ({ type: 'job.updated', kind: 'export_animatic', key: 'e', status, shot_id: null, revision: null, message: null, progress }) as const
     let s = reduceStoryboard(initialStoryboard, exportJob('running', 0.25))
-    expect(s.exportJob).toEqual({ status: 'running', progress: 0.25, message: null })
+    expect(s.exportJob).toEqual({ status: 'running', progress: 0.25, message: null, key: 'e' })
     s = reduceStoryboard(s, exportJob('succeeded', null))
     expect(s.exportJob?.progress).toBe(0.25)
     expect(s.stale).toBe(true)
@@ -156,5 +168,47 @@ describe('shotsToDraft (cast approval gating)', () => {
     expect(shotsToDraft(shots, {}, {}, canDraw).map((s) => s.id)).toEqual(['s1'])
     expect(shotsToDraft(shots, {}, { s1: true }, canDraw)).toEqual([])
     expect(shotsToDraft(shots, { s1: {} }, {}, canDraw)).toEqual([])
+  })
+})
+
+describe('missed job updates (a dropped socket, a new studio version)', () => {
+  const animatic = { url: '/media/projects/p1/exports/new.mp4', duration_ms: 12000, subtitles: false, voiced: true }
+  const exporting = (from: string | null): StoryboardState => ({
+    ...initialStoryboard,
+    exportJob: { status: 'running', progress: 0.5, message: null, key: 'export_animatic:p1:abc', from },
+  })
+
+  it('sees a finished export in the fetched project', () => {
+    expect(loadProject(exporting(null), project({ animatic })).exportJob).toMatchObject({ status: 'succeeded', progress: 1 })
+    expect(loadProject(exporting('/media/old.mp4'), project({ animatic })).exportJob?.status).toBe('succeeded')
+    // The same animatic as before: still waiting.
+    expect(loadProject(exporting(animatic.url), project({ animatic })).exportJob?.status).toBe('running')
+  })
+
+  it('knows what it is waiting for, and which jobs it can ask about', () => {
+    expect(hasJobsInFlight(initialStoryboard)).toBe(false)
+    const s = reduceStoryboard(exporting(null), {
+      type: 'job.updated', kind: 'compose_panel', key: 'compose_panel:p1:s1:r1:x', status: 'running', shot_id: 's1', revision: null, message: null,
+    })
+    expect(hasJobsInFlight(s)).toBe(true)
+    expect(inFlightKeys(s).sort()).toEqual(['compose_panel:p1:s1:r1:x', 'export_animatic:p1:abc'])
+  })
+
+  it('settles jobs by their status, and says when one stopped with the old server', () => {
+    const key = 'export_animatic:p1:abc'
+    expect(resolveJob(exporting(null), key, 'running', null).exportJob?.status).toBe('running')
+    expect(resolveJob(exporting(null), key, 'succeeded', null)).toMatchObject({ exportJob: { status: 'succeeded' }, stale: true })
+    expect(resolveJob(exporting(null), key, 'unknown', null).exportJob).toMatchObject({ status: 'failed', message: EXPORT_INTERRUPTED })
+    expect(resolveJob(exporting(null), key, 'failed', 'Too long.').exportJob?.message).toBe('Too long.')
+
+    const drawing: StoryboardState = {
+      ...initialStoryboard,
+      jobs: { s1: { kind: 'generate_panel', status: 'running', revision: 2, message: null, key: 'generate_panel:p1:s1:r2' } },
+      composing: { s2: 'running' },
+      composingKeys: { s2: 'compose_panel:p1:s2:r1:y' },
+    }
+    expect(resolveJob(drawing, 'generate_panel:p1:s1:r2', 'unknown', null).jobs.s1).toMatchObject({ status: 'failed', message: DRAW_INTERRUPTED })
+    expect(resolveJob(drawing, 'compose_panel:p1:s2:r1:y', 'unknown', null).composing).toEqual({})
+    expect(resolveJob(drawing, 'nope', 'unknown', null)).toBe(drawing)
   })
 })

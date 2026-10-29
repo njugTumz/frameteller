@@ -89,7 +89,10 @@ export class Narration {
           this.socket = null
           this.streaming = false
           this.state.setConnected(false)
-          if (!expected && !this.disposed) onDrop(code)
+          if (!expected && !this.disposed) {
+            this.state.set({ updating: true }) // cleared once the project has been fetched again
+            onDrop(code)
+          }
         },
       },
       this.deps.socketFactory,

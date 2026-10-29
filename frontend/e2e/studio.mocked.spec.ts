@@ -176,7 +176,7 @@ test('a blocked microphone says how to allow it', async ({ browser }) => {
 })
 
 /** A told story with three characters, two drawn shots and a vague "Ember" the narration later reveals. */
-async function storyBackend(page: Page) {
+async function storyBackend(page: Page, { dropDuringExport = false } = {}) {
   const ref = (id: string) => `/media/projects/p1/characters/${id}/reference`
   const state = {
     characters: [
@@ -253,6 +253,15 @@ async function storyBackend(page: Page) {
     }
     if (path === '/projects/p1/exports/animatic') {
       setTimeout(() => send({ type: 'job.updated', kind: 'export_animatic', key: 'e1', status: 'running', shot_id: null, revision: null, message: null, progress: 0.5 }), 200)
+      if (dropDuringExport) {
+        // A new studio version goes live mid-export: the socket drops, and the old server finishes the export
+        // during its grace period, but its job.updated never reaches this page.
+        setTimeout(() => void state.ws?.close({ code: 1012, reason: 'service restart' }), 600)
+        setTimeout(() => {
+          state.animatic = { url: '/media/projects/p1/exports/animatic-1.mp4', duration_ms: 12400, subtitles: Boolean(body?.subtitles), voiced: true }
+        }, 2500)
+        return json(202, { kind: 'export_animatic', key: 'export_animatic:p1:e1', enqueued: true, shot_id: null, revision: null })
+      }
       setTimeout(() => {
         state.animatic = { url: '/media/projects/p1/exports/animatic-1.mp4', duration_ms: 12400, subtitles: Boolean(body?.subtitles), voiced: true }
         send({ type: 'job.updated', kind: 'export_animatic', key: 'e1', status: 'succeeded', shot_id: null, revision: null, message: null, progress: null })
@@ -401,4 +410,22 @@ test('manage the cast, follow a reveal, hear the silence warning, move, export a
   await expect(page.getByText('This link was turned off, or never existed.')).toBeVisible()
   await page.getByRole('button', { name: 'Make your own' }).click()
   await expect(page).toHaveURL(/\/$/)
+})
+
+test('a socket dropped mid-export (a new studio version) still ends with the finished animatic', async ({ page }) => {
+  await storyBackend(page, { dropDuringExport: true })
+  await page.goto('/projects/p1')
+  await expect(page.getByTestId('character-card')).toHaveCount(3)
+  // Tell, then stop: the session socket stays open for job updates.
+  await page.getByRole('button', { name: 'Start telling' }).click()
+  await expect(page.getByTestId('silence-notice')).toBeVisible()
+  await page.getByRole('button', { name: 'Stop telling' }).click()
+
+  await page.getByRole('button', { name: 'Export animatic' }).click()
+  await expect(page.getByText(/Rendering the animatic… 50%/)).toBeVisible()
+  // The socket drops: the page says so, fetches the project again and finds the export there.
+  await expect(page.getByText('Updating the studio, your work is safe')).toBeVisible()
+  await expect(page.getByTestId('animatic-player')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('link', { name: 'Download MP4' })).toHaveAttribute('href', /animatic-1\.mp4\?download=1$/)
+  await expect(page.getByText('Updating the studio, your work is safe')).toHaveCount(0)
 })
