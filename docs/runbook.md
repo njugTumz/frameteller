@@ -34,6 +34,44 @@ There are no cold starts: production keeps one replica running. A new revision d
 120 s, so a live session or an export in progress finishes during a deploy. If the studio socket drops anyway,
 it shows "Updating the studio, your work is safe", refetches the project and carries on.
 
+## Warm Glimmer before a demo
+
+The continuity supervisor's open-weight reviewer, Muse Glimmer, runs on one H100 on Modal (app `frameteller-glimmer`, workspace `geoftums`, [ADR 0013](adr/0013-glimmer-on-modal.md)). It scales to zero after 5 idle minutes. A cold start takes about **3.5 minutes** (measured: 221 s and 194 s). The GPU costs **USD 3.95 an hour** while a container is up.
+
+Production uses `REVIEWER=spark` by default, so Glimmer costs nothing until you switch it on. For a demo or a recording session:
+
+1. **Wake it** 10 minutes before. This polls `/health` (no token needed) until vLLM answers, then sends one authenticated test request:
+   ```bash
+   python3 deploy/modal/warm.py --check     # "ready after ~200 s", then "chat: 'ready' in ~2 s"
+   ```
+2. **Switch the reviewer to the screen.** Glimmer checks every review, its passes stand, and Spark decides whatever it flags ([eval](supervisor-eval.md)). This is a new revision, not a deploy:
+   ```bash
+   az containerapp update -g rg-frameteller-prod -n ca-frameteller-production --set-env-vars REVIEWER=screen
+   ```
+   Badges now say "Checked by Muse Glimmer". If Glimmer is cold, slow (over `GLIMMER_TIMEOUT_S`, 20 s) or failing, Spark reviews instead, and the badge says so.
+3. Every review keeps Glimmer awake. It scales to zero 5 minutes after the last one.
+
+**Stop it** after the demo:
+```bash
+az containerapp update -g rg-frameteller-prod -n ca-frameteller-production --set-env-vars REVIEWER=spark
+modal app stop frameteller-glimmer        # stops the container now; `modal deploy deploy/modal/glimmer.py` brings it back
+```
+
+**Check the spend:**
+- `modal app list` shows whether a container is running.
+- The Modal dashboard's Usage page shows GPU time.
+- The workspace spend limit (USD 30) stops Glimmer if it runs away, and the supervisor then falls back to Spark.
+
+**Rotate the endpoint token.** It is ours, not a Meta key. Keep it out of shell history and logs:
+```bash
+umask 077; python3 -c 'import secrets; print(secrets.token_hex(32), end="")' > ~/.config/frameteller/glimmer.token
+modal secret create frameteller-glimmer-token GLIMMER_API_KEY="$(cat ~/.config/frameteller/glimmer.token)" --force
+modal deploy deploy/modal/glimmer.py
+gh secret set GLIMMER_API_KEY --env staging < ~/.config/frameteller/glimmer.token
+gh secret set GLIMMER_API_KEY --env production < ~/.config/frameteller/glimmer.token
+```
+Then deploy both environments.
+
 ## Kill switch
 
 Pause the public studio without a rebuild. Shared storyboards (`/s/...`), probes and `/status` stay up; everything

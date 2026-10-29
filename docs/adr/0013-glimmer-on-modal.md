@@ -20,13 +20,15 @@ The continuity supervisor ([ADR 0012](0012-continuity-supervisor.md)) reviews ev
   - Weights cached on the Modal Volume `frameteller-glimmer-weights` (downloaded once on CPU).
   - The OpenAI-compatible endpoint requires a bearer token (`--api-key`). That token is ours, not a Meta key: Modal secret `frameteller-glimmer-token`, GitHub environment secret `GLIMMER_API_KEY`.
 - **Fallback** (`REVIEWER=fallback`). `FallbackReviewer` tries Glimmer once with a short timeout (`GLIMMER_TIMEOUT_S`, default 20 s). It falls back to Spark on a timeout (cold start), a 5xx, an open circuit or an unusable answer. Every verdict records the model that served it, and the badge says so ("Checked by Muse Glimmer"). A request to a cold endpoint also starts it, so the next reviews go to Glimmer.
+- **Screen** (`REVIEWER=screen`, chosen by the [eval](../supervisor-eval.md)). This is the fallback mode, plus one rule: whatever Glimmer flags goes to Spark, whose verdict decides, and Glimmer's passes stand. On the eval set, Glimmer as the only reviewer caught every failure but flagged 3 of 9 clean images. As a screen in front of Spark it scored as well as Spark alone, with 30% fewer Spark calls.
+- **Default `REVIEWER=spark`.** Spark alone is faster, needs no GPU, and scored best. The screen is switched on (one environment variable) when Glimmer is warm anyway, for a demo or a recording. Waking a GPU for every casual visitor's first review would cost more than it saves.
 - **Warm before a demo.** `python3 deploy/modal/warm.py --check` wakes the container and waits for it ([runbook](../runbook.md#warm-glimmer-before-a-demo)).
 
 ## Consequences
 
 - Measured on 2026-10-29:
-  - Cold start: **221 s** from the first request to `/health` = 200 (container start, loading 59.6 GB from the Volume, CUDA graphs).
-  - Warm: a short chat answers in 2.1 s, and a reference-sheet review with one image in 6.0 s.
+  - Cold start: **221 s and 194 s** (two runs) from the first request to `/health` = 200 (container start, loading 59.6 GB from the Volume, CUDA graphs).
+  - Warm: a short chat answers in 1.6–2.1 s, a reference-sheet review with one image in 6.0 s, and a panel review with three images in 10 s (median).
 - Cost: an idle-to-idle session (cold start, a few minutes of reviews, 5 minutes of scale-down) is about 15 GPU minutes, about USD 1. Reviews themselves are free per call.
-- vLLM's guided decoding for Glimmer leaves out a required array when it would be empty (`issues`). The parser treats a missing `issues` as none found ([FEEDBACK.md](../../FEEDBACK.md)).
-- Which reviewer is the default comes from the eval ([supervisor-eval.md](../supervisor-eval.md)), not from preference.
+- Meta's vLLM image accepted our strict JSON schema but did not enforce it for Glimmer. The adapter spells the answer's shape out in the prompt and repairs the two off-schema shapes Glimmer produced; without that, the first eval run named no rules at all.
+- The eval ([supervisor-eval.md](../supervisor-eval.md)) chose the default and Glimmer's role, not preference.

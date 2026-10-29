@@ -10,6 +10,10 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-29 · Muse Glimmer · issue · On Meta's `vllm/vllm-openai:muse-glimmer` image with `--reasoning-parser muse_glimmer`, a strict `json_schema` response format (and `structured_outputs`) was accepted but not enforced: answers had extra keys, an `issues` object instead of the required array, or no `issues` at all. Spelling the shape out in the prompt fixed it; the Run inference guide could say whether guided decoding applies after the reasoning section.
+- 2026-10-29 · Muse Glimmer · good · As a continuity reviewer on 20 labelled panels and sheets, Glimmer caught all 11 planted failures with the right rule and never proposed an edit to a clean image; it flagged 3 of 9 clean ones. Good enough to screen reviews before muse-spark-1.3 confirms (docs/supervisor-eval.md).
+- 2026-10-29 · muse-spark-1.3 · good · With two 768 px images, a rubric and a strict schema (rule ids as an enum), image review scored 11/11 with no false flags on our eval set at 4.7 s median and ~USD 0.006 per review, at low reasoning effort.
+- 2026-10-29 · Muse Glimmer · good · The weights repo is ungated Apache 2.0 with a pinned revision, and the vLLM guide gives exact flags and the BF16 VRAM need (~72 GB): it served on the first try on one H100.
 - 2026-10-28 · muse-image-1.0 · good · "Remove the girl, keep everything else identical" as a Responses edit gave a usable clean plate for moving her: layout and style held, and the plate plus our composite was ready 51 s after the move on staging, for $0.01.
 - 2026-10-28 · muse-image-1.0 · issue · A reference sheet for an animal (a small fox) came back wearing the green sweater that only the other character's description named, and one panel added a blue vest. Stating "only the clothing the description names; animals wear nothing unless described" in both prompts fixed it in our lighthouse run (Pip bare in all four of his panels).
 - 2026-10-28 · muse-spark-1.3 · good · Given the last three shots and a later beat that revealed "something small and orange" was the fox, structured output re-cast the earlier shot to Pip in one call instead of inventing a new character, with no extra prompting beyond the schema field.
@@ -37,3 +41,6 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 ## Partner technologies: Fireworks, Modal, Baseten
 
 <!-- e.g. - 2026-11-01 · Modal · good · Glimmer cold start on a single GPU was ~40 s. -->
+
+- 2026-10-29 · Modal · good · Serving Muse Glimmer 30B (BF16, 59.6 GB) on one H100 with weights on a Volume: cold start to a healthy vLLM was 221 s and 194 s; a warm review with three images took ~10 s. `max_containers=1`, `scaledown_window=300` and the workspace spend limit kept the cost bounded.
+- 2026-10-29 · Modal · issue · `Image.from_registry` on the vLLM image failed with "unable to determine the version of Python installed" because the image only has `python3`; a symlink in `setup_dockerfile_commands` fixed it. The error could suggest that.
