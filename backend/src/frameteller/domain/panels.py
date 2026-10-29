@@ -13,6 +13,7 @@ from frameteller.domain.errors import (
     UnknownObjectError,
 )
 from frameteller.domain.media import MediaRef
+from frameteller.domain.review import PanelReview
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +156,7 @@ class Panel:
     outdated: bool = False  # the shot changed after this was drawn (a reveal, a merge, a removed character)
     plates: dict[str, CleanPlate] = field(default_factory=dict)  # by plate_key, for the current base revision
     composite: Composite | None = None
+    review: PanelReview | None = None  # the continuity supervisor's word on this base revision
 
     @property
     def current_revision(self) -> int:
@@ -185,6 +187,7 @@ class Panel:
         self.status = PanelStatus.READY
         self.masks = {}
         self.outdated = False
+        self.review = None  # a new render is reviewed afresh
 
     def mark_failed(self) -> None:
         self.status = PanelStatus.FAILED
@@ -235,6 +238,13 @@ class Panel:
             return None
         self.composite = Composite(self.current_revision + 1, image, size)
         return self.composite
+
+    def record_review(self, review: PanelReview) -> bool:
+        """Keep a review of the base revision it checked. Returns False (and drops it) if the panel moved on."""
+        if review.revision != self.revision or self.status is not PanelStatus.READY:
+            return False
+        self.review = review
+        return True
 
     def clear_composite(self) -> None:
         """Every layer was moved back: the base render is shown again."""

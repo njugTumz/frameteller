@@ -17,6 +17,7 @@ from frameteller.domain.exports import AnimaticExport
 from frameteller.domain.media import MediaRef
 from frameteller.domain.narration import Narration
 from frameteller.domain.panels import Panel
+from frameteller.domain.review import SUPERVISOR_LOG_SIZE, Outcome, PanelReview, SheetReview, SupervisorEntry
 from frameteller.domain.shots import Shot
 from frameteller.domain.style import PanelStyle
 from frameteller.domain.transcript import TranscriptTurn
@@ -36,6 +37,9 @@ class Project:
     share_token: str | None = None  # the read-only share link, until revoked
     share_public: bool = False  # the owner let search engines index the share page
     usage: dict[str, int] = field(default_factory=dict)  # public-demo allowances used, e.g. renders, exports
+    continuity_checks: bool = True  # the continuity supervisor reviews sheets and panels (ADR 0012)
+    sheet_reviews: dict[str, SheetReview] = field(default_factory=dict)  # by character id
+    supervisor_log: list[SupervisorEntry] = field(default_factory=list)  # oldest first, the last 100
 
     # ---- transcript and characters ----
 
@@ -229,3 +233,34 @@ class Project:
     def panel(self, shot_id: str) -> Panel:
         self.shot(shot_id)
         return self.panels.setdefault(shot_id, Panel(shot_id=shot_id))
+
+    # ---- continuity supervisor (ADR 0012) ----
+
+    def record_panel_review(self, shot_id: str, review: PanelReview) -> bool:
+        """Keep a panel review; False if the panel has a newer render than the one reviewed."""
+        return self.panel(shot_id).record_review(review)
+
+    def accept_panel(self, shot_id: str) -> PanelReview:
+        """The user saw the supervisor's issues and keeps the panel as it is."""
+        panel = self.panel(shot_id)
+        if panel.review is None or panel.review.outcome is not Outcome.NEEDS_USER:
+            raise InvalidValueError(f"shot {shot_id}: nothing to accept")
+        panel.review = replace(panel.review, outcome=Outcome.ACCEPTED)
+        return panel.review
+
+    def record_sheet_review(self, character_id: str, review: SheetReview) -> bool:
+        """Keep a sheet review; False if the character has a different sheet now (or left the cast)."""
+        if character_id not in self.bible or self.bible.get(character_id).reference != review.reference:
+            return False
+        self.sheet_reviews[character_id] = review
+        return True
+
+    def accept_sheet(self, character_id: str) -> SheetReview:
+        review = self.sheet_reviews.get(character_id)
+        if review is None or review.outcome is not Outcome.NEEDS_USER:
+            raise InvalidValueError(f"{character_id}: nothing to accept")
+        self.sheet_reviews[character_id] = replace(review, outcome=Outcome.ACCEPTED)
+        return self.sheet_reviews[character_id]
+
+    def log_supervisor(self, entry: SupervisorEntry) -> None:
+        self.supervisor_log = [*self.supervisor_log, entry][-SUPERVISOR_LOG_SIZE:]

@@ -15,18 +15,26 @@ from frameteller.domain import (
     CharacterBible,
     CleanPlate,
     Composite,
+    Decision,
     Framing,
+    Issue,
     MaskBitmap,
     MediaRef,
     Narration,
     ObjectMask,
+    Outcome,
     Panel,
+    PanelReview,
     PanelStatus,
     PanelStyle,
     Project,
+    Severity,
+    SheetReview,
     Shot,
     Size,
+    SupervisorEntry,
     TranscriptTurn,
+    Verdict,
 )
 
 SCHEMA_VERSION = 1
@@ -123,6 +131,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
                     if pn.composite
                     else None
                 ),
+                "review": _panel_review(pn.review) if pn.review else None,
             }
             for pn in p.panels.values()
         ],
@@ -133,6 +142,29 @@ def project_to_dict(p: Project) -> dict[str, Any]:
         "share_token": p.share_token,
         "share_public": p.share_public,
         "usage": dict(p.usage),
+        "continuity_checks": p.continuity_checks,
+        "sheet_reviews": {
+            cid: {
+                "reference": r.reference.key,
+                "outcome": r.outcome.value,
+                "verdict": _verdict(r.verdict),
+                "summary": r.summary,
+            }
+            for cid, r in p.sheet_reviews.items()
+        },
+        "supervisor_log": [
+            {
+                "at": e.at,
+                "subject": e.subject,
+                "outcome": e.outcome.value,
+                "message": e.message,
+                "rule_ids": list(e.rule_ids),
+                "model": e.model,
+                "shot_id": e.shot_id,
+                "character_id": e.character_id,
+            }
+            for e in p.supervisor_log
+        ],
         "animatic": (
             {
                 "video": p.animatic.video.key,
@@ -144,6 +176,52 @@ def project_to_dict(p: Project) -> dict[str, Any]:
             else None
         ),
     }
+
+
+def _verdict(v: Verdict) -> dict[str, Any]:
+    return {
+        "decision": v.decision.value,
+        "confidence": v.confidence,
+        "issues": [
+            {"rule_id": i.rule_id, "severity": i.severity.value, "description": i.description} for i in v.issues
+        ],
+        "fix_instruction": v.fix_instruction,
+        "fix_target": v.fix_target,
+        "fix_parts": list(v.fix_parts),
+        "model": v.model,
+        "latency_ms": v.latency_ms,
+        "rubrics": [list(r) for r in v.rubrics],
+    }
+
+
+def _unverdict(d: dict[str, Any]) -> Verdict:
+    return Verdict(
+        Decision(d["decision"]),
+        float(d["confidence"]),
+        tuple(Issue(i["rule_id"], Severity(i["severity"]), i["description"]) for i in d["issues"]),
+        d["fix_instruction"],
+        d["fix_target"],
+        tuple(d["fix_parts"]),
+        d["model"],
+        int(d["latency_ms"]),
+        tuple((r[0], r[1]) for r in d["rubrics"]),
+    )
+
+
+def _panel_review(r: PanelReview) -> dict[str, Any]:
+    return {
+        "revision": r.revision,
+        "outcome": r.outcome.value,
+        "verdict": _verdict(r.verdict),
+        "fixes": r.fixes,
+        "summary": r.summary,
+    }
+
+
+def _unpanel_review(d: dict[str, Any] | None) -> PanelReview | None:
+    if not d:
+        return None
+    return PanelReview(d["revision"], Outcome(d["outcome"]), _unverdict(d["verdict"]), d["fixes"], d["summary"])
 
 
 def _composite(d: dict[str, Any] | None) -> Composite | None:
@@ -177,6 +255,7 @@ def project_from_dict(d: dict[str, Any]) -> Project:
                 )
             },
             composite=_composite(pd.get("composite")),
+            review=_unpanel_review(pd.get("review")),
         )
     return Project(
         id=d["id"],
@@ -207,6 +286,24 @@ def project_from_dict(d: dict[str, Any]) -> Project:
         share_token=d.get("share_token"),
         share_public=bool(d.get("share_public", False)),
         usage={str(k): int(v) for k, v in d.get("usage", {}).items()},
+        continuity_checks=bool(d.get("continuity_checks", True)),
+        sheet_reviews={
+            cid: SheetReview(MediaRef(r["reference"]), Outcome(r["outcome"]), _unverdict(r["verdict"]), r["summary"])
+            for cid, r in d.get("sheet_reviews", {}).items()
+        },
+        supervisor_log=[
+            SupervisorEntry(
+                e["at"],
+                e["subject"],
+                Outcome(e["outcome"]),
+                e["message"],
+                tuple(e["rule_ids"]),
+                e["model"],
+                e["shot_id"],
+                e["character_id"],
+            )
+            for e in d.get("supervisor_log", [])
+        ],
     )
 
 
