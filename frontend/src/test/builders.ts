@@ -1,4 +1,4 @@
-import type { Character, Panel, Project, Shot, Turn } from '../shared/api/types'
+import type { Character, Panel, Project, Review, Shot, SupervisorEntry, Turn } from '../shared/api/types'
 import type { ServerEvent } from '../shared/events'
 
 export function turn(n: number, text = `words of beat ${n}`, over: Partial<Turn> = {}): Turn {
@@ -53,8 +53,38 @@ export function project(over: Partial<Project> = {}): Project {
     animatic: null,
     share_token: null,
     share_public: false,
+    continuity_checks: true,
+    supervisor: [],
     ...over,
   }
 }
 
 export const ev = (e: ServerEvent): ServerEvent => e
+
+export function review(over: Partial<Review> = {}): Review {
+  return {
+    outcome: 'checked',
+    summary: 'Checked',
+    issues: [],
+    fix_instruction: '',
+    model: 'muse-glimmer',
+    confidence: 0.9,
+    fixes: 0,
+    rubrics: { 'panel-continuity': 'abc123def456' },
+    ...over,
+  }
+}
+
+export function supervisorEntry(over: Partial<SupervisorEntry> = {}): SupervisorEntry {
+  return {
+    at: '2026-10-29T12:00:00+00:00',
+    subject: 'Shot 4',
+    outcome: 'fixed',
+    message: 'Shot 4: remove the blue vest (CONT-04, Pip wears a blue vest that is not on his reference sheet). Fixed in 1 try.',
+    rule_ids: ['CONT-04'],
+    model: 'muse-spark-1.3',
+    shot_id: 's4',
+    character_id: null,
+    ...over,
+  }
+}

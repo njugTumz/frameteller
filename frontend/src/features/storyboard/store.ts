@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Animatic, Narration, Project, Shot } from '../../shared/api/types'
+import type { Animatic, Narration, Project, Shot, SupervisorEntry } from '../../shared/api/types'
 import type { JobKind, JobStatus, ServerEvent } from '../../shared/events'
 
 export interface PanelJob {
@@ -53,6 +53,15 @@ export interface StoryboardState {
   shareToken: string | null
   /** The share page may be indexed by search engines; otherwise it is unlisted. */
   sharePublic: boolean
+  /** The continuity supervisor checks every sheet and render (the project setting, ADR 0012). */
+  continuityChecks: boolean
+  /** The supervisor's decisions, oldest first, as the project has them. */
+  supervisor: SupervisorEntry[]
+  /**
+   * Shots whose new render the supervisor has not reported on yet, with when the render finished (ms). Its
+   * events may come after the session socket closed, so the project is polled for a while (REVIEW_WAIT_MS).
+   */
+  awaitingReview: Record<string, number>
   /** A job finished: the project must be fetched again for the new image and masks. */
   stale: boolean
   loaded: boolean
@@ -74,6 +83,9 @@ export const initialStoryboard: StoryboardState = {
   narrations: [],
   shareToken: null,
   sharePublic: false,
+  continuityChecks: true,
+  supervisor: [],
+  awaitingReview: {},
   stale: false,
   loaded: false,
 }
@@ -102,10 +114,25 @@ function omit<T>(record: Record<string, T>, keys: Iterable<string>): Record<stri
 }
 
 const PANEL_JOBS: readonly JobKind[] = ['generate_panel', 'edit_panel']
+/** How long a finished render waits for its review before the studio stops polling for it. */
+export const REVIEW_WAIT_MS = 90_000
 
-/** Apply one server event. Pure, so every event type is unit-tested. */
-export function reduceStoryboard(state: StoryboardState, event: ServerEvent): StoryboardState {
+/** Apply one server event. Pure (the clock is a parameter), so every event type is unit-tested. */
+export function reduceStoryboard(state: StoryboardState, event: ServerEvent, now = Date.now()): StoryboardState {
   switch (event.type) {
+    case 'supervisor.reviewed':
+    case 'supervisor.fixed':
+    case 'supervisor.needs_user': {
+      // The badge and the fixed image are on the project: fetch it again. The feed line shows at once.
+      const shot = event.entry.shot_id
+      const seen = state.supervisor.some((e) => e.at === event.entry.at && e.message === event.entry.message)
+      return {
+        ...state,
+        supervisor: seen ? state.supervisor : [...state.supervisor, event.entry],
+        awaitingReview: shot ? omit(state.awaitingReview, [shot]) : state.awaitingReview,
+        stale: true,
+      }
+    }
     case 'shot.created':
       return { ...state, shots: upsertShot(state.shots, event.shot) }
     case 'shot.updated': {
@@ -146,7 +173,9 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent): St
       if (event.kind === 'pre_segment_panel') return event.status === 'succeeded' ? { ...state, stale: true } : state
       if (!PANEL_JOBS.includes(event.kind)) return state
       const job: PanelJob = { kind: event.kind, status: event.status, revision: event.revision, message: event.message, key: event.key }
-      return { ...state, jobs: { ...state.jobs, [event.shot_id]: job }, stale: state.stale || done }
+      const awaitingReview =
+        event.status === 'succeeded' && state.continuityChecks ? { ...state.awaitingReview, [event.shot_id]: now } : state.awaitingReview
+      return { ...state, jobs: { ...state.jobs, [event.shot_id]: job }, awaitingReview, stale: state.stale || done }
     }
     default:
       return state
@@ -155,9 +184,10 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent): St
 
 const inFlight = (status: JobStatus | undefined) => status === 'queued' || status === 'running'
 
-/** Work this page is waiting for: a job.updated should arrive for each. */
-export function hasJobsInFlight(state: StoryboardState): boolean {
+/** Work this page is waiting for: a job.updated (or a supervisor event) should arrive for each. */
+export function hasJobsInFlight(state: StoryboardState, now = Date.now()): boolean {
   return (
+    Object.values(state.awaitingReview).some((since) => now - since < REVIEW_WAIT_MS) ||
     inFlight(state.exportJob?.status) ||
     Object.values(state.composing).some(inFlight) ||
     Object.values(state.jobs).some((j) => inFlight(j.status)) ||
@@ -204,7 +234,18 @@ export function resolveJob(state: StoryboardState, key: string, status: Resolved
 }
 
 /** A fresh copy of the project: shots and panels from the server win; finished jobs are forgotten. */
-export function loadProject(state: StoryboardState, project: Project): StoryboardState {
+export function loadProject(state: StoryboardState, project: Project, now = Date.now()): StoryboardState {
+  const checks = project.continuity_checks ?? true
+  const awaitingReview: Record<string, number> = {}
+  for (const shot of project.shots) {
+    const panel = shot.panel
+    if (!checks || panel?.status !== 'ready' || panel.review) continue
+    const job = state.jobs[shot.id]
+    // A render this page waited for has finished (seen here, not through an event): its review comes next.
+    const finished = job && job.status !== 'failed' && job.revision !== null && panel.revision >= job.revision
+    const since = state.awaitingReview[shot.id] ?? (finished ? now : undefined)
+    if (since !== undefined && now - since < REVIEW_WAIT_MS) awaitingReview[shot.id] = since
+  }
   const jobs = Object.fromEntries(
     Object.entries(state.jobs).filter(([shotId, job]) => {
       const panel = project.shots.find((s) => s.id === shotId)?.panel
@@ -231,6 +272,9 @@ export function loadProject(state: StoryboardState, project: Project): Storyboar
     narrations: project.narrations,
     shareToken: project.share_token,
     sharePublic: project.share_public,
+    continuityChecks: checks,
+    supervisor: project.supervisor ?? [],
+    awaitingReview,
     stale: false,
     loaded: true,
     sync: 'ready',

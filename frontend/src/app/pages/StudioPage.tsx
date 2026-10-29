@@ -25,6 +25,10 @@ import type { Project, Shot } from '../../shared/api/types'
 import { loadKeepAudio } from '../../shared/consent'
 import { loadNames } from '../../shared/keywords'
 import { useEditorStore } from '../../features/panel-editor/store'
+import { NeedsYourEye } from '../../features/supervisor/components/NeedsYourEye'
+import { ReviewBadge } from '../../features/supervisor/components/ReviewBadge'
+import { SupervisorFeed } from '../../features/supervisor/components/SupervisorFeed'
+import { useSupervisorActions } from '../../features/supervisor/hooks/useSupervisorActions'
 import { CastZone } from '../studio/CastZone'
 import { dispatchEvent, projectLoaded, resetStudio } from '../studio/dispatch'
 
@@ -51,6 +55,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
     projectLoaded(p)
   }, [])
   const exporting = useExport(projectId, onProject)
+  const supervisor = useSupervisorActions(projectId, onProject)
   const inputs = useAudioInputs(r.silent)
   const allDrawn = board.shots.length > 0 && board.shots.every((s) => s.panel?.status === 'ready')
   const kept = board.narrations.reduce((ms, n) => ms + n.duration_ms, 0)
@@ -78,6 +83,18 @@ export function StudioPage({ projectId }: { projectId: string }) {
         <TellingControls telling={r.telling} heardNothing={r.heardNothing} level={r.level} beats={r.beats} onStart={() => void narration.start()} onStop={() => narration.stop()} onBeat={beat} />
         <Notices notices={r.notices} onDismiss={r.dismissNotice} />
         {kept > 0 && <RecordingKept durationMs={kept} onDelete={() => void exporting.forgetRecording()} />}
+        {(board.shots.length > 0 || board.supervisor.length > 0) && (
+          <SupervisorFeed
+            entries={board.supervisor}
+            enabled={board.continuityChecks}
+            busy={supervisor.busy === 'toggle'}
+            error={supervisor.error}
+            onToggle={(enabled) => {
+              useStoryboardStore.getState().set({ continuityChecks: enabled }) // at once; undone if it fails
+              void supervisor.toggle(enabled).then((ok) => ok || useStoryboardStore.getState().set({ continuityChecks: !enabled }))
+            }}
+          />
+        )}
         <TranscriptRail turns={r.turns} partial={r.partial} listening={r.telling === 'live'} correcting={r.correcting} onCorrect={(id, text) => narration.correct(id, text)} />
       </aside>
       <div className="flex min-w-0 flex-col gap-6">
@@ -86,6 +103,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
         <StoryboardGrid count={board.shots.length} telling={r.telling === 'live'}>
           {board.shots.map((shot) => {
             const phase = panelPhase(shot, board.jobs[shot.id], castReadyFor(cast, shot))
+            const review = shot.panel?.review ?? null
             return (
               <ShotCard
                 key={shot.id}
@@ -94,6 +112,18 @@ export function StudioPage({ projectId }: { projectId: string }) {
                 imageSrc={phase.kind === 'ready' ? mediaUrl(phase.imageUrl) : null}
                 names={shot.character_ids.map(nameOf)}
                 composing={board.composing[shot.id] === 'queued' || board.composing[shot.id] === 'running'}
+                badge={review ? <ReviewBadge review={review} /> : null}
+                review={
+                  review?.outcome === 'needs_user' ? (
+                    <NeedsYourEye
+                      review={review}
+                      busy={supervisor.busy !== null}
+                      onApply={() => void supervisor.applyFix(shot)}
+                      onAccept={() => void supervisor.accept(shot)}
+                      onRedraw={() => void draw(shot, 'draft')}
+                    />
+                  ) : null
+                }
                 onOpen={() => useEditorStore.getState().open(shot.id, shot.panel?.revision ?? null)}
                 onRetry={() => void draw(shot, 'draft')}
               />

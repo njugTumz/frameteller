@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import type { Character } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
 
@@ -15,6 +15,8 @@ export function CharacterCard({
   onRename,
   onRemove,
   onMerge,
+  badge,
+  review,
 }: {
   character: Character
   imageSrc: string | null
@@ -29,6 +31,10 @@ export function CharacterCard({
   onRename?: (name: string) => void
   onRemove?: () => void
   onMerge?: (into: string) => void
+  /** On the sheet: the continuity supervisor's badge. */
+  badge?: ReactNode
+  /** Under the sheet: the rubric issues to look at before approving. */
+  review?: ReactNode
 }) {
   const id = useId()
   const [mode, setMode] = useState<'view' | 'rename' | 'remove' | 'merge'>('view')
@@ -40,13 +46,17 @@ export function CharacterCard({
     <li className="arrive flex w-64 shrink-0 flex-col gap-2 rounded-md border-[1.5px] border-rule bg-sheet p-3" data-testid="character-card">
       <div className="frame aspect-square">
         {imageSrc && !redrawing ? (
-          <img src={imageSrc} alt={`Reference sheet for ${character.name}`} className="size-full object-cover" />
+          <>
+            <img src={imageSrc} alt={`Reference sheet for ${character.name}`} className="size-full object-cover" />
+            {badge}
+          </>
         ) : (
           <div className="grid size-full place-items-center p-4 text-center text-sm font-semibold text-muted" aria-live="polite">
             {redrawing ? `Redrawing ${character.name}…` : `Drawing ${character.name}’s sheet…`}
           </div>
         )}
       </div>
+      {!redrawing && review}
       {mode === 'rename' ? (
         <form
           className="flex gap-2"

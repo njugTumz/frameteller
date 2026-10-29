@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Shot } from '../../../shared/api/types'
 import { framingLabel, seconds, shotLabel } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
@@ -33,6 +34,8 @@ export function ShotCard({
   imageSrc,
   names,
   composing = false,
+  badge,
+  review,
   onOpen,
   onRetry,
 }: {
@@ -41,6 +44,10 @@ export function ShotCard({
   imageSrc: string | null
   names: string[]
   composing?: boolean
+  /** On top of a ready panel: the continuity supervisor's badge. */
+  badge?: ReactNode
+  /** Under the shot: what the supervisor wants the user to look at. */
+  review?: ReactNode
   onOpen: () => void
   onRetry: () => void
 }) {
@@ -56,6 +63,7 @@ export function ShotCard({
               <span className="absolute right-2 bottom-2 rounded-full bg-ink px-3 py-1 text-sm font-semibold text-paper opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
                 Edit panel
               </span>
+              {badge}
               {(outdated || composing) && (
                 <span className="absolute top-2 left-2 rounded-full bg-marker px-3 py-1 text-xs font-bold text-ink ring-1 ring-ink">
                   {composing ? 'Saving your move…' : 'Out of date'}
@@ -82,6 +90,7 @@ export function ShotCard({
         <p className="m-0 leading-snug">{shot.action}</p>
         {shot.dialogue && <p className="m-0 border-l-2 border-blue pl-2 text-muted italic">“{shot.dialogue}”</p>}
         {names.length > 0 && <p className="m-0 text-xs text-muted">With {names.join(', ')}</p>}
+        {phase.kind === 'ready' && review}
         {phase.kind === 'waiting-cast' && (
           <p className="m-0 text-xs text-muted">Panels are drawn once you approve the cast, so every frame shows the same characters.</p>
         )}

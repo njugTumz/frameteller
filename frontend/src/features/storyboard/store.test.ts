@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { panel, project, shot, turn } from '../../test/builders'
+import { panel, project, review, shot, supervisorEntry, turn } from '../../test/builders'
 import { shotsToDraft } from './hooks/useAutoDraft'
 import type { ServerEvent } from '../../shared/events'
 import {
@@ -10,6 +10,7 @@ import {
   initialStoryboard,
   loadProject,
   panelPhase,
+  REVIEW_WAIT_MS,
   reduceStoryboard,
   replaceShots,
   resolveJob,
@@ -210,5 +211,43 @@ describe('missed job updates (a dropped socket, a new studio version)', () => {
     expect(resolveJob(drawing, 'generate_panel:p1:s1:r2', 'unknown', null).jobs.s1).toMatchObject({ status: 'failed', message: DRAW_INTERRUPTED })
     expect(resolveJob(drawing, 'compose_panel:p1:s2:r1:y', 'unknown', null).composing).toEqual({})
     expect(resolveJob(drawing, 'nope', 'unknown', null)).toBe(drawing)
+  })
+})
+
+describe('the continuity supervisor', () => {
+  const entry = supervisorEntry({ shot_id: 's1' })
+
+  it('adds each decision to the feed once and fetches the project for the badge', () => {
+    const s0 = withShots(shot(1, { panel: panel() }))
+    const event = { type: 'supervisor.fixed', entry, revision: 2, fixes: 1 } as const
+    const s1 = reduceStoryboard(s0, event)
+    expect(s1.supervisor).toEqual([entry])
+    expect(s1.stale).toBe(true)
+    expect(reduceStoryboard(s1, event).supervisor).toEqual([entry])
+  })
+
+  it('keeps polling for a while after a render until its review arrives', () => {
+    const s0 = withShots(shot(1))
+    const s1 = reduceStoryboard(s0, job('succeeded'), 1000)
+    expect(s1.awaitingReview).toEqual({ s1: 1000 })
+    expect(hasJobsInFlight(s1, 2000)).toBe(true)
+    expect(hasJobsInFlight(s1, 1000 + REVIEW_WAIT_MS)).toBe(false) // gives up: the review may never come
+    const s2 = reduceStoryboard(s1, { type: 'supervisor.reviewed', entry, revision: 1 })
+    expect(s2.awaitingReview).toEqual({})
+  })
+
+  it('a loaded project with the review stops the wait, and a render seen only by polling starts it', () => {
+    const waiting = { ...withShots(shot(1)), jobs: { s1: { kind: 'generate_panel' as const, status: 'queued' as const, revision: 1, message: null } } }
+    const unreviewed = loadProject(waiting, project({ shots: [shot(1, { panel: panel() })] }), 5000)
+    expect(unreviewed.awaitingReview).toEqual({ s1: 5000 })
+    const reviewed = loadProject(unreviewed, project({ shots: [shot(1, { panel: panel({ review: review() }) })], supervisor: [entry] }), 6000)
+    expect(reviewed.awaitingReview).toEqual({})
+    expect(reviewed.supervisor).toEqual([entry])
+  })
+
+  it('does not wait for reviews when checks are off', () => {
+    const off = loadProject(withShots(shot(1)), project({ continuity_checks: false }))
+    expect(off.continuityChecks).toBe(false)
+    expect(reduceStoryboard(off, job('succeeded')).awaitingReview).toEqual({})
   })
 })
