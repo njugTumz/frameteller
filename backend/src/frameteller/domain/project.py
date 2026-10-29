@@ -35,6 +35,7 @@ class Project:
     animatic: AnimaticExport | None = None  # the latest export
     share_token: str | None = None  # the read-only share link, until revoked
     share_public: bool = False  # the owner let search engines index the share page
+    usage: dict[str, int] = field(default_factory=dict)  # public-demo allowances used, e.g. renders, exports
 
     # ---- transcript and characters ----
 
@@ -130,6 +131,13 @@ class Project:
         refs = [n.recording for n in self.narrations.values()]
         self.narrations = {}
         return refs
+
+    # ---- allowances ----
+
+    def count_use(self, kind: str) -> int:
+        """One more use of a limited action (a render, an export). Returns the new count."""
+        self.usage[kind] = self.usage.get(kind, 0) + 1
+        return self.usage[kind]
 
     # ---- sharing ----
 

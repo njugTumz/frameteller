@@ -13,6 +13,20 @@ class BudgetExceededError(ApplicationError):
     user_message = "This project has reached its spending limit for now."
 
 
+class StudioFullError(BudgetExceededError):
+    """Today's spend across every project reached the global daily cap. Shared storyboards stay viewable."""
+
+    user_message = "The studio is full for today. Come back tomorrow."
+
+
+class LimitReachedError(ApplicationError):
+    """A public-demo allowance is used up (per visitor or per project). The message says which and what next."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.user_message = message
+
+
 class NothingToSegmentError(ApplicationError):
     """SAM found no object at the clicked point."""
 

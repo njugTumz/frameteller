@@ -76,7 +76,7 @@ class FakeDirector:
         directed = self.turns[key]
         # Like the real adapter, cite the turn as stored.
         shots = tuple(replace(d, source_turn_ids=(turn.id,)) for d in directed.shots)
-        return DirectedTurn(directed.new_characters, shots, directed.revisions)
+        return replace(directed, shots=shots)
 
     async def direct_story(self, project: Project) -> DirectedTurn:
         self.calls.append("direct_story")
@@ -295,6 +295,17 @@ class InMemorySpendLedger:
 
     async def record_usage(self, usage: UsageRecord) -> None:
         self.usage.append(usage)
+
+
+class InMemoryVisitorQuota:
+    def __init__(self) -> None:
+        self.counts: dict[tuple[str, str, str], int] = defaultdict(int)
+
+    async def used(self, visitor: str, day: str, kind: str) -> int:
+        return self.counts[(visitor, day, kind)]
+
+    async def add(self, visitor: str, day: str, kind: str) -> None:
+        self.counts[(visitor, day, kind)] += 1
 
 
 class InMemoryShareIndex:

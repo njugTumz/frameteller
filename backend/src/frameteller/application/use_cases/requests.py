@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from frameteller.application.jobs import cast_job, edit_job, panel_job
+from frameteller.application.limits import RENDERS, ProjectAllowance
 from frameteller.application.ports import IdGenerator, Job, JobQueuePort, ProjectRepository, Quality
 from frameteller.domain import InvalidValueError
 
@@ -31,21 +32,23 @@ class JobTicket:
 class RequestPanelRender:
     """Queue the next revision of a shot's panel, as a draft (low) or final (high)."""
 
-    def __init__(self, repo: ProjectRepository, jobs: JobQueuePort) -> None:
-        self._repo, self._jobs = repo, jobs
+    def __init__(self, repo: ProjectRepository, jobs: JobQueuePort, allowance: ProjectAllowance | None = None) -> None:
+        self._repo, self._jobs, self._allowance = repo, jobs, allowance
 
     async def execute(self, project_id: str, shot_id: str, quality: Quality) -> JobTicket:
         project = await self._repo.get(project_id)
         project.require_cast_approved()  # fail now rather than in the background
+        if self._allowance:
+            self._allowance.check(project, RENDERS)
         job = panel_job(project_id, shot_id, project.panel(shot_id).current_revision + 1, quality)
-        return JobTicket.of(job, await self._jobs.enqueue(job))
+        return await _queued(self._jobs, job, self._allowance, project_id)
 
 
 class RequestPanelEdit:
     """Queue a spoken or typed appearance edit of a rendered panel."""
 
-    def __init__(self, repo: ProjectRepository, jobs: JobQueuePort) -> None:
-        self._repo, self._jobs = repo, jobs
+    def __init__(self, repo: ProjectRepository, jobs: JobQueuePort, allowance: ProjectAllowance | None = None) -> None:
+        self._repo, self._jobs, self._allowance = repo, jobs, allowance
 
     async def execute(self, project_id: str, shot_id: str, instruction: str) -> JobTicket:
         instruction = instruction.strip()
@@ -55,8 +58,18 @@ class RequestPanelEdit:
         project.require_cast_approved()
         panel = project.panel(shot_id)
         panel.require_ready()
+        if self._allowance:
+            self._allowance.check(project, RENDERS)
         job = edit_job(project_id, shot_id, panel.revision, instruction)
-        return JobTicket.of(job, await self._jobs.enqueue(job))
+        return await _queued(self._jobs, job, self._allowance, project_id)
+
+
+async def _queued(jobs: JobQueuePort, job: Job, allowance: ProjectAllowance | None, project_id: str) -> JobTicket:
+    """Queue a limited render; only a job that really runs uses the allowance."""
+    enqueued = await jobs.enqueue(job)
+    if enqueued and allowance:
+        await allowance.spend(project_id, RENDERS)
+    return JobTicket.of(job, enqueued)
 
 
 class RequestCastReferences:

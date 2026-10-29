@@ -6,6 +6,7 @@ import hashlib
 
 from frameteller.application.events import JobUpdated
 from frameteller.application.jobs import EXPORT_ANIMATIC, export_job
+from frameteller.application.limits import EXPORTS, ProjectAllowance
 from frameteller.application.ports import (
     EventPublisher,
     JobQueuePort,
@@ -27,13 +28,19 @@ def animatic_digest(animatic: Animatic, subtitles: bool) -> str:
 class RequestAnimaticExport:
     """Check every shot has a panel, then queue the export. Progress arrives as job.updated."""
 
-    def __init__(self, repo: ProjectRepository, jobs: JobQueuePort) -> None:
-        self._repo, self._jobs = repo, jobs
+    def __init__(self, repo: ProjectRepository, jobs: JobQueuePort, allowance: ProjectAllowance | None = None) -> None:
+        self._repo, self._jobs, self._allowance = repo, jobs, allowance
 
     async def execute(self, project_id: str, *, subtitles: bool = False) -> JobTicket:
-        animatic = Animatic.from_project(await self._repo.get(project_id))  # refuses early if a panel is missing
+        project = await self._repo.get(project_id)
+        animatic = Animatic.from_project(project)  # refuses early if a panel is missing
+        if self._allowance:
+            self._allowance.check(project, EXPORTS)
         job = export_job(project_id, animatic_digest(animatic, subtitles), subtitles)
-        return JobTicket.of(job, await self._jobs.enqueue(job))
+        enqueued = await self._jobs.enqueue(job)
+        if enqueued and self._allowance:
+            await self._allowance.spend(project_id, EXPORTS)
+        return JobTicket.of(job, enqueued)
 
 
 class ExportAnimatic:

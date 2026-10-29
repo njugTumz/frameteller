@@ -15,6 +15,8 @@ class DirectedShots:
     new_characters: tuple[Character, ...]
     revised: tuple[Shot, ...] = ()  # earlier shots a reveal changed; their panels are outdated
     dropped_character_ids: tuple[str, ...] = ()  # guesses the reveal replaced, no longer in any shot
+    capped: bool = False  # the project reached its shot limit: shots past it were not added
+    refusal: str = ""  # the director declined a real person or a copyrighted character, and says why
 
 
 def shots_for_turn(drafts: Sequence[ShotDraft], turn: TranscriptTurn, ids: IdGenerator, first: int) -> list[Shot]:
@@ -63,8 +65,10 @@ def apply_revisions(project: Project, revisions: Sequence[ShotRevision]) -> tupl
 class DirectTurn:
     """Direct one finished transcript turn into shots (ADR 0002), revising earlier shots a reveal explains."""
 
-    def __init__(self, repo: ProjectRepository, director: DirectorPort, ids: IdGenerator) -> None:
-        self._repo, self._director, self._ids = repo, director, ids
+    def __init__(
+        self, repo: ProjectRepository, director: DirectorPort, ids: IdGenerator, *, max_shots: int | None = None
+    ) -> None:
+        self._repo, self._director, self._ids, self._max_shots = repo, director, ids, max_shots
 
     async def execute(self, project_id: str, turn: TranscriptTurn) -> DirectedShots:
         snapshot = await self._repo.get(project_id)
@@ -75,8 +79,11 @@ class DirectTurn:
             project.add_turn(turn)
             new = add_new_characters(project, directed.new_characters)
             revised, dropped = apply_revisions(project, directed.revisions)
-            shots = shots_for_turn(directed.shots, turn, self._ids, len(project.shots) + 1)
+            drafts = list(directed.shots)
+            room = len(drafts) if self._max_shots is None else max(0, self._max_shots - len(project.shots))
+            shots = shots_for_turn(drafts[:room], turn, self._ids, len(project.shots) + 1) if room else []
             project.append_shots(shots)
-            return DirectedShots(tuple(shots), new, tuple(revised), tuple(dropped))
+            capped = len(drafts) > room
+            return DirectedShots(tuple(shots), new, tuple(revised), tuple(dropped), capped, directed.refusal)
 
         return await self._repo.update(project_id, apply)

@@ -26,6 +26,7 @@ from frameteller.application.use_cases.requests import (
 )
 from frameteller.application.use_cases.segment_object_at_point import SegmentObjectAtPoint, Selection
 from frameteller.application.use_cases.share import OpenShare, RevokeShare, SharePreview, ShareProject
+from frameteller.application.use_cases.status import GetStudioStatus, StudioStatus
 from frameteller.application.use_cases.transcribe_instruction import MAX_DICTATION_MS, TranscribeInstruction
 from frameteller.application.use_cases.voice_session import Beat, ClientInput, RunVoiceSession, TranscriptCorrection
 
@@ -51,6 +52,7 @@ __all__ = [
     "GenerateCharacterReference",
     "GeneratePanel",
     "GetProject",
+    "GetStudioStatus",
     "JobTicket",
     "MergeCharacters",
     "Merged",
@@ -70,6 +72,7 @@ __all__ = [
     "Selection",
     "SharePreview",
     "ShareProject",
+    "StudioStatus",
     "TranscribeInstruction",
     "TranscriptCorrection",
     "character_mask_id",

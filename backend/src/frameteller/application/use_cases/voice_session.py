@@ -20,6 +20,7 @@ from frameteller.application.events import (
     TranscriptUpdated,
     TurnFinished,
 )
+from frameteller.application.limits import DemoLimits
 from frameteller.application.ports import (
     AudioProgress,
     EventPublisher,
@@ -190,10 +191,12 @@ class RunVoiceSession:
         ids: IdGenerator,
         repo: ProjectRepository,
         storage: MediaStoragePort,
+        limits: DemoLimits | None = None,
     ) -> None:
         self._speech, self._direct, self._correct = speech, direct, correct
         self._cast, self._events, self._ids = cast, events, ids
         self._repo, self._storage = repo, storage
+        self._limits = limits
 
     async def execute(
         self,
@@ -210,6 +213,7 @@ class RunVoiceSession:
         audio: asyncio.Queue[bytes | None] = asyncio.Queue(AUDIO_BUFFER_FRAMES)
         heard = _Heard()
         counts = {"beats": 0, "turns": 0, "shots": 0}
+        told = {"shots_full": False}  # say a limit once per session
         beat_mode = False  # set by the first beat: from then on beats, not the transcriber, cut the shots
         beats: list[int] = []  # beats waiting for the transcript to catch up, oldest first
 
@@ -237,10 +241,18 @@ class RunVoiceSession:
         silence = _Silence()
         kept: bytearray | None = bytearray() if keep_audio else None
 
+        limit_bytes = self._limits.narration_ms_per_session * BYTES_PER_MS if self._limits else None
+        received = 0
+
         async def read_client() -> None:
-            nonlocal beat_mode
+            nonlocal beat_mode, received
             try:
                 async for item in client:
+                    if isinstance(item, bytes) and limit_bytes is not None and self._limits is not None:
+                        received += len(item)
+                        if received > limit_bytes:  # the longest telling allowed: end it like Stop telling
+                            await publish_failure(self._limits.narration_full)
+                            break
                     if isinstance(item, bytes) and (quiet := silence.hear(item, heard.heard_any)):
                         await self._events.publish(project_id, quiet)
                     if isinstance(item, bytes) and kept is not None and len(kept) < MAX_KEPT_MS * BYTES_PER_MS:
@@ -273,6 +285,11 @@ class RunVoiceSession:
                     for shot in directed.shots:
                         counts["shots"] += 1
                         await self._events.publish(project_id, ShotCreated(shot))
+                    if directed.refusal:
+                        await publish_failure(directed.refusal)
+                    if directed.capped and self._limits and not told["shots_full"]:
+                        told["shots_full"] = True
+                        await publish_failure(self._limits.shots_full)
                     if directed.new_characters:
                         await self._cast.execute(project_id, [c.id for c in directed.new_characters])
                 except ApplicationError as e:

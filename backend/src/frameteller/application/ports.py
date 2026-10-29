@@ -53,6 +53,9 @@ class DirectedTurn:
     new_characters: tuple[Character, ...]
     shots: tuple[ShotDraft, ...]
     revisions: tuple[ShotRevision, ...] = ()
+    # One friendly sentence when the narration named a real person or a copyrighted character: no character or
+    # shot was made for them, and the narrator is asked for an original one instead.
+    refusal: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +283,14 @@ class StoryboardSheetPort(Protocol):
     async def render(self, title: str, rows: Sequence[SheetRow]) -> bytes:
         """A printable PDF: the panels in a grid, each with its shot number, framing, action, dialogue and time."""
         ...
+
+
+class VisitorQuota(Protocol):
+    """How many times a visitor did something limited today (start a project). `visitor` is already a hash."""
+
+    async def used(self, visitor: str, day: str, kind: str) -> int: ...
+
+    async def add(self, visitor: str, day: str, kind: str) -> None: ...
 
 
 class ShareIndex(Protocol):

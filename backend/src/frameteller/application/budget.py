@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from frameteller.application.errors import BudgetExceededError
+from frameteller.application.errors import BudgetExceededError, StudioFullError
 from frameteller.application.ports import Clock, SpendLedger
 
 
@@ -28,5 +28,5 @@ class LimitBudgetGuard:
                     f"{what}: project {project_id} would reach ${project_total:.2f} (limit ${self._per_project:.2f})"
                 )
             if day_total > self._per_day:
-                raise BudgetExceededError(f"{what}: today would reach ${day_total:.2f} (limit ${self._per_day:.2f})")
+                raise StudioFullError(f"{what}: today would reach ${day_total:.2f} (limit ${self._per_day:.2f})")
             await self._ledger.record(project_id, day, cost_usd, what)
