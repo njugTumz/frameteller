@@ -24,7 +24,9 @@ from tests.fakes import (
     FakeImageGeneration,
     FakeReviewer,
     FakeSegmentation,
+    FakeSpeechSynthesis,
     FakeSpeechToText,
+    FakeTranslator,
     FakeVideoRenderer,
     InMemoryMediaStorage,
     InMemoryProjectRepository,
@@ -52,10 +54,13 @@ class Fakes:
     quota: InMemoryVisitorQuota = field(default_factory=InMemoryVisitorQuota)
     reviewer: FakeReviewer = field(default_factory=FakeReviewer)
     rubrics: InMemoryRubricLibrary = field(default_factory=InMemoryRubricLibrary)
+    translator: FakeTranslator = field(default_factory=FakeTranslator)
     ready: bool = True
+    tts: bool = True  # Text-to-Speech configured ("Read it to me" offered)
 
     def __post_init__(self) -> None:
         self.images = FakeImageGeneration(self.storage)
+        self.synthesis = FakeSpeechSynthesis(self.storage)
 
 
 @pytest.fixture
@@ -100,6 +105,8 @@ def build(settings: Settings, f: Fakes) -> Container:
         renderer=f.renderer,
         shares=f.shares,
         quota=f.quota,
+        synthesizer=f.synthesis if f.tts else None,
+        translator=f.translator,
     )
 
 

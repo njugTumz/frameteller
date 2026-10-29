@@ -16,6 +16,7 @@ from frameteller.application.errors import (
     ModelTimeoutError,
     NothingToSegmentError,
     ProjectNotFoundError,
+    ScriptError,
     ShareNotFoundError,
     StudioFullError,
 )
@@ -40,6 +41,7 @@ _STATUS: list[tuple[type[Exception], int, str]] = [
     (BudgetExceededError, 402, "budget_exceeded"),
     (LimitReachedError, 429, "limit_reached"),
     (NothingToSegmentError, 422, "nothing_to_select"),
+    (ScriptError, 422, "invalid_script"),
     (ModelRateLimitedError, 503, "model_busy"),
     (ModelTimeoutError, 504, "model_timeout"),
     (ModelError, 502, "model_error"),

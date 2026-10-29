@@ -32,6 +32,7 @@ from frameteller.application.use_cases import (
     Beat,
     CastReview,
     JobTicket,
+    OfferedVoice,
     Selection,
     StudioStatus,
     TranscriptCorrection,
@@ -129,12 +130,27 @@ class ReorderRequest(BaseModel):
     shot_ids: list[str] = Field(min_length=1, max_length=500)
 
 
-class SessionStart(BaseModel):
-    """First WebSocket message. Mode and keywords are fixed for the session (CLAUDE.md section 5)."""
+MAX_SCRIPT_BYTES = 16_000  # far above the script limit: accept_script gives the friendly message
 
-    mode: Literal["narrate", "co_direct"] = "narrate"
+
+class SessionStart(BaseModel):
+    """First WebSocket message. Mode and keywords are fixed for the session (CLAUDE.md section 5).
+
+    "teleprompter" and "read" take a `script` (ADR 0015). "read" also takes a `voice` and `language` from GET
+    /voices, and then receives no audio: the client sends pause, continue and end.
+    """
+
+    mode: Literal["narrate", "co_direct", "teleprompter", "read"] = "narrate"
     keywords: list[str] = Field(default_factory=list, max_length=50)
     keep_audio: bool = Field(default=False, description="The narrator agreed to keep the recording for the animatic.")
+    script: str | None = Field(default=None, max_length=MAX_SCRIPT_BYTES, description="Pasted or uploaded text.")
+    script_format: Literal["text", "markdown", "fountain"] = "text"
+    voice: str | None = Field(default=None, pattern=r"^[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z]{3,40}$")
+    language: str | None = Field(default=None, pattern=r"^[a-z]{2}(-[A-Z]{2})?$")
+
+    @property
+    def scripted(self) -> bool:
+        return self.mode in ("teleprompter", "read")
 
     def as_options(self) -> SpeechOptions:
         mode = SpeechMode.CO_DIRECTION if self.mode == "co_direct" else SpeechMode.NARRATION
@@ -164,10 +180,22 @@ class ClientCorrection(BaseModel):
         return TranscriptCorrection(self.turn_id, self.text)
 
 
+class ClientPause(BaseModel):
+    """ "Read it to me": hold the reading before the next paragraph."""
+
+    type: Literal["pause"]
+
+
+class ClientContinue(BaseModel):
+    """ "Read it to me": go on after a pause, or now instead of waiting for an episode's drafts."""
+
+    type: Literal["continue"]
+
+
 class ClientMessage(BaseModel):
     """A JSON message from the client after the start message."""
 
-    message: ClientEnd | ClientBeat | ClientCorrection = Field(discriminator="type")
+    message: ClientEnd | ClientBeat | ClientCorrection | ClientPause | ClientContinue = Field(discriminator="type")
 
 
 # ---- responses ----
@@ -475,6 +503,44 @@ class SharedAnimaticOut(BaseModel):
     duration_ms: int
 
 
+def voice_name(voice: str) -> str:
+    """ "en-US-BrandonMultilingualNeural" -> "Brandon"."""
+    name = voice.split("-", 2)[-1]
+    return name.removesuffix("Neural").removesuffix("Multilingual") or voice
+
+
+class LanguageOut(BaseModel):
+    code: str = Field(description='"fr"')
+    locale: str = Field(description='"fr-FR": send it as the session\'s language.')
+    name: str = Field(description="The language's own name.")
+
+
+class VoiceOut(BaseModel):
+    name: str
+    display_name: str
+    gender: str
+    accent: str = Field(description='"en-US" or "en-GB".')
+    languages: list[LanguageOut]
+    preview_url: str = Field(description="Add ?language=fr-FR for another language.")
+
+    @classmethod
+    def of(cls, v: OfferedVoice) -> VoiceOut:
+        return cls(
+            name=v.name,
+            display_name=v.display_name,
+            gender=v.gender,
+            accent=v.accent,
+            languages=[LanguageOut(code=x.code, locale=x.locale, name=x.name) for x in v.languages],
+            preview_url=f"/voices/{v.name}/preview",
+        )
+
+
+class VoicesOut(BaseModel):
+    available: bool = Field(description='False when Text-to-Speech is not set up: hide "Read it to me".')
+    default: str
+    voices: list[VoiceOut]
+
+
 class SharedProjectOut(BaseModel):
     """What a share link shows: read-only, with media under /shares/{token}/, never the project id."""
 
@@ -483,6 +549,9 @@ class SharedProjectOut(BaseModel):
     shots: list[SharedShotOut]
     animatic: SharedAnimaticOut | None
     public: bool = Field(description="Indexable by search engines; otherwise the page must say noindex.")
+    narrated_by: str | None = Field(
+        default=None, description='The synthesized voice that narrated it ("Brandon"); null: the author\'s own voice.'
+    )
 
     @classmethod
     def of(cls, p: Project, token: str) -> SharedProjectOut:
@@ -502,7 +571,15 @@ class SharedProjectOut(BaseModel):
                 )
             )
         animatic = SharedAnimaticOut(url=f"{base}/animatic", duration_ms=p.animatic.duration_ms) if p.animatic else None
-        return cls(title=p.title, style=p.style.value, shots=shots, animatic=animatic, public=p.share_public)
+        voices = [n.voice for n in p.narrations.values() if n.voice]
+        return cls(
+            title=p.title,
+            style=p.style.value,
+            shots=shots,
+            animatic=animatic,
+            public=p.share_public,
+            narrated_by=voice_name(voices[-1]) if voices else None,
+        )
 
 
 class CastReviewOut(BaseModel):

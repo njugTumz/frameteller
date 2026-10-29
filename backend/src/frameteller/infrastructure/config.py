@@ -79,7 +79,6 @@ class Settings(BaseSettings):
     azure_speech_key: SecretStr | None = None
     azure_speech_region: str = "eastus2"
     speech_timeout_s: float = Field(default=30, gt=0)
-    speech_default_voice: str = "en-US-BrandonMultilingualNeural"
     speech_characters_per_day: int = Field(default=200_000, ge=0)  # all visitors together
 
     text_timeout_s: float = Field(default=60, gt=0)

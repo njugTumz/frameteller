@@ -13,22 +13,28 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from frameteller.application.errors import ApplicationError, ProjectNotFoundError
+from frameteller.application.errors import ApplicationError, ProjectNotFoundError, ScriptError
 from frameteller.application.events import ProjectEvent
-from frameteller.application.use_cases import ClientInput
-from frameteller.domain import DomainError
+from frameteller.application.scripts import accept_script
+from frameteller.application.use_cases import ClientInput, ReadControl, ReadingOptions
+from frameteller.application.use_cases.voices import DEFAULT_VOICE
+from frameteller.domain import DomainError, Script, ScriptFormat
 from frameteller.infrastructure.observability import log_context
 from frameteller.interface.dto import (
     ClientBeat,
+    ClientContinue,
     ClientCorrection,
     ClientEnd,
     ClientMessage,
+    ClientPause,
     SessionStart,
     error_message,
     event_message,
 )
 from frameteller.interface.errors import describe
 from frameteller.interface.routes.deps import PROJECT_ID, Deps
+from frameteller.interface.routes.voices import NOT_SET_UP
+from frameteller.interface.visitor import visitor_id
 
 router = APIRouter()
 log = logging.getLogger("frameteller.session")
@@ -84,8 +90,29 @@ class Audio:
                     return
                 yield parsed.at(self.received_ms) if isinstance(parsed, ClientBeat) else parsed.as_command()
 
+    async def controls(self) -> AsyncIterator[ReadControl]:
+        """ "Read it to me": Pause and Continue until the client ends or leaves. Audio is not expected."""
+        while True:
+            try:
+                message = await self.ws.receive()
+            except WebSocketDisconnect:
+                self.disconnected = True
+                return
+            if message["type"] == "websocket.disconnect":
+                self.disconnected = True
+                return
+            parsed = _parse(message.get("text"))
+            if isinstance(parsed, ClientEnd):
+                return
+            if isinstance(parsed, ClientPause | ClientContinue):
+                yield parsed.type
+            else:
+                await self._notice('While a voice reads, send {"type": "pause"}, {"type": "continue"} or end.')
+
     async def _parse(self, text: str | None) -> ClientEnd | ClientBeat | ClientCorrection | None:
         parsed = _parse(text)
+        if isinstance(parsed, ClientPause | ClientContinue):
+            parsed = None  # only while a voice reads
         if parsed is None:
             await self._notice('Unknown message: send {"type": "beat"}, {"type": "transcript.corrected", ...} or end.')
         return parsed
@@ -96,7 +123,7 @@ class Audio:
             await _send(self.ws, error_message(text))
 
 
-def _parse(text: str | None) -> ClientEnd | ClientBeat | ClientCorrection | None:
+def _parse(text: str | None) -> ClientEnd | ClientBeat | ClientCorrection | ClientPause | ClientContinue | None:
     try:
         return ClientMessage.model_validate({"message": json.loads(text or "")}).message
     except (ValueError, ValidationError):
@@ -159,10 +186,30 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
     try:
         start = SessionStart.model_validate(await asyncio.wait_for(ws.receive_json(), START_TIMEOUT_S))
     except (TimeoutError, ValidationError, ValueError, KeyError):
-        await _send(ws, error_message('Start with {"mode": "narrate" | "co_direct", "keywords": [...]}.', fatal=True))
+        await _send(
+            ws,
+            error_message(
+                'Start with {"mode": "narrate" | "co_direct" | "teleprompter" | "read", "keywords": [...]}.', fatal=True
+            ),
+        )
         await _close(ws, CLOSE_BAD_REQUEST)
         return
     except WebSocketDisconnect:
+        return
+    script: Script | None = None
+    reading: ReadingOptions | None = None
+    try:
+        if start.scripted:
+            script = accept_script(start.script or "", ScriptFormat(start.script_format), c.settings.demo_limits)
+        if start.mode == "read":
+            if c.read_script is None or c.list_voices is None:
+                raise ScriptError(NOT_SET_UP)
+            voice = start.voice or DEFAULT_VOICE
+            language = await c.list_voices.check(voice, start.language or "en")
+            reading = ReadingOptions(voice, language.locale, visitor_id(ws))
+    except ApplicationError as e:
+        await _send(ws, error_message(e.user_message, fatal=True))
+        await _close(ws, CLOSE_BAD_REQUEST)
         return
 
     audio = Audio(ws)
@@ -171,9 +218,12 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
         try:
             await _send(ws, {"type": "session.started", "mode": start.mode})
             try:
-                await c.voice_session.execute(
-                    project_id, audio.frames(), start.as_options(), keep_audio=start.keep_audio
-                )
+                if reading is not None and script is not None and c.read_script is not None:
+                    await c.read_script.execute(project_id, script, reading, audio.controls())
+                else:
+                    await c.voice_session.execute(
+                        project_id, audio.frames(), start.as_options(), keep_audio=start.keep_audio, script=script
+                    )
             except ApplicationError as e:
                 await _send(ws, error_message(e.user_message, fatal=True))
             except Exception:

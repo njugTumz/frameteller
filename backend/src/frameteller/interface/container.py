@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+import httpx2
 from openai import AsyncOpenAI
 
 from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.events import JobUpdated
-from frameteller.application.limits import ProjectAllowance, VisitorAllowance
+from frameteller.application.limits import ProjectAllowance, SpeechAllowance, VisitorAllowance
 from frameteller.application.ports import (
     Clock,
     CompositorPort,
@@ -24,8 +25,10 @@ from frameteller.application.ports import (
     RubricLibrary,
     SegmentationPort,
     ShareIndex,
+    SpeechSynthesisPort,
     SpeechToTextPort,
     SpendLedger,
+    TranslatorPort,
     VideoRendererPort,
     VisitorQuota,
 )
@@ -48,10 +51,13 @@ from frameteller.application.use_cases import (
     GeneratePanel,
     GetProject,
     GetStudioStatus,
+    ListVoices,
     MergeCharacters,
     MovePanelObject,
     OpenShare,
     PreSegmentPanel,
+    PreviewVoice,
+    ReadScript,
     RemoveCharacter,
     RenameCharacter,
     ReorderShots,
@@ -66,6 +72,7 @@ from frameteller.application.use_cases import (
     SetContinuityChecks,
     SharePreview,
     ShareProject,
+    StoryDirector,
     SupervisePanel,
     TranscribeInstruction,
 )
@@ -77,6 +84,7 @@ from frameteller.infrastructure.azure import (
     BlobVisitorQuota,
     blob_service,
 )
+from frameteller.infrastructure.azure.speech import AzureSpeechSynthesizer
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.imaging.compositor import PillowCompositor
 from frameteller.infrastructure.imaging.ffmpeg_animatic import FfmpegVideoRenderer
@@ -147,6 +155,10 @@ class Container:
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
     glimmer_lease: GlimmerLease | None = None  # set by the warm-up script (POST /internal/glimmer/lease)
+    # "Read it to me" (ADR 0015): None when Text-to-Speech is not configured.
+    read_script: ReadScript | None = None
+    list_voices: ListVoices | None = None
+    preview_voice: PreviewVoice | None = None
 
 
 def wire(
@@ -169,6 +181,8 @@ def wire(
     shares: ShareIndex,
     quota: VisitorQuota | None = None,
     glimmer_lease: GlimmerLease | None = None,
+    synthesizer: SpeechSynthesisPort | None = None,
+    translator: TranslatorPort | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
@@ -251,6 +265,16 @@ def wire(
 
     correct_transcript = CorrectTranscript(repo, director, ids, request_cast, hub)
     open_share = OpenShare(repo, shares)
+    direct_turn = DirectTurn(repo, director, ids, max_shots_per_episode=limits.shots_per_episode)
+    read_script = list_voices = preview_voice = None
+    if synthesizer is not None and translator is not None:
+        speech_allowance = (
+            SpeechAllowance(quota, clock, limits, settings.speech_characters_per_day) if quota is not None else None
+        )
+        story = StoryDirector(direct_turn, correct_transcript, request_cast, hub, limits)
+        read_script = ReadScript(synthesizer, translator, story, hub, ids, repo, storage, budget, speech_allowance)
+        list_voices = ListVoices(synthesizer)
+        preview_voice = PreviewVoice(list_voices, synthesizer, storage, budget)
     return Container(
         settings=settings,
         storage=storage,
@@ -277,7 +301,7 @@ def wire(
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
             speech,
-            DirectTurn(repo, director, ids, max_shots_per_episode=limits.shots_per_episode),
+            direct_turn,
             correct_transcript,
             request_cast,
             hub,
@@ -297,6 +321,9 @@ def wire(
         continuity_checks=SetContinuityChecks(repo),
         readiness=readiness or {},
         glimmer_lease=glimmer_lease,
+        read_script=read_script,
+        list_voices=list_voices,
+        preview_voice=preview_voice,
     )
 
 
@@ -367,11 +394,17 @@ def build_container(settings: Settings) -> Container:
     caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s))
     client = meta_client(settings)
     lease = glimmer_lease(settings, storage)
+    director = MetaSparkDirectorAdapter(client, caller, settings)
+    synthesizer = None
+    if settings.azure_speech_key is not None:
+        synthesizer = AzureSpeechSynthesizer(httpx2.AsyncClient(), caller, storage, settings)
     return wire(
         settings,
         repo=repo,
         storage=storage,
-        director=MetaSparkDirectorAdapter(client, caller, settings),
+        director=director,
+        synthesizer=synthesizer,
+        translator=director,
         images=MetaImageAdapter(client, caller, storage, settings),
         segmentation=MetaSamAdapter(client, caller, storage, settings),
         speech=MetaVoiceTranscribeAdapter(caller, settings),
