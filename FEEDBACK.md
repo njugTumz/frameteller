@@ -10,6 +10,7 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-29 · muse-spark-1.3 · good · Translating a 6-paragraph script to French with structured output (a list of strings, checked one for one) took about 2 s and kept every paragraph aligned, so each voiced paragraph still matched its shot.
 - 2026-10-29 · muse-voice-transcribe-1.0 · good · As a teleprompter follower (ADR 0015), the realtime transcript was good enough to cut a 6-paragraph, 49 s reading automatically: every cut landed in the pause before the next paragraph and reached us 0.6–0.9 s after the speech ended.
 - 2026-10-29 · muse-voice-transcribe-1.0 · idea · Word-level timestamps on partials would let a teleprompter cut at the exact last word; with turn-level times we cut at the first audio position after the end was heard, or at `speechEnd`.
 - 2026-10-29 · Muse Glimmer · issue · On Meta's `vllm/vllm-openai:muse-glimmer` image with `--reasoning-parser muse_glimmer`, a strict `json_schema` response format (and `structured_outputs`) was accepted but not enforced: answers had extra keys, an `issues` object instead of the required array, or no `issues` at all. Spelling the shape out in the prompt fixed it; the Run inference guide could say whether guided decoding applies after the reasoning section.
