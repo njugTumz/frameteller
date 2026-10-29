@@ -1,0 +1,177 @@
+name: Deploy production
+
+# Runs when a GitHub release is published, and waits for the required reviewer on the "production" environment
+# before touching Azure. Deploys the backend (infra/main.bicep with production.bicepparam) and then the studio.
+# The marketing site keeps its own workflow. Azure auth is OIDC with the production identity (its own app
+# registration, scoped to rg-frameteller-prod). MODEL_API_KEY is the production environment's secret: the
+# "frameteller-production" Meta key, standard mode, never the contributor model.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # never cut a deployment off half-way
+
+env:
+  RESOURCE_GROUP: rg-frameteller-prod
+  STATIC_WEB_APP: swa-frameteller-app-prod
+
+jobs:
+  image:
+    name: Build and push the backend image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Image name
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/frameteller-backend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push (unless staging already pushed this commit)
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+        run: |
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "$IMAGE already exists"
+            exit 0
+          fi
+          docker build backend --tag "$IMAGE" \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}"
+          docker push "$IMAGE"
+
+  deploy:
+    name: Deploy the backend and the studio
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://app.frameteller.com
+    permissions:
+      contents: read
+      id-token: write # OIDC token for azure/login
+    env:
+      CONTAINER_IMAGE: ${{ needs.image.outputs.image }}
+      API_CERTIFICATE_NAME: ${{ vars.API_CERTIFICATE_NAME }}
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }} # https://api.frameteller.com; public, baked into the bundle
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Meta key is set
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+        run: |
+          if [ -z "$MODEL_API_KEY" ]; then
+            echo "::error::The production environment has no MODEL_API_KEY secret. Set it with: read -s KEY && printf %s \"\$KEY\" | gh secret set MODEL_API_KEY --env production"
+            exit 1
+          fi
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-if
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+        run: >
+          az deployment group what-if
+          --resource-group "$RESOURCE_GROUP"
+          --template-file infra/main.bicep
+          --parameters infra/parameters/production.bicepparam
+
+      - name: Deploy infrastructure and image
+        env:
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "production-${GITHUB_SHA::7}-${GITHUB_RUN_ATTEMPT}" \
+            --template-file infra/main.bicep \
+            --parameters infra/parameters/production.bicepparam \
+            --output none
+          echo "Deployed $CONTAINER_IMAGE"
+
+      - name: Health and readiness
+        run: |
+          for path in /healthz /readyz; do
+            for attempt in $(seq 30); do
+              code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 30 "https://api.frameteller.com$path" || true)
+              [ "$code" = "200" ] && break
+              echo "$path: HTTP $code (attempt $attempt), retrying"
+              sleep 10
+            done
+            echo "$path: HTTP $code $(cat /tmp/body)"
+            [ "$code" = "200" ] || exit 1
+          done
+
+      # ---- the studio, in the same job: one approval deploys the whole release ----
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build (indexable share pages, everything else noindex)
+        working-directory: frontend
+        run: npm run build && npm run swa:config
+
+      - name: Static Web App deployment token
+        id: site
+        run: |
+          token=$(az staticwebapp secrets list -n "$STATIC_WEB_APP" -g "$RESOURCE_GROUP" --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to the Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.site.outputs.token }}
+          action: upload
+          app_location: frontend/dist
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: The studio answers with its security headers
+        run: |
+          for attempt in $(seq 12); do
+            code=$(curl -s -o /dev/null -D /tmp/headers -w '%{http_code}' --max-time 20 https://app.frameteller.com/ || true)
+            [ "$code" = "200" ] && break
+            echo "HTTP $code (attempt $attempt), retrying"
+            sleep 10
+          done
+          [ "$code" = "200" ] || exit 1
+          grep -i '^content-security-policy:' /tmp/headers | grep -q "$VITE_API_BASE_URL" || {
+            echo "::error::The CSP does not name $VITE_API_BASE_URL"
+            exit 1
+          }
