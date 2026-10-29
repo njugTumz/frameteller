@@ -42,6 +42,8 @@ export interface RecordingState {
   /** The session socket dropped unexpectedly (usually a new studio version going live) and the project is
    * being fetched again: "Updating the studio, your work is safe". */
   updating: boolean
+  /** The studio is busy and this session waits in line (queue.waiting, ADR 0016); null once it starts. */
+  queue: { position: number; estimateS: number } | null
 }
 
 export const initialRecording: RecordingState = {
@@ -61,6 +63,7 @@ export const initialRecording: RecordingState = {
   micLabel: '',
   deviceId: null,
   updating: false,
+  queue: null,
 }
 
 const MAX_NOTICES = 3
@@ -84,7 +87,9 @@ function without<T>(record: Record<string, T>, key: string): Record<string, T> {
 export function reduceRecording(state: RecordingState, event: ServerEvent): RecordingState {
   switch (event.type) {
     case 'session.started':
-      return { ...state, telling: state.telling === 'finishing' ? 'finishing' : 'live', problem: null, heardNothing: false }
+      return { ...state, telling: state.telling === 'finishing' ? 'finishing' : 'live', problem: null, heardNothing: false, queue: null }
+    case 'queue.waiting':
+      return { ...state, queue: { position: event.position, estimateS: event.estimate_s } }
     case 'transcript.partial':
       return { ...state, partial: event.text, silent: state.silent && !event.text.trim() }
     case 'audio.silent':
@@ -94,7 +99,7 @@ export function reduceRecording(state: RecordingState, event: ServerEvent): Reco
     case 'shots.replaced':
       return { ...state, turns: upsertTurn(state.turns, event.turn), correcting: without(state.correcting, event.turn.id) }
     case 'error': {
-      if (event.fatal) return { ...state, problem: { kind: 'server', message: event.message }, telling: 'idle', level: 0 }
+      if (event.fatal) return { ...state, problem: { kind: 'server', message: event.message }, telling: 'idle', level: 0, queue: null }
       const correcting = Object.fromEntries(
         Object.entries(state.correcting).map(([id, s]) => [id, s === 'sending' && /correct/i.test(event.message) ? 'failed' : s]),
       )

@@ -1,3 +1,4 @@
+import { inLine } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
 import type { Telling } from '../store'
 import { BeatButton } from './BeatButton'
@@ -17,6 +18,7 @@ export const HEARD_NOTHING = 'We didn’t hear anything. Check your microphone.'
 export function TellingControls({
   telling,
   heardNothing = false,
+  queue = null,
   level,
   beats,
   onStart,
@@ -25,6 +27,8 @@ export function TellingControls({
 }: {
   telling: Telling
   heardNothing?: boolean
+  /** Waiting for a free seat in a busy studio (ADR 0016). */
+  queue?: { position: number; estimateS: number } | null
   level: number
   beats: number
   onStart: () => void
@@ -41,13 +45,13 @@ export function TellingControls({
             aria-hidden="true"
             className={live ? 'live-dot size-2.5 rounded-full bg-marker ring-1 ring-ink' : 'size-2.5 rounded-full bg-rule'}
           />
-          {telling === 'ended' && heardNothing ? HEARD_NOTHING : STATUS[telling]}
+          {telling === 'ended' && heardNothing ? HEARD_NOTHING : telling === 'connecting' && queue ? `The studio is busy. ${inLine(queue.position, queue.estimateS)}.` : STATUS[telling]}
         </p>
         <MicMeter level={level} active={live} />
       </div>
       {live || telling === 'connecting' ? (
-        <Button variant="outline" onClick={onStop} disabled={telling !== 'live'}>
-          Stop telling
+        <Button variant="outline" onClick={onStop} disabled={telling !== 'live' && !queue}>
+          {queue && telling === 'connecting' ? 'Leave the line' : 'Stop telling'}
         </Button>
       ) : (
         <Button variant="ink" onClick={onStart} disabled={busy}>

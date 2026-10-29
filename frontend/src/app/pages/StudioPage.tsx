@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
-import { castReadyFor, useCastStore } from '../../features/cast/store'
+import { castReadyFor, nameFromId, useCastStore } from '../../features/cast/store'
 import { storyboardPdfUrl, shareUrl } from '../../features/export/api'
 import { ExportPanel } from '../../features/export/components/ExportPanel'
 import { SharePanel } from '../../features/export/components/SharePanel'
@@ -78,7 +78,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
   useAutoDraft(projectId, canDraw)
   const draw = usePanelRender(projectId)
   const editing = useEditorStore((s) => s.shotId)
-  const nameOf = (id: string) => cast.characters.find((c) => c.id === id)?.name ?? id
+  const nameOf = (id: string) => cast.characters.find((c) => c.id === id)?.name ?? nameFromId(id)
   const onProject = useCallback((p: Project) => {
     useStoryboardStore.getState().load(p)
     projectLoaded(p)
@@ -113,6 +113,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
         {reading ? (
           <ReadingControls
             telling={r.telling}
+            queue={r.queue}
             reading={script.reading}
             nextEpisode={script.nextEpisode}
             voiceName={voice?.display_name ?? 'The voice'}
@@ -123,7 +124,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
             onStop={() => reader.stop()}
           />
         ) : (
-          <TellingControls telling={r.telling} heardNothing={r.heardNothing} level={r.level} beats={r.beats} onStart={() => void narration.start()} onStop={() => narration.stop()} onBeat={beat} />
+          <TellingControls telling={r.telling} queue={r.queue} heardNothing={r.heardNothing} level={r.level} beats={r.beats} onStart={() => void narration.start()} onStop={() => narration.stop()} onBeat={beat} />
         )}
         {(teleprompter || reading) &&
           (lines.length > 0 ? (

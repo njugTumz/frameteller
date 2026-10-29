@@ -194,6 +194,7 @@ export class Narration {
       await this.connect((code) => void this.reconnect(code))
       this.state.setTelling('live')
     } catch (e) {
+      if (this.state.telling === 'idle') return // left the line
       this.fail('connection', e instanceof Error ? e.message : closeMessage(0))
     }
   }
@@ -228,6 +229,14 @@ export class Narration {
     const { telling } = this.state
     if (telling !== 'live' && telling !== 'connecting') return
     this.stopMic()
+    if (telling === 'connecting') {
+      // Still connecting, or waiting in line in a busy studio (ADR 0016): leave without a session.
+      this.socket?.close()
+      this.socket = null
+      this.state.set({ queue: null })
+      this.state.setTelling('idle')
+      return
+    }
     this.state.setTelling(this.socket?.end() ? 'finishing' : 'idle')
   }
 

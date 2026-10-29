@@ -96,3 +96,11 @@ describe('useRecordingStore', () => {
     expect(useRecordingStore.getState().correcting).toEqual({ 't-b1': 'sending' })
   })
 })
+
+describe('the waiting room', () => {
+  it('holds the place in line until the session starts', () => {
+    const waiting = reduceRecording({ ...initialRecording, telling: 'connecting' }, { type: 'queue.waiting', position: 2, estimate_s: 150 })
+    expect(waiting.queue).toEqual({ position: 2, estimateS: 150 })
+    expect(reduceRecording(waiting, { type: 'session.started', mode: 'narrate' }).queue).toBeNull()
+  })
+})

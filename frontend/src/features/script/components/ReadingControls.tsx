@@ -1,3 +1,4 @@
+import { inLine } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
 import type { Telling } from '../../recording/store'
 import type { Reading } from '../store'
@@ -5,6 +6,7 @@ import type { Reading } from '../store'
 /** "Read it to me": start, pause and continue the voice, and the break between episodes. */
 export function ReadingControls({
   telling,
+  queue = null,
   reading,
   nextEpisode,
   voiceName,
@@ -15,6 +17,8 @@ export function ReadingControls({
   onStop,
 }: {
   telling: Telling
+  /** Waiting for a free seat in a busy studio (ADR 0016). */
+  queue?: { position: number; estimateS: number } | null
   reading: Reading
   nextEpisode: number | null
   voiceName: string
@@ -27,7 +31,9 @@ export function ReadingControls({
   const live = telling === 'live'
   const status =
     telling === 'connecting'
-      ? 'Connecting to the studio…'
+      ? queue
+        ? `The studio is busy. ${inLine(queue.position, queue.estimateS)}. ${voiceName} starts when it's your turn.`
+        : 'Connecting to the studio…'
       : telling === 'finishing'
         ? 'Directing the last shot…'
         : !live

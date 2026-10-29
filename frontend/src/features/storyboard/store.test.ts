@@ -103,7 +103,7 @@ describe('reveals, saved moves and exports', () => {
     const exportJob = (status: 'running' | 'succeeded', progress: number | null) =>
       ({ type: 'job.updated', kind: 'export_animatic', key: 'e', status, shot_id: null, revision: null, message: null, progress }) as const
     let s = reduceStoryboard(initialStoryboard, exportJob('running', 0.25))
-    expect(s.exportJob).toEqual({ status: 'running', progress: 0.25, message: null, key: 'e' })
+    expect(s.exportJob).toEqual({ status: 'running', progress: 0.25, message: null, key: 'e', position: null, estimateS: null })
     s = reduceStoryboard(s, exportJob('succeeded', null))
     expect(s.exportJob?.progress).toBe(0.25)
     expect(s.stale).toBe(true)
@@ -249,5 +249,18 @@ describe('the continuity supervisor', () => {
     const off = loadProject(withShots(shot(1)), project({ continuity_checks: false }))
     expect(off.continuityChecks).toBe(false)
     expect(reduceStoryboard(off, job('succeeded')).awaitingReview).toEqual({})
+  })
+})
+
+describe('busy studio and failed sheets', () => {
+  it('a queued panel learns its place in line', () => {
+    const s = { ...initialStoryboard, shots: [shot(1)] }
+    const after = reduceStoryboard(s, { type: 'job.updated', kind: 'generate_panel', key: 'k', status: 'queued', shot_id: 's1', revision: 1, message: null, position: 3, estimate_s: 50 })
+    expect(panelPhase(after.shots[0] as ReturnType<typeof shot>, after.jobs.s1, true)).toEqual({ kind: 'queued', position: 3, estimateS: 50 })
+  })
+
+  it('a failed cast job fetches the project again, so the card can say why', () => {
+    const after = reduceStoryboard(initialStoryboard, { type: 'job.updated', kind: 'generate_cast', key: 'k', status: 'failed', shot_id: null, revision: null, message: "Amara's sheet couldn't be drawn." })
+    expect(after.stale).toBe(true)
   })
 })

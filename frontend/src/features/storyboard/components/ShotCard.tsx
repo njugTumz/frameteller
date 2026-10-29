@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Shot } from '../../../shared/api/types'
-import { framingLabel, seconds, shotLabel } from '../../../shared/format'
+import { framingLabel, inLine, seconds, shotLabel } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
 import type { PanelPhase } from '../store'
 import { PanelSketch } from './PanelSketch'
@@ -16,7 +16,7 @@ function status(phase: PanelPhase): string {
     case 'waiting-cast':
       return 'Waiting for the cast'
     case 'queued':
-      return 'In the queue'
+      return phase.position ? `Busy studio. ${inLine(phase.position, phase.estimateS ?? 0)}` : 'In the queue'
     case 'drawing':
       return DRAWING[phase.what]
     case 'ready':

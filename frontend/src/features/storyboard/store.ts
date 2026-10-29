@@ -9,6 +9,9 @@ export interface PanelJob {
   message: string | null
   /** The job's idempotency key, to ask GET /projects/{id}/jobs/{key} when its events stop. */
   key?: string
+  /** Waiting behind the studio's limits (ADR 0016): its place in line and an estimate in seconds. */
+  position?: number | null
+  estimateS?: number | null
 }
 
 export type SyncStatus = 'loading' | 'ready' | 'missing' | 'unreachable'
@@ -21,6 +24,9 @@ export interface ExportJob {
   key?: string
   /** The animatic URL when the export started: a different one in the project means it finished. */
   from?: string | null
+  /** Waiting for a free renderer (ADR 0016). */
+  position?: number | null
+  estimateS?: number | null
 }
 
 /** A job the server no longer knows (it ran on a revision that was replaced) and whose result never arrived. */
@@ -158,9 +164,13 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent, now
           progress: event.progress ?? state.exportJob?.progress ?? null,
           message: event.message,
           key: event.key,
+          position: event.position ?? null,
+          estimateS: event.estimate_s ?? null,
         }
         return { ...state, exportJob, stale: state.stale || event.status === 'succeeded' }
       }
+      // A failed sheet: the project has the character, with why it failed; fetch it so the card can say so.
+      if (event.kind === 'generate_cast') return event.status === 'failed' ? { ...state, stale: true } : state
       if (!event.shot_id) return state
       if (event.kind === 'compose_panel') {
         return {
@@ -172,7 +182,15 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent, now
       }
       if (event.kind === 'pre_segment_panel') return event.status === 'succeeded' ? { ...state, stale: true } : state
       if (!PANEL_JOBS.includes(event.kind)) return state
-      const job: PanelJob = { kind: event.kind, status: event.status, revision: event.revision, message: event.message, key: event.key }
+      const job: PanelJob = {
+        kind: event.kind,
+        status: event.status,
+        revision: event.revision,
+        message: event.message,
+        key: event.key,
+        position: event.position ?? null,
+        estimateS: event.estimate_s ?? null,
+      }
       const awaitingReview =
         event.status === 'succeeded' && state.continuityChecks ? { ...state.awaitingReview, [event.shot_id]: now } : state.awaitingReview
       return { ...state, jobs: { ...state.jobs, [event.shot_id]: job }, awaitingReview, stale: state.stale || done }
@@ -283,7 +301,7 @@ export function loadProject(state: StoryboardState, project: Project, now = Date
 
 export type PanelPhase =
   | { kind: 'waiting-cast' }
-  | { kind: 'queued' }
+  | { kind: 'queued'; position?: number; estimateS?: number }
   | { kind: 'drawing'; what: 'draft' | 'final' | 'change' }
   | { kind: 'ready'; imageUrl: string; revision: number; outdated: boolean }
   | { kind: 'failed'; message: string }
@@ -292,7 +310,9 @@ export type PanelPhase =
 /** What a shot card shows, from the shot, its latest job, and whether its cast is approved. */
 export function panelPhase(shot: Shot, job: PanelJob | undefined, castReady: boolean, quality: 'draft' | 'final' = 'draft'): PanelPhase {
   const panel = shot.panel
-  if (job?.status === 'queued') return { kind: 'queued' }
+  if (job?.status === 'queued') {
+    return job.position ? { kind: 'queued', position: job.position, estimateS: job.estimateS ?? 0 } : { kind: 'queued' }
+  }
   if (job?.status === 'running' || (panel?.status === 'pending' && job?.status !== 'failed')) {
     return { kind: 'drawing', what: job?.kind === 'edit_panel' ? 'change' : quality }
   }

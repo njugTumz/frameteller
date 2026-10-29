@@ -72,7 +72,12 @@ export type ServerEvent =
       message: string | null
       /** 0–1 while an animatic export runs; null otherwise. */
       progress?: number | null
+      /** Queued behind a capacity limit (ADR 0016): 1 is next, with an estimate in seconds. */
+      position?: number | null
+      estimate_s?: number | null
     }
+  /** The studio is busy: this session waits in line before session.started (ADR 0016). */
+  | { type: 'queue.waiting'; position: number; estimate_s: number }
   | { type: 'error'; message: string; fatal: boolean }
   | { type: 'audio.silent'; after_ms: number; level: number }
   | { type: 'session.ended'; turns: number; shots: number; heard?: boolean }
@@ -204,8 +209,12 @@ function check(e: Json): boolean {
         isStrOrNull(e.shot_id) &&
         isNumOrNull(e.revision) &&
         isStrOrNull(e.message) &&
-        (e.progress === undefined || isNumOrNull(e.progress))
+        (e.progress === undefined || isNumOrNull(e.progress)) &&
+        (e.position === undefined || isNumOrNull(e.position)) &&
+        (e.estimate_s === undefined || isNumOrNull(e.estimate_s))
       )
+    case 'queue.waiting':
+      return typeof e.position === 'number' && typeof e.estimate_s === 'number'
     case 'error':
       return isStr(e.message) && typeof e.fatal === 'boolean'
     case 'audio.silent':
