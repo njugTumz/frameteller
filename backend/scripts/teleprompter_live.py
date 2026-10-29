@@ -49,8 +49,8 @@ def paragraphs(text: str) -> str:
     return "\n\n".join(line.strip() for line in text.splitlines() if line.strip())
 
 
-async def run(api: str, script: str, keywords: list[str]) -> dict[str, Any]:
-    project = create(api, "Teleprompter check")
+async def run(api: str, script: str, keywords: list[str], project: str | None = None) -> dict[str, Any]:
+    project = project or create(api, "Teleprompter check")
     with wave.open(str(NARRATION)) as w:
         pcm = w.readframes(w.getnframes())
     frame = FRAME_MS * BYTES_PER_MS
@@ -108,9 +108,10 @@ def main() -> None:
     parser.add_argument("--api", required=True)
     parser.add_argument("--script", type=Path, required=True)
     parser.add_argument("--keywords", default="Mira")
+    parser.add_argument("--project", help="tell it again in an existing project (a new session continues it)")
     args = parser.parse_args()
     keywords = [k.strip() for k in args.keywords.split(",") if k.strip()]
-    report(asyncio.run(run(args.api.rstrip("/"), args.script.read_text(), keywords)))
+    report(asyncio.run(run(args.api.rstrip("/"), args.script.read_text(), keywords, args.project)))
 
 
 if __name__ == "__main__":
