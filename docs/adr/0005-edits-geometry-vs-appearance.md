@@ -1,6 +1,6 @@
 # ADR 0005: Geometry on our canvas, appearance by prompt
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR 0014](0014-edit-from-stored-images.md): edits send the stored image, never a `previous_response_id` chain
 - **Date:** 2026-10-27
 - **Deciders:** Isaac Tumuti
 

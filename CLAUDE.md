@@ -148,10 +148,10 @@ Not used: Muse Wonder Full (Muse Code subscription only), Muse Spark 1.1/1.2 (sa
 - On the Responses API, the only allowed tool for image models is `image_generation`:
   `tools=[{"type":"image_generation","enable_image_search":false,"enable_web_search":false,"enable_shell":false,"reasoning_strength":"low"|"high","size":"1536x1024"}]` (`low` for drafts, `high` for finals).
 - **`enable_image_search` must stay `false`** so renders never pull in real people's likenesses or copyrighted designs (hackathon rights rule).
-- Multi-turn edits chain with `previous_response_id`; send only the change.
+- **Never chain edits with `previous_response_id`** ([ADR 0014](docs/adr/0014-edit-from-stored-images.md)). Observed retention is unreliable: one chain held at 49 minutes, while another failed at once and at 3 and 6 minutes, and a production move failed on a panel drawn 2 minutes earlier (400 "referenced response not found or expired"). Every edit sends our stored image first, then the shot's reference sheets, as `input_image` parts. This kept the layout better than a chain (≤ 0.21% structural change outside the object).
 - Character consistency: pass character reference sheets as `input_image` parts inside a `{"role":"user","content":[...]}` message on Responses, or as `images[]` (1–10 items, each `image_url` or `file_id`) on `POST /v1/images/edits`.
 - **No seed parameter** (an unknown field returns HTTP 400). Consistency comes only from references.
-- **Masked edits are not supported: never send a `mask` parameter.** Appearance changes (colour, clothing, expression) = whole-panel edit with a prompt naming the SAM-selected object, chained with `previous_response_id`. Geometry (move, resize, swap, delete) = we transform and composite SAM cut-outs ourselves on the canvas; prompt-based resizing barely works (+3% in the spike). Edits keep the layout (≤ 0.6% structural change outside the object) but redraw fine texture, so they are not pixel-identical.
+- **Masked edits are not supported: never send a `mask` parameter.** Appearance changes (colour, clothing, expression) = whole-panel edit of the stored image with a prompt naming the SAM-selected object. Geometry (move, resize, swap, delete) = we transform and composite SAM cut-outs ourselves on the canvas; prompt-based resizing barely works (+3% in the spike). Edits keep the layout (≤ 0.6% structural change outside the object) but redraw fine texture, so they are not pixel-identical.
 
 **SAM (`sam-3.1`)**
 - Called via the Responses API, streaming. The text part holds **either** a short noun phrase **or** box/point prompts, never both.
@@ -164,7 +164,7 @@ Not used: Muse Wonder Full (Muse Code subscription only), Muse Spark 1.1/1.2 (sa
 - [x] ~~Realtime ASR audio format and session limits~~ PCM s16le mono, 24 kHz preferred, real-time pacing, 60-minute sessions, no resume.
 - [x] ~~How well do reference images hold a character across 6+ panels?~~ Well, across 6 panels in all approaches; references also propagate their mistakes, so the cast is approved before panels are drawn. See the [Day 2 findings](docs/spikes/2026-10-28-findings.md).
 - [ ] Rate limits per model on our account.
-- [ ] Retention period for `previous_response_id` (how long a multi-turn edit chain stays resumable).
+- [x] ~~Retention period for `previous_response_id`~~ Unreliable (minutes to an hour, sometimes none), so edits never chain. See [ADR 0014](docs/adr/0014-edit-from-stored-images.md).
 
 Docs sections worth reading: Quickstart, Capabilities (Speech to text, Image generation, Media segmentation, Structured output, Prompt caching, Tool calling), Protocols, Agent guides, Get unblocked, Pricing and rate limits, API reference.
 

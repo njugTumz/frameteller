@@ -1,6 +1,6 @@
 # ADR 0010: Saved geometry on a clean plate
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR 0014](0014-edit-from-stored-images.md): edits send the stored image, never a `previous_response_id` chain
 - **Date:** 2026-10-28
 - **Deciders:** Isaac Tumuti
 - **Amends:** [ADR 0005](0005-edits-geometry-vs-appearance.md)

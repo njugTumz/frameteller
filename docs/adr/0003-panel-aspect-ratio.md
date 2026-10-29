@@ -1,6 +1,6 @@
 # ADR 0003: 3:2 panels via the Responses API
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR 0014](0014-edit-from-stored-images.md): edits send the stored image, never a `previous_response_id` chain
 - **Date:** 2026-10-27
 - **Deciders:** Isaac Tumuti
 
