@@ -20,9 +20,14 @@ RG=rg-frameteller-prod APP=ca-frameteller-production
 
 ## Warm-up before a demo (15 minutes before)
 
+0. `cd backend && .venv/bin/python scripts/demo_check.py` (about USD 0.003). It wakes the backend, pings Muse
+   Spark, SAM 3.1, Voice Transcribe and Azure Text-to-Speech from this machine, and with
+   `~/.config/frameteller/admin-production.token` prints today's public and judge budgets and every queue. Add
+   `--image` to draw one Muse Image draft (USD 0.01), `--glimmer` to wake Glimmer, `--api staging` for staging.
+   Exit code 1 if anything failed.
 1. `curl -s https://api.frameteller.com/healthz` → `{"status":"ok"}`. `curl -s https://api.frameteller.com/readyz` → `ready`.
 2. `curl -s https://api.frameteller.com/status` → `"paused": false, "full": false`. If `full` is true, the day's
-   USD 10 cap is spent: see [Spend](#spend-and-errors).
+   public cap is spent: see [Daily caps](#daily-caps-by-date). Judges keep their own budget.
 3. Open https://app.frameteller.com in the demo browser, allow the microphone, and tell a 20-second test story
    through to two draft panels (about USD 0.05). This checks Voice Transcribe, Spark and Muse Image end to end.
 4. Check the Meta Billing page has room under the spend limit, and the Azure budget has no alert today.
@@ -153,7 +158,7 @@ the Meta key (`az containerapp secret set ... --secrets "azure-speech-key=$KEY"`
 | Azure spend | Cost Management, budget `budget-frameteller-production` (USD 50/month, emails at 80% and 100%) |
 | Today's model spend per call | Application Insights → Logs, below |
 | Uptime | Availability test `avail-frameteller-production`: `/healthz` every 5 minutes from 3 locations, emails izotumzybiz@gmail.com when 2 fail |
-| Studio state | `GET /status`: `full` means today's global cap (USD 10) is reached |
+| Studio state | `GET /status`: `full` means today's public cap is reached. The admin page shows both budgets |
 
 ```kusto
 // Model calls today: cost and failures per model
@@ -175,6 +180,79 @@ The public-demo limits are settings (defaults shown): `BUDGET_PER_DAY_USD=10`,
 `LIMIT_SCRIPT_CHARACTERS=4000`, `LIMIT_SPEECH_CHARACTERS_PER_VISITOR_PER_DAY=12000` and, for all visitors
 together, `SPEECH_CHARACTERS_PER_DAY=200000` (Text-to-Speech, USD 15 per million characters). Change one for a day with
 `az containerapp update --set-env-vars`, like the kill switch.
+
+## The judge pass
+
+Judges get a private link, `https://app.frameteller.com/judge#<JUDGE_TOKEN>` ([ADR 0016](adr/0016-capacity-and-fairness.md)).
+Opening it sets a signed cookie for 21 days and shows "Judge access" in the top bar. Judge sessions skip the
+per-visitor caps and the queues, and spend from their own daily budget (`JUDGE_BUDGET_PER_DAY_USD`, default
+USD 15), which the public cap never touches. The token is in the URL fragment, so it never reaches a log.
+
+Set or **rotate** it (every pass already given stops working at once), for each environment:
+
+```bash
+umask 077
+python3 -c 'import secrets; print(secrets.token_urlsafe(32), end="")' > ~/.config/frameteller/judge-production.token
+gh secret set JUDGE_TOKEN --env production < ~/.config/frameteller/judge-production.token
+# then publish a release (or run deploy-production.yml): the token reaches the app as a Container Apps secret
+```
+
+The link is `https://app.frameteller.com/judge#` followed by the file's contents. Send it only in the
+submission form's private fields or a direct message. Never commit or post it. Without `JUDGE_TOKEN`, `/judge`
+answers 404 and there is no judge lane.
+
+## The admin page
+
+`https://app.frameteller.com/admin#<ADMIN_TOKEN>` (staging: the staging studio's `/admin#…`). It shows today's budgets per lane, every queue
+(in flight, waiting, longest wait), the live sessions, whether Glimmer is warm, and the gallery: pending and
+reported entries first, with Watch, Publish, Feature, Hide and Remove. Set and rotate `ADMIN_TOKEN` exactly like
+`JUDGE_TOKEN` above (file `admin-production.token`, secret `ADMIN_TOKEN`). The token stays in the tab's
+sessionStorage only. The same token works from a terminal:
+
+```bash
+curl -s -H "Authorization: Bearer $(cat ~/.config/frameteller/admin-production.token)" https://api.frameteller.com/admin/overview
+```
+
+## Gallery moderation
+
+A submission is checked by the reviewer against [agents/gallery.md](../agents/gallery.md) ([ADR 0017](adr/0017-gallery.md)).
+A confident clean pass publishes it; anything else is **pending** until someone looks:
+
+1. Open the admin page. "Needs a look" lists pending entries and anything reported, with the reviewer's note.
+2. **Watch** the video, open the share page, then **Publish** or **Remove**. **Feature** puts a published entry
+   in the gallery's Featured view; **Hide** takes it out without deleting it.
+3. Three reports from different visitors hide a published entry automatically. Check it the same way.
+
+Creators withdraw their own entry from the studio, which deletes it and its video.
+
+## Daily caps by date
+
+The public cap is set per day, counted in UTC+4: `BUDGET_PER_DAY_USD=10` by default, and `BUDGET_DAYS_USD`
+raises it on given dates (default `2026-11-02:25,2026-11-05:25,2026-11-06:25,2026-11-07:25,2026-11-08:25`). The
+judge budget comes on top. To change a day quickly (a new revision, no redeploy):
+
+```bash
+az containerapp update -g $RG -n $APP --set-env-vars "BUDGET_DAYS_USD=2026-11-02:40,2026-11-05:25,2026-11-06:25,2026-11-07:25,2026-11-08:25"
+az containerapp update -g $RG -n $APP --set-env-vars JUDGE_BUDGET_PER_DAY_USD=20
+```
+
+Then make the same change in `infra/parameters/production.bicepparam` (or the GitHub variable) and commit it,
+so the next release keeps it. Raise the Meta Billing spend limit first if the new caps could exceed it.
+
+## Capacity and the waiting room
+
+Limits ([ADR 0016](adr/0016-capacity-and-fairness.md)): `CAPACITY_SESSIONS=24`, `CAPACITY_IMAGES=8`, `CAPACITY_SAM=4`,
+`CAPACITY_EXPORTS=2`, `CAPACITY_JOBS=32`. Past a limit, visitors see their place in line. Measured headroom
+is in [load-test.md](load-test.md). If the admin page shows long image lines **and no 429s** in the logs,
+raise `CAPACITY_IMAGES` (for example to 12). If Meta answers 429, lower it: the calls back off in line anyway.
+
+```kusto
+// 429s from Meta in the last hour
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend line = parse_json(Log_s) | where line.msg == "model call failed" and tostring(line.error) has "rate limited"
+| summarize retries = count() by model = tostring(line.model), bin(TimeGenerated, 5m)
+```
 
 ## When Meta's API is down
 
