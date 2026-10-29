@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-29T02:45:12Z",
+  "updated_at": "2026-10-29T05:44:14Z",
   "items": [
+    {
+      "date": "2026-10-29",
+      "status": "shipped",
+      "title": "Ready for the world",
+      "body": "Frameteller now runs on its own production servers at app.frameteller.com, with fair limits for a busy public demo and a privacy page that says exactly what we keep."
+    },
     {
       "date": "2026-10-29",
       "status": "shipped",
