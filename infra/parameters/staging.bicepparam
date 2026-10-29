@@ -16,3 +16,5 @@ param modelApiKey = readEnvironmentVariable('MODEL_API_KEY')
 param reviewer = readEnvironmentVariable('REVIEWER', 'spark')
 param glimmerBaseUrl = readEnvironmentVariable('GLIMMER_BASE_URL', '')
 param glimmerApiKey = readEnvironmentVariable('GLIMMER_API_KEY', '')
+// "Read it to me" (ADR 0015): optional; without it the studio offers narration and the teleprompter only.
+param azureSpeechKey = readEnvironmentVariable('AZURE_SPEECH_KEY', '')

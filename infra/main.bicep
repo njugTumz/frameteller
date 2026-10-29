@@ -52,6 +52,10 @@ param glimmerBaseUrl string = ''
 @description('Bearer token of our Glimmer endpoint (not a Meta key), stored only as a Container App secret.')
 param glimmerApiKey string = ''
 
+@secure()
+@description('Azure AI Speech key for "Read it to me" (ADR 0015), stored only as a Container App secret. Empty: not offered.')
+param azureSpeechKey string = ''
+
 @description('Guardrail settings for a public demo, as name/value pairs (see the backend settings).')
 param guardrailEnv array = []
 
@@ -104,6 +108,7 @@ module app 'modules/containerapp.bicep' = {
     reviewer: reviewer
     glimmerBaseUrl: glimmerBaseUrl
     glimmerApiKey: glimmerApiKey
+    azureSpeechKey: azureSpeechKey
     allowedOrigins: allowedOrigins
     publicAppUrl: publicAppUrl
     storageAccountName: storage.outputs.accountName

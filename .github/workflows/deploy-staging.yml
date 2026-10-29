@@ -78,6 +78,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
           GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
           REVIEWER: ${{ vars.REVIEWER || 'spark' }}
         run: |
@@ -105,6 +106,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
           GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
           REVIEWER: ${{ vars.REVIEWER || 'spark' }}
         run: >
@@ -118,6 +120,7 @@ jobs:
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
           GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
           REVIEWER: ${{ vars.REVIEWER || 'spark' }}
         run: |

@@ -11,6 +11,8 @@ param reviewer string
 param glimmerBaseUrl string
 @secure()
 param glimmerApiKey string
+@secure()
+param azureSpeechKey string
 param allowedOrigins string
 param publicAppUrl string
 param storageAccountName string
@@ -94,6 +96,11 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'glimmer-api-key'
           value: glimmerApiKey
         }
+      ], empty(azureSpeechKey) ? [] : [
+        {
+          name: 'azure-speech-key'
+          value: azureSpeechKey
+        }
       ])
     }
     template: {
@@ -120,6 +127,8 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'GLIMMER_BASE_URL', value: glimmerBaseUrl }
           ], empty(glimmerApiKey) ? [] : [
             { name: 'GLIMMER_API_KEY', secretRef: 'glimmer-api-key' }
+          ], empty(azureSpeechKey) ? [] : [
+            { name: 'AZURE_SPEECH_KEY', secretRef: 'azure-speech-key' }
           ], extraEnv)
           probes: [
             {
