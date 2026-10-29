@@ -37,6 +37,7 @@ class InProcessJobQueue:
         self._slots = asyncio.Semaphore(concurrency)
         self._on_status = on_status
         self._status: dict[str, JobStatus] = {}
+        self._messages: dict[str, str] = {}
         self._tasks: set[asyncio.Task[None]] = set()
 
     async def enqueue(self, job: Job) -> bool:
@@ -52,6 +53,10 @@ class InProcessJobQueue:
 
     def status(self, idempotency_key: str) -> JobStatus | None:
         return self._status.get(idempotency_key)
+
+    def message(self, idempotency_key: str) -> str | None:
+        """The user-facing message of a failed job."""
+        return self._messages.get(idempotency_key)
 
     async def join(self) -> None:
         while self._tasks:
@@ -71,6 +76,8 @@ class InProcessJobQueue:
 
     async def _set(self, job: Job, status: JobStatus, message: str | None = None) -> None:
         self._status[job.idempotency_key] = status
+        if message is not None:
+            self._messages[job.idempotency_key] = message
         if self._on_status:
             try:
                 await self._on_status(job, status, message)

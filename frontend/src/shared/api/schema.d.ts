@@ -221,6 +221,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/jobs/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job Status
+         * @description One job's status, for clients that missed its job.updated events. Keys belong to their project.
+         */
+        get: operations["job_status_projects__project_id__jobs__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/narration": {
         parameters: {
             query?: never;
@@ -575,6 +595,25 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * JobStatusOut
+         * @description A job's status, as the fallback when job.updated events were missed (a dropped socket, a new revision).
+         */
+        JobStatusOut: {
+            /** Key */
+            key: string;
+            /**
+             * Message
+             * @description User-facing, on failure.
+             */
+            message?: string | null;
+            /**
+             * Status
+             * @description unknown: this server never saw the job, e.g. it started on a revision that has since been replaced. Fetch the project to see whether its result arrived.
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "unknown";
         };
         /** LayerOut */
         LayerOut: {
@@ -1457,6 +1496,56 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    job_status_projects__project_id__jobs__key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobStatusOut"];
                 };
             };
             /** @description Not Found */

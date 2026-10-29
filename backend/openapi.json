@@ -280,6 +280,45 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "JobStatusOut": {
+        "description": "A job's status, as the fallback when job.updated events were missed (a dropped socket, a new revision).",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User-facing, on failure.",
+            "title": "Message"
+          },
+          "status": {
+            "description": "unknown: this server never saw the job, e.g. it started on a revision that has since been replaced. Fetch the project to see whether its result arrived.",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "unknown"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "status"
+        ],
+        "title": "JobStatusOut",
+        "type": "object"
+      },
       "LayerOut": {
         "properties": {
           "deleted": {
@@ -1885,6 +1924,80 @@
           }
         },
         "summary": "Storyboard Pdf",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/jobs/{key}": {
+      "get": {
+        "description": "One job's status, for clients that missed its job.updated events. Keys belong to their project.",
+        "operationId": "job_status_projects__project_id__jobs__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 300,
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Job Status",
         "tags": [
           "projects"
         ]

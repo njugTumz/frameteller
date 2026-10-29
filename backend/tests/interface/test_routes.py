@@ -268,6 +268,25 @@ async def test_layers_need_a_known_object_and_a_sane_scale(api: Api) -> None:
     assert huge.status_code == 422
 
 
+async def test_job_status_is_the_fallback_for_missed_job_updates(api: Api) -> None:
+    for n in (1, 2, 3):
+        await api.client.post(f"/projects/p1/shots/{n}/panel", json={})
+    await api.settle()
+    key = (await api.client.post("/projects/p1/exports/animatic", json={})).json()["key"]
+    await api.settle()
+    assert (await api.client.get(f"/projects/p1/jobs/{key}")).json() == {
+        "key": key,
+        "status": "succeeded",
+        "message": None,
+    }
+    # A job this server never saw (it ran on a replaced revision), and another project's key.
+    lost = "export_animatic:p1:0123456789ab"
+    assert (await api.client.get(f"/projects/p1/jobs/{lost}")).json()["status"] == "unknown"
+    other = key.replace(":p1:", ":p2:")
+    assert (await api.client.get(f"/projects/p1/jobs/{other}")).json()["status"] == "unknown"
+    assert (await api.client.get(f"/projects/p2/jobs/{key}")).json()["status"] == "unknown"
+
+
 async def test_export_animatic_then_play_seek_and_download_it(api: Api) -> None:
     refused = await api.client.post("/projects/p1/exports/animatic", json={})
     assert refused.status_code == 409  # no panels yet

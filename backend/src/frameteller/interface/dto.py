@@ -392,6 +392,17 @@ class CastReviewOut(BaseModel):
         return cls(approved=r.approved, redrawing=list(r.redrawing), job_key=r.job_key)
 
 
+class JobStatusOut(BaseModel):
+    """A job's status, as the fallback when job.updated events were missed (a dropped socket, a new revision)."""
+
+    key: str
+    status: Literal["queued", "running", "succeeded", "failed", "unknown"] = Field(
+        description="unknown: this server never saw the job, e.g. it started on a revision that has since been "
+        "replaced. Fetch the project to see whether its result arrived."
+    )
+    message: str | None = Field(default=None, description="User-facing, on failure.")
+
+
 class TicketOut(BaseModel):
     """A queued job. Follow it with job.updated events on the session WebSocket, or poll the project."""
 

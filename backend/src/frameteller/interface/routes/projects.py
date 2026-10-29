@@ -15,6 +15,7 @@ from frameteller.interface.dto import (
     DictationOut,
     EditRequest,
     ErrorOut,
+    JobStatusOut,
     LayerRequest,
     ProjectCreate,
     ProjectOut,
@@ -166,3 +167,15 @@ async def dictate(project_id: ProjectId, request: Request, c: Deps) -> Dictation
     if len(wav) > _WAV_HEADER_BYTES + 48 * MAX_DICTATION_MS:
         raise InvalidValueError(f"Keep spoken instructions under {MAX_DICTATION_MS // 1000} seconds.")
     return DictationOut(text=await c.transcribe_instruction.execute(project_id, wav))
+
+
+@router.get("/{project_id}/jobs/{key}")
+async def job_status(project_id: ProjectId, key: Annotated[str, Path(max_length=300)], c: Deps) -> JobStatusOut:
+    """One job's status, for clients that missed its job.updated events. Keys belong to their project."""
+    rest = key.partition(":")[2]
+    if not rest.startswith(f"{project_id}:"):
+        return JobStatusOut(key=key, status="unknown")
+    found = c.jobs.status(key)
+    if found is None:
+        return JobStatusOut(key=key, status="unknown")
+    return JobStatusOut(key=key, status=found.value, message=c.jobs.message(key))
