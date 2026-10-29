@@ -100,3 +100,26 @@ async def test_unexpected_errors_get_a_generic_message_and_a_broken_callback_is_
     await q.enqueue(Job("panel", "k1"))
     await q.join()
     assert statuses[-1] == (JobStatus.FAILED, "Something went wrong.")
+
+
+async def test_join_returns_when_jobs_queue_more_jobs() -> None:
+    """Regression: a render queues a review that queues an edit. Gathering tasks that were already done never
+    yielded, so their done-callbacks never ran and join spun forever."""
+    ran: list[str] = []
+    queue: InProcessJobQueue
+
+    async def first(job: Job) -> None:
+        ran.append(job.kind)
+        await queue.enqueue(Job("second", "second:1", {}))
+
+    async def second(job: Job) -> None:
+        ran.append(job.kind)
+        await queue.enqueue(Job("third", "third:1", {}))
+
+    async def third(job: Job) -> None:
+        ran.append(job.kind)
+
+    queue = InProcessJobQueue({"first": first, "second": second, "third": third})
+    await queue.enqueue(Job("first", "first:1", {}))
+    await asyncio.wait_for(queue.join(), 2)
+    assert ran == ["first", "second", "third"]

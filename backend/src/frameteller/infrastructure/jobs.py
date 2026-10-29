@@ -61,6 +61,9 @@ class InProcessJobQueue:
     async def join(self) -> None:
         while self._tasks:
             await asyncio.gather(*list(self._tasks))
+            # Finished tasks leave the set in done-callbacks, which run only once the loop gets a turn: without
+            # this, gathering tasks that are already done never yields and the loop spins forever.
+            await asyncio.sleep(0)
 
     async def _run(self, job: Job) -> None:
         async with self._slots:
