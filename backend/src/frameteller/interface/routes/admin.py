@@ -76,7 +76,8 @@ async def overview(c: Admin) -> OverviewOut:
                 left_usd=round(max(0.0, s.cap_usd - s.spent_usd), 4),
             )
         )
-    gates = [GateOut(**vars_of(g)) for g in [*c.capacity.states(), *(gate.state() for gate in c.jobs.gates())]]
+    states = [*c.capacity.states(), *(gate.state() for gate in c.jobs.gates())]
+    gates = [GateOut.model_validate(g, from_attributes=True) for g in states]
     warm = await c.glimmer_lease.warm_until() if c.glimmer_lease is not None else None
     return OverviewOut(
         paused=c.settings.demo_paused,
@@ -87,7 +88,3 @@ async def overview(c: Admin) -> OverviewOut:
         judge_pass=c.settings.judge_token is not None,
         glimmer_warm_until=warm.isoformat(timespec="seconds") if warm else None,
     )
-
-
-def vars_of(state: object) -> dict[str, object]:
-    return {name: getattr(state, name) for name in GateOut.model_fields}
