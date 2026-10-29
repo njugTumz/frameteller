@@ -189,3 +189,15 @@ async def test_older_answers_without_updated_shots_still_parse(
     transport, _ = replay("director_turn")
     out = await MetaSparkDirectorAdapter(client_for(transport), caller, settings).direct_turn(TURN_4, story())
     assert out.revisions == ()
+
+
+async def test_a_real_person_or_a_franchise_character_is_refused_with_a_reason(
+    client_for: Client, caller: ModelCaller, settings: Settings
+) -> None:
+    no = "Frameteller draws original characters only. Who would you like in this scene instead?"
+    transport, seen = replay([with_content(json.dumps({"new_characters": [], "shots": [], "refusal": f" {no} "}))])
+
+    out = await MetaSparkDirectorAdapter(client_for(transport), caller, settings).direct_turn(TURN_4, story())
+
+    assert (out.shots, out.new_characters, out.refusal) == ((), (), no)
+    assert "original" in body(seen[0])["messages"][0]["content"]  # the rule is in the stable system prompt

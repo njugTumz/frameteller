@@ -18,7 +18,13 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 from frameteller.application.errors import ProjectNotFoundError
 from frameteller.application.ports import UsageRecord
 from frameteller.domain import MediaRef, Project
-from frameteller.infrastructure.azure import AzureBlobMediaStorage, BlobProjectRepository, BlobSpendLedger, blob_service
+from frameteller.infrastructure.azure import (
+    AzureBlobMediaStorage,
+    BlobProjectRepository,
+    BlobSpendLedger,
+    BlobVisitorQuota,
+    blob_service,
+)
 from frameteller.infrastructure.config import Settings, load_settings
 from tests.builders import project, turn
 
@@ -130,3 +136,11 @@ async def test_spend_ledger_counts_charges_by_project_and_day(containers: Contai
     usage = UsageRecord("sam-3.1", "segment_point", 4000, 0.0025, project_id="p1")
     await ledger.record_usage(usage, day="2026-10-27")
     assert await ledger.usage("2026-10-27") == [usage]
+
+
+async def test_visitor_quota_counts_per_visitor_day_and_kind(containers: Containers) -> None:
+    quota = BlobVisitorQuota(containers.projects)
+    await asyncio.gather(*(quota.add("v1", "2026-11-02", "projects") for _ in range(3)))
+    assert await quota.used("v1", "2026-11-02", "projects") == 3
+    assert await quota.used("v1", "2026-11-03", "projects") == 0
+    assert await quota.used("v2", "2026-11-02", "projects") == 0

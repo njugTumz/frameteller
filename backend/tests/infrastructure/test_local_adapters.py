@@ -16,7 +16,12 @@ from frameteller.domain import (
     Project,
     Size,
 )
-from frameteller.infrastructure.local import FileSpendLedger, JsonFileProjectRepository, LocalFileMediaStorage
+from frameteller.infrastructure.local import (
+    FileSpendLedger,
+    FileVisitorQuota,
+    JsonFileProjectRepository,
+    LocalFileMediaStorage,
+)
 from tests.builders import bitmap, project
 from tests.fakes import FixedClock
 
@@ -110,3 +115,16 @@ async def test_json_repository_update_saves_nothing_when_the_change_fails(tmp_pa
     with pytest.raises(ValueError, match="rule broken"):
         await repo.update("p1", change)
     assert (await repo.get("p1")).title == "kept"
+
+
+async def test_visitor_quota_counts_per_visitor_day_and_kind(tmp_path: Path) -> None:
+    quota = FileVisitorQuota(tmp_path)
+    await asyncio.gather(*(quota.add("v1", "2026-11-02", "projects") for _ in range(3)))
+    await quota.add("v2", "2026-11-02", "projects")
+
+    again = FileVisitorQuota(tmp_path)  # survives a restart
+    assert await again.used("v1", "2026-11-02", "projects") == 3
+    assert await again.used("v1", "2026-11-03", "projects") == 0
+    assert await again.used("v2", "2026-11-02", "projects") == 1
+    with pytest.raises(ValueError, match="key"):
+        await quota.used("../escape", "2026-11-02", "projects")

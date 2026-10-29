@@ -8,6 +8,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from frameteller.application.limits import DemoLimits
+
 AppEnv = Literal["local", "staging", "production"]
 StorageBackend = Literal["local", "blob"]
 Effort = Literal["minimal", "low", "medium", "high"]
@@ -44,7 +46,18 @@ class Settings(BaseSettings):
     sam_max_side: int | None = Field(default=768, ge=256)  # ADR 0007
 
     budget_per_project_usd: float = Field(default=2.0, gt=0)
+    # The global daily cap across every project: past it, "The studio is full for today".
     budget_per_day_usd: float = Field(default=10.0, gt=0)
+
+    # Public-demo guardrails (production defaults). A visitor is a hash of IP and browser id.
+    limit_projects_per_visitor_per_day: int = Field(default=3, ge=1)
+    limit_narration_minutes_per_session: float = Field(default=3, gt=0)
+    limit_shots_per_project: int = Field(default=12, ge=1)
+    limit_renders_per_project: int = Field(default=30, ge=1)  # panel renders and edits
+    limit_exports_per_project: int = Field(default=3, ge=1)
+    # The kill switch: a friendly "back soon" page everywhere but shared storyboards. Set with
+    # `az containerapp update --set-env-vars DEMO_PAUSED=true` (a new revision, no redeploy; docs/runbook.md).
+    demo_paused: bool = False
 
     text_timeout_s: float = Field(default=60, gt=0)
     image_timeout_s: float = Field(default=120, gt=0)
@@ -101,6 +114,16 @@ class Settings(BaseSettings):
         if self.public_app_url.strip():
             return self.public_app_url.strip().rstrip("/")
         return next((o for o in self.origins if o.startswith("https://")), "")
+
+    @property
+    def demo_limits(self) -> DemoLimits:
+        return DemoLimits(
+            projects_per_visitor_per_day=self.limit_projects_per_visitor_per_day,
+            narration_ms_per_session=round(self.limit_narration_minutes_per_session * 60_000),
+            shots_per_project=self.limit_shots_per_project,
+            renders_per_project=self.limit_renders_per_project,
+            exports_per_project=self.limit_exports_per_project,
+        )
 
     @property
     def director(self) -> str:

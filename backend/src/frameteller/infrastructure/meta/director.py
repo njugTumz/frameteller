@@ -41,7 +41,12 @@ Never invent a character, name or species the narration does not state. Somethin
 - updated_shots: when this turn reveals who or what an earlier vague or wrongly guessed thing was, revise
   those of the last 3 shots so far: their number, their full character_ids and their action rewritten with
   the reveal. Return [] when nothing is revealed. Never revise older shots.
-Keep the story original. Do not add real people, brands or copyrighted characters."""
+- refusal: "" normally. Stories must be original. When a turn names a real, identifiable person (a public
+  figure, a celebrity, a politician) or a well-known copyrighted character (from films, TV, comics, games or
+  books), create no character and no shot for them, and set refusal to one short, friendly sentence asking
+  the narrator to describe an original character instead, e.g. "Let's keep the cast original: describe your
+  own character instead of a famous one." Other shots in the turn are made as usual.
+Never add real people, brands or copyrighted characters yourself."""
 
 CHARACTERS_PROMPT = """You maintain the character bible for a storyboard.
 List every character in the transcript, including animals, that is not already in the bible.
@@ -85,6 +90,7 @@ class DirectorOutput(BaseModel):
     new_characters: list[CharacterOut]
     shots: list[ShotOut]
     updated_shots: list[UpdatedShotOut] = Field(default_factory=list, max_length=3)
+    refusal: str = Field(default="", max_length=300)
 
 
 class CharactersOutput(BaseModel):
@@ -246,7 +252,7 @@ class MetaSparkDirectorAdapter:
             for u in out.updated_shots
             if u.number in by_number
         )
-        return DirectedTurn(characters, tuple(drafts), revisions)
+        return DirectedTurn(characters, tuple(drafts), revisions, out.refusal.strip())
 
 
 def _character(c: CharacterOut) -> Character:

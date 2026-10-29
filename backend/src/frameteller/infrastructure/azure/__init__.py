@@ -5,7 +5,15 @@ from frameteller.infrastructure.azure.blob import (
     BlobProjectRepository,
     BlobShareIndex,
     BlobSpendLedger,
+    BlobVisitorQuota,
     blob_service,
 )
 
-__all__ = ["AzureBlobMediaStorage", "BlobProjectRepository", "BlobShareIndex", "BlobSpendLedger", "blob_service"]
+__all__ = [
+    "AzureBlobMediaStorage",
+    "BlobProjectRepository",
+    "BlobShareIndex",
+    "BlobSpendLedger",
+    "BlobVisitorQuota",
+    "blob_service",
+]

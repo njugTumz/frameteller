@@ -218,25 +218,52 @@ class BlobSpendLedger:
         return [UsageRecord(**{k: v for k, v in r.items() if k != "type"}) for r in rows]
 
     async def _rows(self, name: str) -> list[dict[str, Any]]:
-        blob = self._container.get_blob_client(check_key(name))
-
-        def read() -> bytes:
-            try:
-                return blob.download_blob().readall()
-            except ResourceNotFoundError:
-                return b""
-
-        text = (await asyncio.to_thread(read)).decode()
-        return [json.loads(line) for line in text.splitlines() if line.strip()]
+        return await read_rows(self._container, name)
 
     async def _append(self, name: str, row: dict[str, Any]) -> None:
-        blob = self._container.get_blob_client(check_key(name))
-        data = (json.dumps(row) + "\n").encode()
+        await append_row(self._container, name, row)
 
-        def append() -> None:
-            # Create it only if it does not exist yet, so a racing writer never truncates it.
-            with contextlib.suppress(ResourceExistsError, ResourceModifiedError):
-                blob.create_append_blob(match_condition=MatchConditions.IfMissing)
-            blob.append_block(data)
 
-        await asyncio.to_thread(append)
+async def read_rows(container: ContainerClient, name: str) -> list[dict[str, Any]]:
+    """The JSON lines of an append blob; none when it does not exist yet."""
+    blob = container.get_blob_client(check_key(name))
+
+    def read() -> bytes:
+        try:
+            return blob.download_blob().readall()
+        except ResourceNotFoundError:
+            return b""
+
+    text = (await asyncio.to_thread(read)).decode()
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+async def append_row(container: ContainerClient, name: str, row: dict[str, Any]) -> None:
+    """One JSON line as one append block, which Blob Storage applies atomically."""
+    blob = container.get_blob_client(check_key(name))
+    data = (json.dumps(row) + "\n").encode()
+
+    def append() -> None:
+        # Create it only if it does not exist yet, so a racing writer never truncates it.
+        with contextlib.suppress(ResourceExistsError, ResourceModifiedError):
+            blob.create_append_blob(match_condition=MatchConditions.IfMissing)
+        blob.append_block(data)
+
+    await asyncio.to_thread(append)
+
+
+class BlobVisitorQuota:
+    """VisitorQuota as one append blob per day, visitor and kind (quotas/<day>/<kind>/<visitor>.jsonl).
+
+    Visitors are hashes, never raw IPs. The media lifecycle rule does not cover this container, but each row
+    is tiny and a day's blobs are never read again after that day.
+    """
+
+    def __init__(self, container: ContainerClient) -> None:
+        self._container = container
+
+    async def used(self, visitor: str, day: str, kind: str) -> int:
+        return len(await read_rows(self._container, f"quotas/{day}/{kind}/{visitor}.jsonl"))
+
+    async def add(self, visitor: str, day: str, kind: str) -> None:
+        await append_row(self._container, f"quotas/{day}/{kind}/{visitor}.jsonl", {"kind": kind})
