@@ -79,6 +79,7 @@ jobs:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
           GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
+          REVIEWER: ${{ vars.REVIEWER || 'spark' }}
         run: |
           if [ -z "$MODEL_API_KEY" ]; then
             echo "::error::The staging environment has no MODEL_API_KEY secret. Set it with: gh secret set MODEL_API_KEY --env staging"
@@ -105,6 +106,7 @@ jobs:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
           GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
+          REVIEWER: ${{ vars.REVIEWER || 'spark' }}
         run: >
           az deployment group what-if
           --resource-group "$RESOURCE_GROUP"
@@ -117,6 +119,7 @@ jobs:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
           GLIMMER_API_KEY: ${{ secrets.GLIMMER_API_KEY }}
           GLIMMER_BASE_URL: ${{ vars.GLIMMER_BASE_URL }}
+          REVIEWER: ${{ vars.REVIEWER || 'spark' }}
         run: |
           url=$(az deployment group create \
             --resource-group "$RESOURCE_GROUP" \
