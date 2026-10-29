@@ -77,22 +77,27 @@ Stage 1 pass/fail → Stage 2 scored 0–10 per category → Stage 3 top 5 per t
 
 ## 4. Scope
 
-### P0 — must ship by Nov 2 live demo
-- Live mic capture → realtime transcript on screen.
-- Transcript → shot list (structured output, validated).
-- Character bible + reference sheet per character.
-- Panel generation with character references; storyboard grid UI.
-- Voice edit of a single panel (multi-turn image edit).
-- Animatic MP4 export with narration audio and turn-timed panels.
-- Deployed to production on Azure, with staging.
+### P0 — must ship by Nov 2 live demo (done on staging Oct 28, except production)
+- [x] Live mic capture → realtime transcript on screen.
+- [x] Transcript → shot list (structured output, validated).
+- [x] Character bible + reference sheet per character.
+- [x] Panel generation with character references; storyboard grid UI.
+- [x] Voice edit of a single panel (multi-turn image edit).
+- [x] Animatic MP4 export with narration audio and turn-timed panels.
+- [ ] Deployed to production on Azure (staging is live).
 
-### P1 — ship by Nov 3
-- Click object → SAM 3.1 mask → targeted edit / move / swap.
-- Reorder and delete shots by voice.
-- Two-speaker co-direction (speaker labels shown).
-- PDF storyboard export. Shareable read-only project link (for X and the gallery).
+Also shipped from the old P1: click object → SAM 3.1 mask → edit / move (saved on clean plates), PDF storyboard export, shareable read-only links that preview on X.
+
+### P1 — in this order, after production
+1. **Continuity supervisor.** Rubric markdown files, one per pipeline step. An agent checks each step's output and either passes it, auto-fixes it (at most 2 tries per panel, budget-guarded) or asks the user; its decisions are shown in the UI. Muse Spark first; Muse Glimmer served on Modal once partner credits arrive (open-weight bonus).
+2. **Parallax animatic** from SAM cut-outs over clean plates.
+3. **Narrator voices and languages** with Azure Text-to-Speech; translation by Muse Spark.
+4. **Script upload** with episodes.
+
+Out of scope: Azure speech-to-text (we use Muse Voice Transcribe) and voice cloning.
 
 ### P2 — only if everything above is solid
+- Reorder and delete shots by voice; two-speaker co-direction with speaker labels (left over from the old P1).
 - Glimmer local voice-command router (open-weight bonus).
 - Muse Wonder "story doctor" pass (pacing and continuity suggestions).
 - Style presets (pencil rough, ink, colour).
@@ -255,7 +260,7 @@ No hosting is mandated by the hackathon; we use Azure.
 | Piece | Service | Notes |
 |---|---|---|
 | App frontend | Azure Static Web Apps | PR preview environments |
-| Marketing page | Azure Static Web Apps (separate app) | Deploys on any push to `main` touching `marketing/**` |
+| Marketing page | Azure Static Web Apps (separate app) | Live at https://frameteller.com. Deploys on any push to `main` touching `marketing/**` |
 | Backend | Azure Container Apps | WebSockets on, scale to zero, health probes |
 | Media + project docs | Azure Blob Storage | Private containers, SAS for reads |
 | Secrets | Key Vault / Container Apps secrets | `MODEL_API_KEY` never in the repo |
@@ -263,6 +268,8 @@ No hosting is mandated by the hackathon; we use Azure.
 | Telemetry | Application Insights | |
 
 One resource group per environment: `rg-frameteller-staging`, `rg-frameteller-prod`, same Bicep with different parameter files.
+
+**DNS:** frameteller.com is registered and hosted at Cloudflare. Every record that points at Azure is **DNS only (grey cloud), never proxied**, so Azure can validate the domains and renew its managed certificates. www and the old azurestaticapps.net address redirect (301) to https://frameteller.com.
 
 **Pipelines**
 - `ci.yml` — on `pull_request` (never `pull_request_target`) and push: lint, type-check, test both apps.
@@ -301,12 +308,14 @@ The repo is public from day one and judges read the commit history.
 | Day | Goal |
 |---|---|
 | Tue Oct 27 | Repo, licence, CI, Azure skeleton. Marketing page live with countdown. First X post. |
-| Wed Oct 28 | Spikes in plain scripts: voice → shot JSON; character consistency across 6 panels; SAM point select → prompt edit and canvas composite. Decide fallbacks. |
-| Thu Oct 29 – Fri Oct 30 | Domain + use cases + adapters; storyboard UI; live mic streaming. Staging up. |
-| Sat Oct 31 – Sun Nov 1 | Voice edits, animatic export, hardening, Playwright smoke. |
-| **Mon Nov 2, 9 PM** | **Public live demo on production. Countdown hits zero. Launch post on X.** |
-| Tue Nov 3 | P1 features, polish, README, record demo video, draft all submission answers. |
-| Wed Nov 4 | Buffer, final checks, submit well before **Thu Nov 5, 6:00 AM**. Tag and freeze. |
+| Wed Oct 28 | Spikes proved voice → shots, consistency and SAM selection. Then, on staging: cast fixes, reveals, saved moves on clean plates, animatic export, PDF and share links. |
+| Thu Oct 29 | Production: environment, domains, guardrails, privacy page, runbook. Marketing at frameteller.com. |
+| Fri Oct 30 | Continuity supervisor. |
+| Sat Oct 31 | Parallax animatic. |
+| Sun Nov 1 | Narrator voices with Azure Text-to-Speech, and script upload if time. |
+| **Mon Nov 2, 21:00** | **Public launch on production. Countdown hits zero. Launch post on X.** |
+| Tue Nov 3 | Creator tests, record the demo video, submit early. |
+| Wed Nov 4 | Buffer and final checks. Submit well before **Thu Nov 5, 6:00 AM**. Tag and freeze. |
 
 ---
 
@@ -360,3 +369,5 @@ Keep `SUBMISSION.md` updated as we build; paste from it on Nov 4.
 - Use the contributor model only with synthetic data.
 - When P0 is at risk, cut scope (move to P1/P2) rather than cut quality.
 - After any user-visible milestone, add a build-log entry to `marketing/updates.json`.
+- **Never push to `main` while the user is running a live test**: a push redeploys staging and cuts the test off. Commit locally and push afterwards.
+- **After the submission deadline, no commits to `main` until judging ends (Nov 16).** Later work goes on a branch.
