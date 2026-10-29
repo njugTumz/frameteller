@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-29T08:52:40Z",
+  "updated_at": "2026-10-29T13:40:00Z",
   "items": [
+    {
+      "date": "2026-10-29",
+      "status": "shipped",
+      "title": "Paste a script, pick a voice",
+      "body": "Paste or upload a script and read it from a teleprompter that cuts each shot for you, or pick one of five voices in six languages and let it read the story aloud while the panels draw."
+    },
     {
       "date": "2026-10-29",
       "status": "shipped",
