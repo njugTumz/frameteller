@@ -27,6 +27,14 @@ class LimitReachedError(ApplicationError):
         self.user_message = message
 
 
+class ScriptError(ApplicationError):
+    """A script that cannot be told: empty, too long, or too many episodes or paragraphs. Says what to change."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.user_message = message
+
+
 class NothingToSegmentError(ApplicationError):
     """SAM found no object at the clicked point."""
 

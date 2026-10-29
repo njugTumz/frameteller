@@ -15,7 +15,7 @@ class DirectedShots:
     new_characters: tuple[Character, ...]
     revised: tuple[Shot, ...] = ()  # earlier shots a reveal changed; their panels are outdated
     dropped_character_ids: tuple[str, ...] = ()  # guesses the reveal replaced, no longer in any shot
-    capped: bool = False  # the project reached its shot limit: shots past it were not added
+    capped: bool = False  # the episode reached its shot limit: shots past it were not added
     refusal: str = ""  # the director declined a real person or a copyrighted character, and says why
 
 
@@ -34,6 +34,7 @@ def shots_for_turn(drafts: Sequence[ShotDraft], turn: TranscriptTurn, ids: IdGen
             dialogue=d.dialogue,
             source_turn_ids=d.source_turn_ids,
             duration_ms=durations[i],
+            episode=turn.episode,
         )
         for i, d in enumerate(drafts)
     ]
@@ -66,9 +67,14 @@ class DirectTurn:
     """Direct one finished transcript turn into shots (ADR 0002), revising earlier shots a reveal explains."""
 
     def __init__(
-        self, repo: ProjectRepository, director: DirectorPort, ids: IdGenerator, *, max_shots: int | None = None
+        self,
+        repo: ProjectRepository,
+        director: DirectorPort,
+        ids: IdGenerator,
+        *,
+        max_shots_per_episode: int | None = None,
     ) -> None:
-        self._repo, self._director, self._ids, self._max_shots = repo, director, ids, max_shots
+        self._repo, self._director, self._ids, self._max_shots = repo, director, ids, max_shots_per_episode
 
     async def execute(self, project_id: str, turn: TranscriptTurn) -> DirectedShots:
         snapshot = await self._repo.get(project_id)
@@ -80,7 +86,8 @@ class DirectTurn:
             new = add_new_characters(project, directed.new_characters)
             revised, dropped = apply_revisions(project, directed.revisions)
             drafts = list(directed.shots)
-            room = len(drafts) if self._max_shots is None else max(0, self._max_shots - len(project.shots))
+            in_episode = sum(s.episode == turn.episode for s in project.shots)
+            room = len(drafts) if self._max_shots is None else max(0, self._max_shots - in_episode)
             shots = shots_for_turn(drafts[:room], turn, self._ids, len(project.shots) + 1) if room else []
             project.append_shots(shots)
             capped = len(drafts) > room

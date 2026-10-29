@@ -52,8 +52,11 @@ class Settings(BaseSettings):
     # Public-demo guardrails (production defaults). A visitor is a hash of IP and browser id.
     limit_projects_per_visitor_per_day: int = Field(default=3, ge=1)
     limit_narration_minutes_per_session: float = Field(default=3, gt=0)
-    limit_shots_per_project: int = Field(default=12, ge=1)
-    limit_renders_per_project: int = Field(default=30, ge=1)  # panel renders and edits
+    limit_shots_per_episode: int = Field(default=12, ge=1)
+    limit_renders_per_project: int = Field(default=60, ge=1)  # panel renders and edits
+    limit_episodes_per_script: int = Field(default=3, ge=1)
+    limit_script_characters: int = Field(default=4000, ge=100)
+    limit_speech_characters_per_visitor_per_day: int = Field(default=12_000, ge=0)  # Text-to-Speech
     limit_exports_per_project: int = Field(default=3, ge=1)
     # The kill switch: a friendly "back soon" page everywhere but shared storyboards. Set with
     # `az containerapp update --set-env-vars DEMO_PAUSED=true` (a new revision, no redeploy; docs/runbook.md).
@@ -71,6 +74,13 @@ class Settings(BaseSettings):
     # fallback and screen use Glimmer only while the warm-up script holds a lease, so visitors never wake the GPU.
     glimmer_only_when_warm: bool = True
     rubrics_dir: Path | None = None  # agents/; found next to the repo when unset
+
+    # "Read it to me" (ADR 0015): Azure AI Speech Text-to-Speech, with a key (the resource is outside our tenant).
+    azure_speech_key: SecretStr | None = None
+    azure_speech_region: str = "eastus2"
+    speech_timeout_s: float = Field(default=30, gt=0)
+    speech_default_voice: str = "en-US-BrandonMultilingualNeural"
+    speech_characters_per_day: int = Field(default=200_000, ge=0)  # all visitors together
 
     text_timeout_s: float = Field(default=60, gt=0)
     image_timeout_s: float = Field(default=120, gt=0)
@@ -100,7 +110,12 @@ class Settings(BaseSettings):
         return None if isinstance(value, str) and value.strip().lower() in ("", "none") else value
 
     @field_validator(
-        "azure_storage_connection_string", "azure_storage_api_version", "glimmer_api_key", "rubrics_dir", mode="before"
+        "azure_storage_connection_string",
+        "azure_storage_api_version",
+        "glimmer_api_key",
+        "rubrics_dir",
+        "azure_speech_key",
+        mode="before",
     )
     @classmethod
     def _empty_means_unset(cls, value: object) -> object:
@@ -127,6 +142,10 @@ class Settings(BaseSettings):
         return self
 
     @property
+    def azure_speech_tts_base_url(self) -> str:
+        return f"https://{self.azure_speech_region.strip()}.tts.speech.microsoft.com"
+
+    @property
     def origins(self) -> list[str]:
         return [o.strip().rstrip("/") for o in self.allowed_origins.split(",") if o.strip()]
 
@@ -141,9 +160,12 @@ class Settings(BaseSettings):
         return DemoLimits(
             projects_per_visitor_per_day=self.limit_projects_per_visitor_per_day,
             narration_ms_per_session=round(self.limit_narration_minutes_per_session * 60_000),
-            shots_per_project=self.limit_shots_per_project,
+            shots_per_episode=self.limit_shots_per_episode,
             renders_per_project=self.limit_renders_per_project,
             exports_per_project=self.limit_exports_per_project,
+            episodes_per_script=self.limit_episodes_per_script,
+            script_characters=self.limit_script_characters,
+            speech_characters_per_visitor_per_day=self.limit_speech_characters_per_visitor_per_day,
         )
 
     @property

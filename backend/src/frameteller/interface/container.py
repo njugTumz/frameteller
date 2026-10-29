@@ -277,7 +277,7 @@ def wire(
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
             speech,
-            DirectTurn(repo, director, ids, max_shots=limits.shots_per_project),
+            DirectTurn(repo, director, ids, max_shots_per_episode=limits.shots_per_episode),
             correct_transcript,
             request_cast,
             hub,

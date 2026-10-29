@@ -279,6 +279,43 @@ class MediaStoragePort(Protocol):
         """Remove a stored file. Deleting one that is already gone is not an error."""
         ...
 
+    async def exists(self, ref: MediaRef) -> bool: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Voice:
+    """A Text-to-Speech voice the studio offers (ADR 0015)."""
+
+    name: str  # "en-US-BrandonMultilingualNeural"
+    display_name: str  # "Brandon"
+    gender: str  # "Male" | "Female"
+    locale: str  # "en-US"
+    languages: tuple[str, ...]  # locales it can speak, its own first
+
+
+@dataclass(frozen=True, slots=True)
+class SpokenClip:
+    """Synthesized speech the adapter already stored: 24 kHz mono 16-bit WAV."""
+
+    ref: MediaRef
+    duration_ms: int
+
+
+class SpeechSynthesisPort(Protocol):
+    async def voices(self) -> list[Voice]:
+        """The voices available, fetched once and cached."""
+        ...
+
+    async def synthesize(self, text: str, voice: str, language: str, store_as: str) -> SpokenClip:
+        """Speak `text` (already in `language`) with `voice`, and store it as WAV at `store_as`."""
+        ...
+
+
+class TranslatorPort(Protocol):
+    async def translate(self, texts: Sequence[str], language: str) -> list[str]:
+        """Each text in `language` (a locale such as "fr-FR"), same order and count, meaning kept."""
+        ...
+
 
 class ProjectRepository(Protocol):
     async def get(self, project_id: str) -> Project: ...
@@ -335,11 +372,14 @@ class StoryboardSheetPort(Protocol):
 
 
 class VisitorQuota(Protocol):
-    """How many times a visitor did something limited today (start a project). `visitor` is already a hash."""
+    """How much a visitor did of something limited today (projects started, characters read aloud).
+
+    `visitor` is already a hash.
+    """
 
     async def used(self, visitor: str, day: str, kind: str) -> int: ...
 
-    async def add(self, visitor: str, day: str, kind: str) -> None: ...
+    async def add(self, visitor: str, day: str, kind: str, amount: int = 1) -> None: ...
 
 
 class ShareIndex(Protocol):

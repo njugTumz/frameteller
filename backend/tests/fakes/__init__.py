@@ -121,6 +121,9 @@ class InMemoryMediaStorage:
     async def delete(self, ref: MediaRef) -> None:
         self.files.pop(ref.key, None)
 
+    async def exists(self, ref: MediaRef) -> bool:
+        return ref.key in self.files
+
 
 class FakeImageGeneration:
     """Stores a tiny fake image under `store_as`, like the real adapter does with model output."""
@@ -318,8 +321,8 @@ class InMemoryVisitorQuota:
     async def used(self, visitor: str, day: str, kind: str) -> int:
         return self.counts[(visitor, day, kind)]
 
-    async def add(self, visitor: str, day: str, kind: str) -> None:
-        self.counts[(visitor, day, kind)] += 1
+    async def add(self, visitor: str, day: str, kind: str, amount: int = 1) -> None:
+        self.counts[(visitor, day, kind)] += amount
 
 
 class InMemoryShareIndex:

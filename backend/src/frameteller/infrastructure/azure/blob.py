@@ -79,6 +79,10 @@ class AzureBlobMediaStorage:
 
         await asyncio.to_thread(remove)
 
+    async def exists(self, ref: MediaRef) -> bool:
+        blob = self._container.get_blob_client(check_key(ref.key))
+        return bool(await asyncio.to_thread(blob.exists))
+
     async def check_writable(self) -> None:
         """Readiness probe: write and delete a tiny blob. Raises if the identity or network cannot."""
         blob = self._container.get_blob_client(".ready")
@@ -263,7 +267,8 @@ class BlobVisitorQuota:
         self._container = container
 
     async def used(self, visitor: str, day: str, kind: str) -> int:
-        return len(await read_rows(self._container, f"quotas/{day}/{kind}/{visitor}.jsonl"))
+        rows = await read_rows(self._container, f"quotas/{day}/{kind}/{visitor}.jsonl")
+        return sum(int(r.get("n", 1)) for r in rows)
 
-    async def add(self, visitor: str, day: str, kind: str) -> None:
-        await append_row(self._container, f"quotas/{day}/{kind}/{visitor}.jsonl", {"kind": kind})
+    async def add(self, visitor: str, day: str, kind: str, amount: int = 1) -> None:
+        await append_row(self._container, f"quotas/{day}/{kind}/{visitor}.jsonl", {"kind": kind, "n": amount})

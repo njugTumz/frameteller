@@ -72,8 +72,10 @@ async def test_status_lists_the_limits(api: Api) -> None:
         "limits": {
             "projects_per_visitor_per_day": 3,
             "narration_minutes_per_session": 3,
-            "shots_per_project": 12,
-            "renders_per_project": 30,
+            "shots_per_episode": 12,
+            "episodes_per_script": 3,
+            "script_characters": 4000,
+            "renders_per_project": 60,
             "exports_per_project": 3,
         },
     }

@@ -40,7 +40,7 @@ from tests.fakes import (
 )
 
 SMALL = DemoLimits(
-    projects_per_visitor_per_day=2, narration_ms_per_session=1000, shots_per_project=4, renders_per_project=2,
+    projects_per_visitor_per_day=2, narration_ms_per_session=1000, shots_per_episode=4, renders_per_project=2,
     exports_per_project=2,
 )  # fmt: skip
 
@@ -116,7 +116,7 @@ async def test_the_shot_limit_keeps_the_first_shots_and_says_so() -> None:
     repo = InMemoryProjectRepository(project(shots=3))
     three = DirectedTurn((), (draft("one"), draft("two"), draft("three")))
     director = FakeDirector({"4": three, "5": three})
-    directed = await DirectTurn(repo, director, SequentialIds("shot"), max_shots=4).execute(
+    directed = await DirectTurn(repo, director, SequentialIds("shot"), max_shots_per_episode=4).execute(
         "p1", TranscriptTurn("4", "Three more beats", 0, 3000)
     )
 
@@ -124,7 +124,7 @@ async def test_the_shot_limit_keeps_the_first_shots_and_says_so() -> None:
     assert directed.capped
     assert len(repo.peek("p1").shots) == 4
 
-    again = await DirectTurn(repo, director, SequentialIds("more"), max_shots=4).execute(
+    again = await DirectTurn(repo, director, SequentialIds("more"), max_shots_per_episode=4).execute(
         "p1", TranscriptTurn("5", "And three more", 3000, 6000)
     )
     assert (again.shots, again.capped) == ((), True)
@@ -141,7 +141,7 @@ def voice_session(
     cast = RequestCastReferences(repo, jobs, SequentialIds("n"))
     run = RunVoiceSession(
         speech,
-        DirectTurn(repo, director, SequentialIds("shot"), max_shots=limits.shots_per_project),
+        DirectTurn(repo, director, SequentialIds("shot"), max_shots_per_episode=limits.shots_per_episode),
         CorrectTranscript(repo, director, SequentialIds("fix"), cast, events),
         cast,
         events,

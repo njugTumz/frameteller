@@ -20,17 +20,17 @@ class FileVisitorQuota:
         path = self._path(visitor, day, kind)
 
         def count() -> int:
-            return len(path.read_text("utf-8").splitlines()) if path.exists() else 0
+            return sum(int(x) for x in path.read_text("utf-8").split()) if path.exists() else 0
 
         return await asyncio.to_thread(count)
 
-    async def add(self, visitor: str, day: str, kind: str) -> None:
+    async def add(self, visitor: str, day: str, kind: str, amount: int = 1) -> None:
         path = self._path(visitor, day, kind)
 
         def append() -> None:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as f:
-                f.write("1\n")
+                f.write(f"{amount}\n")
 
         async with self._lock:
             await asyncio.to_thread(append)

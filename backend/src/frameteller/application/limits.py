@@ -14,6 +14,8 @@ from frameteller.application.errors import LimitReachedError
 from frameteller.application.ports import Clock, ProjectRepository, VisitorQuota
 from frameteller.domain import Project
 
+SPEECH = "speech"  # characters read aloud by Text-to-Speech
+EVERYONE = "everyone"  # the quota key for a cap on all visitors together
 RENDERS = "renders"  # panel renders and appearance edits
 EXPORTS = "exports"
 PROJECTS = "projects"
@@ -23,9 +25,12 @@ PROJECTS = "projects"
 class DemoLimits:
     projects_per_visitor_per_day: int = 3
     narration_ms_per_session: int = 3 * 60_000
-    shots_per_project: int = 12
-    renders_per_project: int = 30
+    shots_per_episode: int = 12  # a narration is one episode; a script may have several (ADR 0015)
+    renders_per_project: int = 60
     exports_per_project: int = 3
+    episodes_per_script: int = 3
+    script_characters: int = 4000
+    speech_characters_per_visitor_per_day: int = 12_000  # Azure Text-to-Speech, "Read it to me"
 
     def messages(self) -> dict[str, str]:
         return {
@@ -40,8 +45,8 @@ class DemoLimits:
     @property
     def shots_full(self) -> str:
         return (
-            f"This story has {self.shots_per_project} shots, the most for the public demo. Your storyboard is "
-            "saved: draw, edit and export it."
+            f"This episode has {self.shots_per_episode} shots, the most for the public demo. Your storyboard "
+            "is saved: draw, edit and export it."
         )
 
     @property
@@ -84,3 +89,29 @@ class VisitorAllowance:
             if await self._quota.used(visitor, day, kind) >= self._limits.projects_per_visitor_per_day:
                 raise LimitReachedError(self._limits.messages()[kind])
             await self._quota.add(visitor, day, kind)
+
+
+class SpeechAllowance:
+    """Characters read aloud by Text-to-Speech today: per visitor, and for all visitors together (ADR 0015)."""
+
+    def __init__(self, quota: VisitorQuota, clock: Clock, limits: DemoLimits, per_day: int) -> None:
+        self._quota, self._clock, self._limits, self._per_day = quota, clock, limits, per_day
+        self._lock = asyncio.Lock()
+
+    async def take(self, visitor: str | None, characters: int) -> None:
+        day = self._clock.now().date().isoformat()
+        async with self._lock:
+            if self._per_day and await self._quota.used(EVERYONE, day, SPEECH) + characters > self._per_day:
+                raise LimitReachedError(
+                    "The public demo has read aloud all it can for today. Narrate the story yourself, use the "
+                    "teleprompter, or come back tomorrow."
+                )
+            per_visitor = self._limits.speech_characters_per_visitor_per_day
+            if visitor and await self._quota.used(visitor, day, SPEECH) + characters > per_visitor:
+                raise LimitReachedError(
+                    f"You've had {per_visitor:,} characters read aloud today, the most for the public demo. "
+                    "Narrate the rest yourself or use the teleprompter."
+                )
+            await self._quota.add(EVERYONE, day, SPEECH, characters)
+            if visitor:
+                await self._quota.add(visitor, day, SPEECH, characters)

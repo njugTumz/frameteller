@@ -32,6 +32,9 @@ class LocalFileMediaStorage:
     async def delete(self, ref: MediaRef) -> None:
         await asyncio.to_thread(safe_path(self._root, ref.key).unlink, missing_ok=True)
 
+    async def exists(self, ref: MediaRef) -> bool:
+        return await asyncio.to_thread(safe_path(self._root, ref.key).is_file)
+
     async def check_writable(self) -> None:
         """Readiness probe: write and remove a small file. Raises if the disk is not writable."""
 
