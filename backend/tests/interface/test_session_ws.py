@@ -68,9 +68,11 @@ async def test_narration_becomes_partials_turns_shots_and_a_proposed_cast(api: A
     assert owl["id"] == "owl"
     assert owl["reference_url"] == "/media/projects/p1/characters/owl/reference"
     assert by_type["session.ended"] == {"type": "session.ended", "turns": 1, "shots": 1, "heard": True}
-    while not any(e["type"] == "job.updated" and e["status"] == "succeeded" for e in events):
+    while not any(
+        e["type"] == "job.updated" and e["kind"] == "generate_cast" and e["status"] == "succeeded" for e in events
+    ):
         events.append(await ws.receive())  # type: ignore[arg-type]
-    jobs = [(e["kind"], e["status"]) for e in events if e["type"] == "job.updated"]
+    jobs = [(e["kind"], e["status"]) for e in events if e["type"] == "job.updated" and e["kind"] == "generate_cast"]
     assert jobs == [("generate_cast", "queued"), ("generate_cast", "running"), ("generate_cast", "succeeded")]
 
     assert api.fakes.speech.options is not None

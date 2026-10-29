@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from openai import AsyncOpenAI
+
 from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.events import JobUpdated
@@ -18,6 +20,8 @@ from frameteller.application.ports import (
     Job,
     MediaStoragePort,
     ProjectRepository,
+    ReviewerPort,
+    RubricLibrary,
     SegmentationPort,
     ShareIndex,
     SpeechToTextPort,
@@ -26,6 +30,8 @@ from frameteller.application.ports import (
     VisitorQuota,
 )
 from frameteller.application.use_cases import (
+    AcceptReview,
+    ApplySuggestedFix,
     ApproveCast,
     ComposePanel,
     CorrectTranscript,
@@ -53,11 +59,14 @@ from frameteller.application.use_cases import (
     RequestCastReferences,
     RequestPanelEdit,
     RequestPanelRender,
+    ReviewSheet,
     RevokeShare,
     RunVoiceSession,
     SegmentObjectAtPoint,
+    SetContinuityChecks,
     SharePreview,
     ShareProject,
+    SupervisePanel,
     TranscribeInstruction,
 )
 from frameteller.infrastructure.azure import (
@@ -87,7 +96,13 @@ from frameteller.infrastructure.meta.image import MetaImageAdapter
 from frameteller.infrastructure.meta.sam import MetaSamAdapter
 from frameteller.infrastructure.meta.voice import MetaVoiceTranscribeAdapter
 from frameteller.infrastructure.observability import log_context
-from frameteller.infrastructure.resilience import Breakers, ModelCaller
+from frameteller.infrastructure.resilience import Breakers, ModelCaller, RetryPolicy
+from frameteller.infrastructure.review import (
+    FallbackReviewer,
+    FileRubricLibrary,
+    GlimmerReviewerAdapter,
+    SparkReviewerAdapter,
+)
 from frameteller.infrastructure.system import RandomIds, SystemClock
 from frameteller.interface.hub import ActiveSessions, EventHub
 
@@ -124,6 +139,9 @@ class Container:
     transcribe_instruction: TranscribeInstruction
     delete_narration: DeleteNarration
     studio_status: GetStudioStatus
+    apply_fix: ApplySuggestedFix
+    accept_review: AcceptReview
+    continuity_checks: SetContinuityChecks
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
 
@@ -137,6 +155,8 @@ def wire(
     images: ImageGenerationPort,
     segmentation: SegmentationPort,
     speech: SpeechToTextPort,
+    reviewer: ReviewerPort,
+    rubrics: RubricLibrary,
     ledger: SpendLedger,
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
@@ -179,9 +199,12 @@ def wire(
     generate_panel = GeneratePanel(repo, images, budget, queue)
     pre_segment = PreSegmentPanel(repo, segmentation, budget, queue)
     compose_panel = ComposePanel(repo, images, storage, compositor, budget)
-    edit_by_command = EditPanelByCommand(repo, director, EditPanelAppearance(repo, images, budget, queue))
-    cast_references = GenerateCastReferences(GenerateCharacterReference(repo, images, budget), hub)
+    edit_appearance = EditPanelAppearance(repo, images, budget, queue)
+    edit_by_command = EditPanelByCommand(repo, director, edit_appearance)
+    cast_references = GenerateCastReferences(GenerateCharacterReference(repo, images, budget, queue), hub)
     request_cast = RequestCastReferences(repo, queue, ids)
+    supervise_panel = SupervisePanel(repo, reviewer, rubrics, edit_appearance, budget, hub, clock)
+    review_sheet = ReviewSheet(repo, reviewer, rubrics, budget, hub, clock)
 
     def handler(run: Callable[[dict[str, str]], Awaitable[object]]) -> Handler:
         async def handle(job: Job) -> None:
@@ -209,7 +232,17 @@ def wire(
         lambda p: edit_by_command.execute(p["project_id"], p["shot_id"], p["instruction"])
     )
     handlers[job_kinds.GENERATE_CAST] = handler(
-        lambda p: cast_references.execute(p["project_id"], p["character_ids"].split(","))
+        lambda p: cast_references.execute(
+            p["project_id"], p["character_ids"].split(","), correction=p.get("correction", "")
+        )
+    )
+    handlers[job_kinds.SUPERVISE_PANEL] = handler(
+        lambda p: supervise_panel.execute(
+            p["project_id"], p["shot_id"], int(p["revision"]), "high" if p["quality"] == "high" else "low"
+        )
+    )
+    handlers[job_kinds.REVIEW_SHEET] = handler(
+        lambda p: review_sheet.execute(p["project_id"], p["character_id"], p["reference"])
     )
 
     correct_transcript = CorrectTranscript(repo, director, ids, request_cast, hub)
@@ -255,8 +288,40 @@ def wire(
         studio_status=GetStudioStatus(
             ledger, clock, per_day_usd=settings.budget_per_day_usd, paused=settings.demo_paused, limits=limits
         ),
+        apply_fix=ApplySuggestedFix(repo, queue, request_cast),
+        accept_review=AcceptReview(repo),
+        continuity_checks=SetContinuityChecks(repo),
         readiness=readiness or {},
     )
+
+
+def build_reviewer(
+    settings: Settings, client: AsyncOpenAI, caller: ModelCaller, storage: MediaStoragePort
+) -> ReviewerPort:
+    """REVIEWER: Muse Spark on Meta's API, Muse Glimmer on our Modal endpoint, or Glimmer with Spark behind it."""
+    spark = SparkReviewerAdapter(
+        client,
+        caller,
+        storage,
+        settings.director,
+        RetryPolicy(settings.retry_attempts, settings.text_timeout_s),
+        settings.reviewer_effort,
+    )
+    if settings.reviewer == "spark":
+        return spark
+    assert settings.glimmer_api_key is not None  # checked by the settings validator
+    glimmer_client = AsyncOpenAI(
+        base_url=settings.glimmer_base_url.strip(),
+        api_key=settings.glimmer_api_key.get_secret_value(),
+        max_retries=0,
+    )
+    if settings.reviewer == "glimmer":
+        policy = RetryPolicy(settings.retry_attempts, settings.text_timeout_s)
+        return GlimmerReviewerAdapter(glimmer_client, caller, storage, settings.glimmer_model, policy)
+    # One short try: a cold or slow Glimmer hands the review to Spark at once instead of retrying.
+    quick = RetryPolicy(1, settings.glimmer_timeout_s)
+    glimmer = GlimmerReviewerAdapter(glimmer_client, caller, storage, settings.glimmer_model, quick)
+    return FallbackReviewer(glimmer, spark, confirm_flags=settings.reviewer == "screen")
 
 
 def build_container(settings: Settings) -> Container:
@@ -288,6 +353,8 @@ def build_container(settings: Settings) -> Container:
         images=MetaImageAdapter(client, caller, storage, settings),
         segmentation=MetaSamAdapter(client, caller, storage, settings),
         speech=MetaVoiceTranscribeAdapter(caller, settings),
+        reviewer=build_reviewer(settings, client, caller, storage),
+        rubrics=FileRubricLibrary(settings.rubrics_path),
         ledger=ledger,
         readiness={"storage": check},
         shares=shares,

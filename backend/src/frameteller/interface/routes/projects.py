@@ -19,6 +19,7 @@ from frameteller.interface.dto import (
     LayerRequest,
     ProjectCreate,
     ProjectOut,
+    ProjectSettings,
     RenderRequest,
     ReorderRequest,
     SelectionOut,
@@ -47,6 +48,13 @@ async def create_project(body: ProjectCreate, request: Request, c: Deps) -> Proj
 
 @router.get("/{project_id}")
 async def get_project(project_id: ProjectId, c: Deps) -> ProjectOut:
+    return ProjectOut.of(await c.get_project.execute(project_id))
+
+
+@router.patch("/{project_id}")
+async def update_settings(project_id: ProjectId, body: ProjectSettings, c: Deps) -> ProjectOut:
+    """Turn the continuity supervisor on or off for this project. Off: new sheets and renders are not reviewed."""
+    await c.continuity_checks.execute(project_id, body.continuity_checks)
     return ProjectOut.of(await c.get_project.execute(project_id))
 
 
@@ -105,6 +113,42 @@ async def select_object(project_id: ProjectId, n: ShotNumber, body: SelectReques
     shot = await c.find_shot.execute(project_id, n)
     shown = Size(body.preview_width, body.preview_height)
     return SelectionOut.of(await c.select_object.execute(project_id, shot.id, Point(body.x, body.y), shown))
+
+
+@router.post(
+    "/{project_id}/shots/{n}/panel/review/apply",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={402: {"model": ErrorOut}, 422: {"model": ErrorOut}},
+)
+async def apply_panel_fix(project_id: ProjectId, n: ShotNumber, c: Deps) -> TicketOut:
+    """ "Apply suggested fix": the supervisor's appearance edit on the current render (422 if it suggested none)."""
+    shot = await c.find_shot.execute(project_id, n)
+    return TicketOut.of(await c.apply_fix.for_panel(project_id, shot.id))
+
+
+@router.post("/{project_id}/shots/{n}/panel/review/accept", responses={422: {"model": ErrorOut}})
+async def accept_panel(project_id: ProjectId, n: ShotNumber, c: Deps) -> ProjectOut:
+    """ "Accept anyway": keep the panel the supervisor flagged; its badge says the user accepted it."""
+    shot = await c.find_shot.execute(project_id, n)
+    await c.accept_review.for_panel(project_id, shot.id)
+    return ProjectOut.of(await c.get_project.execute(project_id))
+
+
+@router.post(
+    "/{project_id}/cast/{character_id}/review/apply",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={402: {"model": ErrorOut}, 422: {"model": ErrorOut}},
+)
+async def apply_sheet_fix(project_id: ProjectId, character_id: CharacterId, c: Deps) -> TicketOut:
+    """ "Apply fix" on a flagged reference sheet: redraw it with the supervisor's correction."""
+    return TicketOut.of(await c.apply_fix.for_sheet(project_id, character_id))
+
+
+@router.post("/{project_id}/cast/{character_id}/review/accept", responses={422: {"model": ErrorOut}})
+async def accept_sheet(project_id: ProjectId, character_id: CharacterId, c: Deps) -> ProjectOut:
+    """Keep a flagged reference sheet as it is."""
+    await c.accept_review.for_sheet(project_id, character_id)
+    return ProjectOut.of(await c.get_project.execute(project_id))
 
 
 @router.post(

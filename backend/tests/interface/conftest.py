@@ -22,11 +22,13 @@ from tests.fakes import (
     FakeCompositor,
     FakeDirector,
     FakeImageGeneration,
+    FakeReviewer,
     FakeSegmentation,
     FakeSpeechToText,
     FakeVideoRenderer,
     InMemoryMediaStorage,
     InMemoryProjectRepository,
+    InMemoryRubricLibrary,
     InMemoryShareIndex,
     InMemorySpendLedger,
     InMemoryVisitorQuota,
@@ -48,6 +50,8 @@ class Fakes:
     renderer: FakeVideoRenderer = field(default_factory=FakeVideoRenderer)
     shares: InMemoryShareIndex = field(default_factory=InMemoryShareIndex)
     quota: InMemoryVisitorQuota = field(default_factory=InMemoryVisitorQuota)
+    reviewer: FakeReviewer = field(default_factory=FakeReviewer)
+    rubrics: InMemoryRubricLibrary = field(default_factory=InMemoryRubricLibrary)
     ready: bool = True
 
     def __post_init__(self) -> None:
@@ -87,6 +91,8 @@ def build(settings: Settings, f: Fakes) -> Container:
         images=f.images,
         segmentation=f.sam,
         speech=f.speech,
+        reviewer=f.reviewer,
+        rubrics=f.rubrics,
         ledger=f.ledger,
         ids=SequentialIds("id"),
         readiness={"storage": storage_check},

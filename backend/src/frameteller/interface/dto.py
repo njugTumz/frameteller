@@ -16,6 +16,9 @@ from frameteller.application.events import (
     ShotCreated,
     ShotsReplaced,
     ShotUpdated,
+    SupervisorFixed,
+    SupervisorNeedsUser,
+    SupervisorReviewed,
     TranscriptUpdated,
     TurnFinished,
 )
@@ -36,11 +39,15 @@ from frameteller.domain import (
     Character,
     MediaRef,
     ObjectMask,
+    Outcome,
     Panel,
     PanelStyle,
     Project,
+    SheetReview,
     Shot,
+    SupervisorEntry,
     TranscriptTurn,
+    Verdict,
 )
 
 Id = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
@@ -197,6 +204,70 @@ class LayerOut(BaseModel):
         return cls(object_id=t.object_id, dx=t.dx, dy=t.dy, scale=t.scale, deleted=t.deleted)
 
 
+class IssueOut(BaseModel):
+    rule_id: str = Field(description="The rubric rule, e.g. CONT-04 (agents/*.md).")
+    severity: Literal["blocker", "major", "minor"]
+    description: str
+
+
+class ProjectSettings(BaseModel):
+    """Per-project settings. continuity_checks: the supervisor reviews every sheet and render (on by default)."""
+
+    continuity_checks: bool
+
+
+class ReviewOut(BaseModel):
+    """The continuity supervisor's word on a panel or a reference sheet (ADR 0012)."""
+
+    outcome: Literal["checked", "fixed", "needs_user", "accepted"]
+    summary: str = Field(description='For the badge, e.g. "Fixed: remove the blue vest".')
+    issues: list[IssueOut]
+    fix_instruction: str = Field(description='The suggested appearance edit; "" when an edit cannot fix it.')
+    model: str = Field(description="The model that checked it, e.g. muse-glimmer or muse-spark-1.3.")
+    confidence: float
+    fixes: int = Field(description="Automatic fixes applied before this verdict.")
+    rubrics: dict[str, str] = Field(description="Rubric id -> hash of the rubric text the check used.")
+
+    @classmethod
+    def of(cls, outcome: Outcome, summary: str, v: Verdict, fixes: int = 0) -> ReviewOut:
+        return cls(
+            outcome=outcome.value,
+            summary=summary,
+            issues=[
+                IssueOut(rule_id=i.rule_id, severity=i.severity.value, description=i.description) for i in v.issues
+            ],
+            fix_instruction=v.fix_instruction if v.can_fix else "",
+            model=v.model,
+            confidence=v.confidence,
+            fixes=fixes,
+            rubrics=dict(v.rubrics),
+        )
+
+
+class SupervisorEntryOut(BaseModel):
+    at: str
+    subject: str
+    outcome: Literal["checked", "fixed", "needs_user", "accepted"]
+    message: str
+    rule_ids: list[str]
+    model: str
+    shot_id: str | None
+    character_id: str | None
+
+    @classmethod
+    def of(cls, e: SupervisorEntry) -> SupervisorEntryOut:
+        return cls(
+            at=e.at,
+            subject=e.subject,
+            outcome=e.outcome.value,
+            message=e.message,
+            rule_ids=list(e.rule_ids),
+            model=e.model,
+            shot_id=e.shot_id,
+            character_id=e.character_id,
+        )
+
+
 class PanelOut(BaseModel):
     revision: int = Field(description="The model render the masks and layers belong to.")
     shown_revision: int = Field(description="What image_url shows: the composite of the layers, or the render.")
@@ -208,6 +279,7 @@ class PanelOut(BaseModel):
     masks: list[MaskOut]
     layers: list[LayerOut]
     outdated: bool = Field(description="The shot changed after this was drawn; draw it again.")
+    review: ReviewOut | None = Field(default=None, description="The continuity check of this render, once done.")
 
     @classmethod
     def of(cls, p: Panel) -> PanelOut:
@@ -223,6 +295,9 @@ class PanelOut(BaseModel):
             masks=[MaskOut.of(m) for m in p.masks.values()],
             layers=[LayerOut.of(t) for t in p.transforms],
             outdated=p.outdated,
+            review=ReviewOut.of(p.review.outcome, p.review.summary, p.review.verdict, p.review.fixes)
+            if p.review and p.review.revision == p.revision
+            else None,
         )
 
 
@@ -259,10 +334,18 @@ class CharacterOut(BaseModel):
     name: str
     description: str
     reference_url: str | None
+    review: ReviewOut | None = Field(default=None, description="The continuity check of this reference sheet.")
 
     @classmethod
-    def of(cls, c: Character) -> CharacterOut:
-        return cls(id=c.id, name=c.name, description=c.canonical_description, reference_url=media_url(c.reference))
+    def of(cls, c: Character, review: SheetReview | None = None) -> CharacterOut:
+        current = review if review and review.reference == c.reference else None
+        return cls(
+            id=c.id,
+            name=c.name,
+            description=c.canonical_description,
+            reference_url=media_url(c.reference),
+            review=ReviewOut.of(current.outcome, current.summary, current.verdict) if current else None,
+        )
 
 
 class CastOut(BaseModel):
@@ -310,6 +393,10 @@ class ProjectOut(BaseModel):
     animatic: AnimaticOut | None = Field(description="The latest exported animatic.")
     share_token: str | None = Field(description="The live share link's token: {api}/s/{token}. None when off.")
     share_public: bool = Field(description="Search engines may index the share page. Unlisted (noindex) when false.")
+    continuity_checks: bool = Field(default=True, description="The continuity supervisor checks sheets and panels.")
+    supervisor: list[SupervisorEntryOut] = Field(
+        default_factory=list, description="The supervisor's decisions, oldest first (the last 100)."
+    )
 
     @classmethod
     def of(cls, p: Project) -> ProjectOut:
@@ -318,7 +405,8 @@ class ProjectOut(BaseModel):
             title=p.title,
             style=p.style.value,
             cast=CastOut(
-                status=p.bible.status.value, characters=[CharacterOut.of(c) for c in p.bible.characters.values()]
+                status=p.bible.status.value,
+                characters=[CharacterOut.of(c, p.sheet_reviews.get(c.id)) for c in p.bible.characters.values()],
             ),
             turns=[TurnOut.of(t) for t in p.turns],
             shots=[ShotOut.of(s, p.panels.get(s.id)) for s in p.shots],
@@ -329,6 +417,8 @@ class ProjectOut(BaseModel):
             animatic=AnimaticOut.of(p.animatic) if p.animatic else None,
             share_token=p.share_token,
             share_public=p.share_public,
+            continuity_checks=p.continuity_checks,
+            supervisor=[SupervisorEntryOut.of(e) for e in p.supervisor_log],
         )
 
 
@@ -522,6 +612,30 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
             return {"type": "audio.silent", "after_ms": after_ms, "level": level}
         case SessionEnded(turns, shots, heard):
             return {"type": "session.ended", "turns": turns, "shots": shots, "heard": heard}
+        case SupervisorReviewed(entry, revision):
+            return {
+                "type": "supervisor.reviewed",
+                "entry": SupervisorEntryOut.of(entry).model_dump(),
+                "revision": revision,
+            }
+        case SupervisorFixed(entry, revision, fixes):
+            return {
+                "type": "supervisor.fixed",
+                "entry": SupervisorEntryOut.of(entry).model_dump(),
+                "revision": revision,
+                "fixes": fixes,
+            }
+        case SupervisorNeedsUser(entry, issues, fix_instruction, revision):
+            return {
+                "type": "supervisor.needs_user",
+                "entry": SupervisorEntryOut.of(entry).model_dump(),
+                "issues": [
+                    IssueOut(rule_id=i.rule_id, severity=i.severity.value, description=i.description).model_dump()
+                    for i in issues
+                ],
+                "fix_instruction": fix_instruction,
+                "revision": revision,
+            }
 
 
 def error_message(message: str, *, fatal: bool = False) -> dict[str, Any]:
