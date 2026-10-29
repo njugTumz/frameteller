@@ -12,11 +12,12 @@ One live session per project at a time. Browsers must connect from an origin in 
 
 | Message | When | Shape |
 |---|---|---|
-| Start | First message, within 10 s | JSON `{"mode": "narrate" \| "co_direct", "keywords": ["Mira", ...], "keep_audio": true}` |
+| Start | First message, within 10 s | JSON `{"mode": "narrate" \| "co_direct" \| "teleprompter" \| "read", "keywords": ["Mira", ...], "keep_audio": true}`, plus `script`, `script_format`, `voice` and `language` for scripts. See [Scripts](#scripts). |
 | Audio | Then, repeatedly | **Binary** frames of raw PCM, signed 16-bit little-endian, mono, **24 kHz**. Even length, at most 32,768 bytes (about 0.34 s). Send at real-time pace. |
 | Beat | When a new shot starts | JSON `{"type": "beat"}`. See [Beats](#beats). |
 | Correction | Any time, also after `session.ended` | JSON `{"type": "transcript.corrected", "turn_id": "55a635ca-b1", "text": "Scene one. Night. ..."}`. `text` is 1–2,000 characters. |
 | End | When the narrator is done | JSON `{"type": "end"}` |
+| Pause, Continue | `read` mode only | JSON `{"type": "pause"}`, `{"type": "continue"}`. See [Scripts](#scripts). |
 
 - `mode` is fixed for the session. `narrate` uses low-latency turn endpointing; `co_direct` adds speaker labels (`A`, `B`) but only closes a turn when the speaker changes or the stream ends. In our measurement, one narrator gave a single 42-second turn (see the [findings](spikes/2026-10-28-findings.md)).
 - `keywords` (at most 50, each trimmed to 40 characters) bias recognition towards character and place names.
@@ -43,6 +44,11 @@ Every server message is JSON with a `type`.
 | `session.ended` | `turns, shots, heard` | The narration is fully transcribed and directed. `heard: false` means no words were heard at all: say so rather than "done". |
 | `supervisor.reviewed` | `entry, revision` | The continuity supervisor checked a panel (`revision`) or a reference sheet (`revision: null`) and found no blocker or major issue. Re-read the project for the badge. |
 | `supervisor.fixed` | `entry, revision, fixes` | The supervisor fixed a draft by itself with `fixes` appearance edits; `revision` is the fixed render. Re-read the project for the new image and the badge. |
+| `script.accepted` | `episodes: [{number, paragraphs: [{narration, direction}]}]` | `teleprompter` and `read`: the script as the server split it, sent right after `session.started`. Paragraphs are counted from 0 through the whole script. |
+| `teleprompter.advanced` | `paragraph` | The reader finished a paragraph (or pressed Space): `paragraph` is now current. Highlight it and keep the next one visible. |
+| `script.voiced` | `paragraph, episode, text, original, audio_url, duration_ms` | `read`: a paragraph's narration is ready. `text` is what the voice says (translated if needed); `original` is the script's paragraph. Play `audio_url` (24 kHz mono WAV) after the clips before it. |
+| `script.paused` | `next_paragraph, next_episode, reason` | `read`: the reading stopped before `next_paragraph`. `reason: "user"` after a Pause; `"episode"` at an episode break, while the finished episode's drafts are drawn: show "Episode N is next". |
+| `script.resumed` | `next_paragraph` | `read`: the reading goes on. |
 | `supervisor.needs_user` | `entry, issues, fix_instruction, revision` | The supervisor wants the user to look: `issues` are `{rule_id, severity, description}` (blocker and major only). `fix_instruction` is the suggested appearance edit, or `""` when an edit cannot fix it. Offer "Apply suggested fix", "Accept anyway" and "Redraw". |
 
 `entry` is one line of the supervisor's feed, as `ProjectOut.supervisor` lists it: `{at, subject, outcome, message, rule_ids, model, shot_id, character_id}`. `outcome` is `checked`, `fixed`, `needs_user` or `accepted`; `model` is the model that served the review (`muse-glimmer` or `muse-spark-1.3`); `message` is ready to show, e.g. "Shot 4: remove the blue vest (CONT-04, Pip wears a blue vest that is not on his reference sheet). Fixed in 1 try." The badge itself is `PanelOut.review` / `CharacterOut.review` (`outcome, summary, issues, fix_instruction, model, confidence, fixes, rubrics`), shown only for the render or sheet it checked.
@@ -79,6 +85,21 @@ transcript.partial  (several)
 turn.completed      (the words since the previous beat, ~0.8 s later)
 shot.created
 ```
+
+## Scripts
+
+The teleprompter and "Read it to me" ([ADR 0015](adr/0015-script-mode.md)) start with a script:
+
+```json
+{"mode": "teleprompter", "script": "Wide shot. Lena feeds the pigeons.\n\nA kite drifts down.", "script_format": "text", "keep_audio": true}
+{"mode": "read", "script": "...", "script_format": "fountain", "voice": "en-US-BrandonMultilingualNeural", "language": "fr-FR"}
+```
+
+- `script_format` is `text` (default), `markdown` or `fountain`. Each paragraph is one beat. Framing cues ("Wide shot.") go to the director only. A line `Episode N`, `EPISODE N` or `Ep. N` starts an episode. Shots carry `episode`; turns carry `episode` and `direction`.
+- A script that is too long (over 4,000 characters), has too many episodes (over 3) or too many paragraphs in one episode (over 12), or is empty, gets a fatal `error` that says what to change, then close code 4400.
+- **teleprompter:** send audio as for `narrate`. Each paragraph is cut when the transcript has covered its end (fuzzy, tolerant of misheard words) and the reader pauses or reads on. `{"type": "beat"}` still cuts by hand; a beat within 2.5 s of an automatic cut, before any new words, only confirms it. Turn text is the script's words.
+- **read:** send no audio. `voice` and `language` (a locale from `GET /voices`; default Brandon in English) must be offered, or the start is refused with 4400. `{"type": "pause"}` holds the reading before the next paragraph; `{"type": "continue"}` goes on, also at an episode break before its drafts are done. `{"type": "end"}` stops reading. The reading is kept as the project's narration with its `voice` and `language`, and turn text is what the voice said.
+- `GET /voices` returns `{available, default, voices: [{name, display_name, gender, accent, languages: [{code, locale, name}], preview_url}]}`; `available: false` means "Read it to me" is not set up. `GET /voices/{name}/preview?language=fr-FR` returns a short WAV sample.
 
 ## Corrections
 
@@ -125,11 +146,11 @@ Before closing with a 44xx code (not 4503), the server sends a fatal `error` wit
 
 | Response | When |
 |---|---|
-| 429 `limit_reached` | A visitor started 3 stories today (visitor = hash of IP and the `X-Visitor-Id` browser id; neither is stored raw), or a story used its 30 renders and edits, or its 3 exports. The message says what to do next. |
+| 429 `limit_reached` | A visitor started 3 stories today (visitor = hash of IP and the `X-Visitor-Id` browser id; neither is stored raw), or a story used its 60 renders and edits, or its 3 exports, or a visitor had 12,000 characters read aloud today (all visitors together: 200,000). The message says what to do next. |
 | 503 `studio_full` | The day's global spend cap (`BUDGET_PER_DAY_USD`, USD 10 in production). |
 | 503 `paused` | `DEMO_PAUSED=true`. Everything but `/healthz`, `/readyz`, `/status`, `/s/*` and `/shares/*`; sessions close with 4503. |
 
-In a live session, the 12-shot limit, the 3-minute narration limit and a director refusal (a real person or a franchise character) arrive as non-fatal `error` events. At the narration limit the server ends the telling as if the narrator pressed Stop.
+In a live session, the 12-shots-per-episode limit, the 3-minute narration limit and a director refusal (a real person or a franchise character) arrive as non-fatal `error` events. At the narration limit the server ends the telling as if the narrator pressed Stop.
 
 ## Share links
 

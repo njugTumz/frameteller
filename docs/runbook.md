@@ -126,6 +126,25 @@ Do this at once if the key may have leaked (it starts with `LLM_`; never paste i
 Staging has its own key in the `staging` environment; rotate it the same way with `--env staging` and
 `ca-frameteller-staging` in `rg-frameteller-staging`.
 
+## The Azure Speech key ("Read it to me")
+
+"Read it to me" uses Azure AI Speech Text-to-Speech with a key ([ADR 0015](adr/0015-script-mode.md)): the
+resource (`isaac-maqegffq-eastus2`, region eastus2) is in a tenant our deployment identity cannot see, so keyless
+auth is not possible. Without the key the studio still runs and offers narration and the teleprompter.
+
+Store it for both environments, and for local tests and fixture recording, without it ever showing on screen:
+
+```bash
+read -s KEY && printf %s "$KEY" | gh secret set AZURE_SPEECH_KEY --env staging -R njugTumz/frameteller \
+  && printf %s "$KEY" | gh secret set AZURE_SPEECH_KEY --env production -R njugTumz/frameteller; unset KEY
+umask 077; read -s KEY && printf %s "$KEY" > ~/.config/frameteller/speech.key; unset KEY
+```
+
+The next deploy passes it to the Container App as the `azure-speech-key` secret. To rotate it, regenerate the
+key in the Azure portal (Keys and Endpoint), store it as above and redeploy, or set it in the running app like
+the Meta key (`az containerapp secret set ... --secrets "azure-speech-key=$KEY"`). Check it with
+`curl -s https://api.frameteller.com/voices | jq .available`.
+
 ## Spend and errors
 
 | What | Where |
@@ -151,8 +170,10 @@ ContainerAppConsoleLogs_CL
 ```
 
 The public-demo limits are settings (defaults shown): `BUDGET_PER_DAY_USD=10`,
-`LIMIT_PROJECTS_PER_VISITOR_PER_DAY=3`, `LIMIT_NARRATION_MINUTES_PER_SESSION=3`, `LIMIT_SHOTS_PER_PROJECT=12`,
-`LIMIT_RENDERS_PER_PROJECT=30`, `LIMIT_EXPORTS_PER_PROJECT=3`. Change one for a day with
+`LIMIT_PROJECTS_PER_VISITOR_PER_DAY=3`, `LIMIT_NARRATION_MINUTES_PER_SESSION=3`, `LIMIT_SHOTS_PER_EPISODE=12`,
+`LIMIT_RENDERS_PER_PROJECT=60`, `LIMIT_EXPORTS_PER_PROJECT=3`, `LIMIT_EPISODES_PER_SCRIPT=3`,
+`LIMIT_SCRIPT_CHARACTERS=4000`, `LIMIT_SPEECH_CHARACTERS_PER_VISITOR_PER_DAY=12000` and, for all visitors
+together, `SPEECH_CHARACTERS_PER_DAY=200000` (Text-to-Speech, USD 15 per million characters). Change one for a day with
 `az containerapp update --set-env-vars`, like the kill switch.
 
 ## When Meta's API is down

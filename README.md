@@ -28,6 +28,16 @@ The animatic is rendered with ffmpeg: each panel shows for its shot's spoken tim
 
 Moving or resizing an object is saved on the panel: the first move asks Muse Image for a clean plate (the picture with only that object removed), and the server composites the SAM cut-out onto it at its new place ([ADR 0010](docs/adr/0010-clean-plates.md)). You can also download a storyboard sheet as a PDF and share a read-only link whose preview shows on X.
 
+## Three ways to tell it
+
+The start screen asks "How you'll tell it" ([ADR 0015](docs/adr/0015-script-mode.md)):
+
+- **Narrate.** Make the story up out loud and press Space before each new shot. Muse Voice Transcribe streams the transcript, and the animatic uses your recording.
+- **Teleprompter.** Paste a script, or upload a `.txt`, `.md` or `.fountain` file, then read it aloud while it scrolls. The current paragraph is highlighted and the next one is visible. Voice Transcribe follows along, and each paragraph is cut into a shot when you reach its end and pause. Matching is fuzzy, so misheard words still line up, and Space still works. The animatic uses your recording.
+- **Read it to me.** Paste a script, choose one of five multilingual neural voices (each with a preview) and a language: English, French, Spanish, Hindi, Arabic or Portuguese. You don't speak. Azure Text-to-Speech reads each paragraph aloud in the browser while its shots are directed and drawn. For another language, Muse Spark translates the narration first, and the panels follow your original words. The animatic uses the synthesized narration, and the share page names the voice.
+
+In both script modes each paragraph is one shot. Cues like "Wide shot." guide the camera. A line "Episode 2" starts a new episode with the same cast: shot numbers restart, and the storyboard groups shots by episode. In "Read it to me" the reading pauses after each episode until its draft panels are drawn ("Episode 2 is next"), then goes on by itself. The public demo takes scripts of up to 4,000 characters, 3 episodes and 12 shots per episode.
+
 ## Continuity supervisor
 
 Reference sheets keep characters consistent, but not every time. In our own runs, a fox's reference sheet came back in the other character's green sweater, and a panel put him in a blue vest. The continuity supervisor is an agent that checks every frame so the creator doesn't have to ([ADR 0012](docs/adr/0012-continuity-supervisor.md)).
@@ -258,6 +268,8 @@ Everything in this repository was built during the event. The commit history is 
 - [x] Storyboard sheet PDF, and revocable read-only share links that preview on X
 - [x] The continuity supervisor: versioned rubrics, automatic draft fixes, badges and a feed, Muse Glimmer on Modal with a Muse Spark fallback, and a labelled eval set ([ADR 0012](docs/adr/0012-continuity-supervisor.md), [ADR 0013](docs/adr/0013-glimmer-on-modal.md))
 - [x] Stray beats: a beat with no words or one stray word joins the next beat instead of becoming a shot
+- [x] Edits from our stored panel image, never a response chain that can expire ([ADR 0014](docs/adr/0014-edit-from-stored-images.md)); Glimmer reviews only while the warm-up script holds a lease
+- [x] Three ways to tell it: narrate, a teleprompter that follows your reading, or "Read it to me" with Azure Text-to-Speech voices in six languages; scripts with episodes and Fountain ([ADR 0015](docs/adr/0015-script-mode.md))
 - [ ] TODO: list features as they ship
 
 ## License
