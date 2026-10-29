@@ -10,6 +10,8 @@ Running notes for the optional feedback fields in the submission. Whenever somet
 
 ## Meta products
 
+- 2026-10-29 · muse-voice-transcribe-1.0 · good · As a teleprompter follower (ADR 0015), the realtime transcript was good enough to cut a 6-paragraph, 49 s reading automatically: every cut landed in the pause before the next paragraph and reached us 0.6–0.9 s after the speech ended.
+- 2026-10-29 · muse-voice-transcribe-1.0 · idea · Word-level timestamps on partials would let a teleprompter cut at the exact last word; with turn-level times we cut at the first audio position after the end was heard, or at `speechEnd`.
 - 2026-10-29 · Muse Glimmer · issue · On Meta's `vllm/vllm-openai:muse-glimmer` image with `--reasoning-parser muse_glimmer`, a strict `json_schema` response format (and `structured_outputs`) was accepted but not enforced: answers had extra keys, an `issues` object instead of the required array, or no `issues` at all. Spelling the shape out in the prompt fixed it; the Run inference guide could say whether guided decoding applies after the reasoning section.
 - 2026-10-29 · Muse Glimmer · good · As a continuity reviewer on 20 labelled panels and sheets, Glimmer caught all 11 planted failures with the right rule and never proposed an edit to a clean image; it flagged 3 of 9 clean ones. Good enough to screen reviews before muse-spark-1.3 confirms (docs/supervisor-eval.md).
 - 2026-10-29 · muse-spark-1.3 · good · With two 768 px images, a rubric and a strict schema (rule ids as an enum), image review scored 11/11 with no false flags on our eval set at 4.7 s median and ~USD 0.006 per review, at low reasoning effort.
