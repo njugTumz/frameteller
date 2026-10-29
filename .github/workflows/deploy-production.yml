@@ -164,14 +164,15 @@ jobs:
 
       - name: The studio answers with its security headers
         run: |
-          for attempt in $(seq 12); do
+          # The old site keeps answering 200 for a little while after an upload: wait for the new headers.
+          for attempt in $(seq 18); do
             code=$(curl -s -o /dev/null -D /tmp/headers -w '%{http_code}' --max-time 20 https://app.frameteller.com/ || true)
-            [ "$code" = "200" ] && break
-            echo "HTTP $code (attempt $attempt), retrying"
+            if [ "$code" = "200" ] && grep -i '^content-security-policy:' /tmp/headers | grep -q "$VITE_API_BASE_URL"; then
+              echo "HTTP 200 with a CSP naming $VITE_API_BASE_URL"
+              exit 0
+            fi
+            echo "HTTP $code, CSP not updated yet (attempt $attempt), retrying"
             sleep 10
           done
-          [ "$code" = "200" ] || exit 1
-          grep -i '^content-security-policy:' /tmp/headers | grep -q "$VITE_API_BASE_URL" || {
-            echo "::error::The CSP does not name $VITE_API_BASE_URL"
-            exit 1
-          }
+          echo "::error::The studio does not answer 200 with a CSP naming $VITE_API_BASE_URL"
+          exit 1
