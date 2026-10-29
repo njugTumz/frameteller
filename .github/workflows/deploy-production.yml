@@ -79,6 +79,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Production API URL
+        run: |
+          # The studio and its CSP must point at the custom domain, never a raw Container Apps host (staging's or
+          # production's): that would break with a new environment and bypass api.frameteller.com.
+          if [ "$VITE_API_BASE_URL" != "https://api.frameteller.com" ]; then
+            echo "::error::VITE_API_BASE_URL is '$VITE_API_BASE_URL'. Production must use https://api.frameteller.com: gh variable set VITE_API_BASE_URL --env production --body https://api.frameteller.com"
+            exit 1
+          fi
+
       - name: Meta key is set
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
@@ -145,6 +154,18 @@ jobs:
       - name: Build (indexable share pages, everything else noindex)
         working-directory: frontend
         run: npm run build && npm run swa:config
+
+      - name: No azurecontainerapps.io URL in the production build
+        working-directory: frontend
+        run: |
+          if grep -rIl 'azurecontainerapps\.io' dist; then
+            echo "::error::The production build names an azurecontainerapps.io host (files above). It must only use https://api.frameteller.com."
+            exit 1
+          fi
+          grep -q "connect-src 'self' https://api.frameteller.com wss://api.frameteller.com" dist/staticwebapp.config.json || {
+            echo "::error::dist/staticwebapp.config.json has no connect-src for https://api.frameteller.com and wss://api.frameteller.com"
+            exit 1
+          }
 
       - name: Static Web App deployment token
         id: site
