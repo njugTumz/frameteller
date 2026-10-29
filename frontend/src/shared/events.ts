@@ -6,13 +6,20 @@ import type { Character, ReviewIssue, Shot, SupervisorEntry, Turn } from './api/
 
 // ---- client → server ----
 
-export type SessionMode = 'narrate' | 'co_direct'
+export type SessionMode = 'narrate' | 'co_direct' | 'teleprompter' | 'read'
+export type ScriptFormat = 'text' | 'markdown' | 'fountain'
 
 export interface StartMessage {
   mode: SessionMode
   keywords: string[]
   /** Keep the recording for the animatic's voice track. Only with the narrator's consent. */
   keep_audio: boolean
+  /** Teleprompter and "Read it to me" (ADR 0015). */
+  script?: string
+  script_format?: ScriptFormat
+  /** "Read it to me": a voice and a language locale from GET /voices. */
+  voice?: string
+  language?: string
 }
 export interface BeatMessage {
   type: 'beat'
@@ -25,7 +32,11 @@ export interface CorrectionMessage {
 export interface EndMessage {
   type: 'end'
 }
-export type ClientMessage = BeatMessage | CorrectionMessage | EndMessage
+/** "Read it to me": hold the reading before the next paragraph, or go on (also past an episode break). */
+export interface ReadingMessage {
+  type: 'pause' | 'continue'
+}
+export type ClientMessage = BeatMessage | CorrectionMessage | EndMessage | ReadingMessage
 
 export const MAX_CORRECTION_CHARS = 2000
 export const MAX_KEYWORDS = 50
@@ -69,6 +80,29 @@ export type ServerEvent =
   | { type: 'supervisor.reviewed'; entry: SupervisorEntry; revision: number | null }
   | { type: 'supervisor.fixed'; entry: SupervisorEntry; revision: number; fixes: number }
   | { type: 'supervisor.needs_user'; entry: SupervisorEntry; issues: ReviewIssue[]; fix_instruction: string; revision: number | null }
+  // Scripts (ADR 0015). Paragraphs are counted from 0 through the whole script.
+  | { type: 'script.accepted'; episodes: ScriptEpisode[] }
+  | { type: 'teleprompter.advanced'; paragraph: number }
+  | {
+      type: 'script.voiced'
+      paragraph: number
+      episode: number
+      text: string
+      original: string
+      audio_url: string
+      duration_ms: number
+    }
+  | { type: 'script.paused'; next_paragraph: number; next_episode: number; reason: 'user' | 'episode' }
+  | { type: 'script.resumed'; next_paragraph: number }
+
+export interface ScriptParagraph {
+  narration: string
+  direction: string
+}
+export interface ScriptEpisode {
+  number: number
+  paragraphs: ScriptParagraph[]
+}
 
 export type ServerEventOf<T extends ServerEvent['type']> = Extract<ServerEvent, { type: T }>
 
@@ -139,11 +173,16 @@ export function isSupervisorEntry(v: unknown): v is SupervisorEntry {
 
 const isIssue = (v: unknown): v is ReviewIssue => isObj(v) && isStr(v.rule_id) && isStr(v.severity) && isStr(v.description)
 const JOB_STATUSES: readonly string[] = ['queued', 'running', 'succeeded', 'failed']
+const MODES: readonly string[] = ['narrate', 'co_direct', 'teleprompter', 'read']
+
+const isParagraph = (v: unknown): v is ScriptParagraph => isObj(v) && isStr(v.narration) && isStr(v.direction)
+const isEpisode = (v: unknown): v is ScriptEpisode =>
+  isObj(v) && isNum(v.number) && Array.isArray(v.paragraphs) && v.paragraphs.every(isParagraph)
 
 function check(e: Json): boolean {
   switch (e.type) {
     case 'session.started':
-      return e.mode === 'narrate' || e.mode === 'co_direct'
+      return isStr(e.mode) && MODES.includes(e.mode)
     case 'transcript.partial':
       return isStr(e.text)
     case 'turn.completed':
@@ -185,6 +224,23 @@ function check(e: Json): boolean {
         isStr(e.fix_instruction) &&
         isNumOrNull(e.revision)
       )
+    case 'script.accepted':
+      return Array.isArray(e.episodes) && e.episodes.every(isEpisode)
+    case 'teleprompter.advanced':
+      return isNum(e.paragraph)
+    case 'script.voiced':
+      return (
+        isNum(e.paragraph) &&
+        isNum(e.episode) &&
+        isStr(e.text) &&
+        isStr(e.original) &&
+        isStr(e.audio_url) &&
+        isNum(e.duration_ms)
+      )
+    case 'script.paused':
+      return isNum(e.next_paragraph) && isNum(e.next_episode) && (e.reason === 'user' || e.reason === 'episode')
+    case 'script.resumed':
+      return isNum(e.next_paragraph)
     default:
       return false // unknown types are ignored, as the backend's own clients do
   }

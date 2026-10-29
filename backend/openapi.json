@@ -359,6 +359,32 @@
         "title": "JobStatusOut",
         "type": "object"
       },
+      "LanguageOut": {
+        "properties": {
+          "code": {
+            "description": "\"fr\"",
+            "title": "Code",
+            "type": "string"
+          },
+          "locale": {
+            "description": "\"fr-FR\": send it as the session's language.",
+            "title": "Locale",
+            "type": "string"
+          },
+          "name": {
+            "description": "The language's own name.",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "locale",
+          "name"
+        ],
+        "title": "LanguageOut",
+        "type": "object"
+      },
       "LayerOut": {
         "properties": {
           "deleted": {
@@ -439,6 +465,10 @@
       },
       "LimitsOut": {
         "properties": {
+          "episodes_per_script": {
+            "title": "Episodes Per Script",
+            "type": "integer"
+          },
           "exports_per_project": {
             "title": "Exports Per Project",
             "type": "integer"
@@ -455,15 +485,21 @@
             "title": "Renders Per Project",
             "type": "integer"
           },
-          "shots_per_project": {
-            "title": "Shots Per Project",
+          "script_characters": {
+            "title": "Script Characters",
+            "type": "integer"
+          },
+          "shots_per_episode": {
+            "title": "Shots Per Episode",
             "type": "integer"
           }
         },
         "required": [
           "projects_per_visitor_per_day",
           "narration_minutes_per_session",
-          "shots_per_project",
+          "shots_per_episode",
+          "episodes_per_script",
+          "script_characters",
           "renders_per_project",
           "exports_per_project"
         ],
@@ -522,6 +558,17 @@
             "title": "Duration Ms",
             "type": "integer"
           },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
           "session": {
             "title": "Session",
             "type": "string"
@@ -529,6 +576,18 @@
           "url": {
             "title": "Url",
             "type": "string"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The synthesized voice that read it; null: the user's own.",
+            "title": "Voice"
           }
         },
         "required": [
@@ -1010,6 +1069,18 @@
               }
             ]
           },
+          "narrated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The synthesized voice that narrated it (\"Brandon\"); null: the author's own voice.",
+            "title": "Narrated By"
+          },
           "public": {
             "description": "Indexable by search engines; otherwise the page must say noindex.",
             "title": "Public",
@@ -1109,6 +1180,12 @@
           },
           "duration_ms": {
             "title": "Duration Ms",
+            "type": "integer"
+          },
+          "episode": {
+            "default": 1,
+            "description": "Shots are numbered through the story; the studio counts per episode.",
+            "title": "Episode",
             "type": "integer"
           },
           "framing": {
@@ -1321,8 +1398,19 @@
       },
       "TurnOut": {
         "properties": {
+          "direction": {
+            "default": "",
+            "description": "From a script: the paragraph as written, with its cues.",
+            "title": "Direction",
+            "type": "string"
+          },
           "end_ms": {
             "title": "End Ms",
+            "type": "integer"
+          },
+          "episode": {
+            "default": 1,
+            "title": "Episode",
             "type": "integer"
           },
           "id": {
@@ -1397,6 +1485,76 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceOut": {
+        "properties": {
+          "accent": {
+            "description": "\"en-US\" or \"en-GB\".",
+            "title": "Accent",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/LanguageOut"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "preview_url": {
+            "description": "Add ?language=fr-FR for another language.",
+            "title": "Preview Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "gender",
+          "accent",
+          "languages",
+          "preview_url"
+        ],
+        "title": "VoiceOut",
+        "type": "object"
+      },
+      "VoicesOut": {
+        "properties": {
+          "available": {
+            "description": "False when Text-to-Speech is not set up: hide \"Read it to me\".",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "default": {
+            "title": "Default",
+            "type": "string"
+          },
+          "voices": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceOut"
+            },
+            "title": "Voices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "default",
+          "voices"
+        ],
+        "title": "VoicesOut",
         "type": "object"
       }
     }
@@ -3536,6 +3694,79 @@
         "summary": "Studio Status",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/voices": {
+      "get": {
+        "description": "The voices and languages offered. `available` is false when Text-to-Speech is not configured.",
+        "operationId": "list_voices_voices_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoicesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Voices",
+        "tags": [
+          "voices"
+        ]
+      }
+    },
+    "/voices/{voice}/preview": {
+      "get": {
+        "description": "One sentence in the voice and language, as WAV. Synthesized once, then kept.",
+        "operationId": "preview_voice_voices__voice__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voice",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z]{3,40}$",
+              "title": "Voice",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "default": "en",
+              "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+              "title": "Language",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "audio/wav": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Voice",
+        "tags": [
+          "voices"
         ]
       }
     }

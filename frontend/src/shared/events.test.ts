@@ -20,6 +20,12 @@ describe('parseServerEvent', () => {
     { type: 'audio.silent', after_ms: 8000, level: 0.003 },
     { type: 'job.updated', kind: 'export_animatic', key: 'k', status: 'running', shot_id: null, revision: null, message: null, progress: 0.4 },
     { type: 'job.updated', kind: 'compose_panel', key: 'k', status: 'queued', shot_id: 's1', revision: 1, message: null, progress: null },
+    { type: 'session.started', mode: 'read' },
+    { type: 'script.accepted', episodes: [{ number: 1, paragraphs: [{ narration: 'Lena waves.', direction: 'Wide shot. Lena waves.' }] }] },
+    { type: 'teleprompter.advanced', paragraph: 1 },
+    { type: 'script.voiced', paragraph: 0, episode: 1, text: 'Lena salue.', original: 'Lena waves.', audio_url: '/media/projects/p1/speech/a.wav', duration_ms: 1200 },
+    { type: 'script.paused', next_paragraph: 3, next_episode: 2, reason: 'episode' },
+    { type: 'script.resumed', next_paragraph: 3 },
   ])('accepts $type', (event) => {
     expect(parseServerEvent(raw(event))).toEqual(event)
   })
@@ -31,6 +37,9 @@ describe('parseServerEvent', () => {
     ['a missing field', raw({ type: 'turn.completed', turn: { id: 't1' } })],
     ['a wrong job status', raw({ type: 'job.updated', kind: 'generate_panel', key: 'k', status: 'done', shot_id: null, revision: null, message: null })],
     ['an error without fatal', raw({ type: 'error', message: 'x' })],
+    ['an unknown session mode', raw({ type: 'session.started', mode: 'sing' })],
+    ['a pause without a reason', raw({ type: 'script.paused', next_paragraph: 1, next_episode: 1 })],
+    ['a paragraph without its direction', raw({ type: 'script.accepted', episodes: [{ number: 1, paragraphs: [{ narration: 'x' }] }] })],
     ['a silence without its level', raw({ type: 'audio.silent', after_ms: 8000 })],
     ['a progress that is not a number', raw({ type: 'job.updated', kind: 'export_animatic', key: 'k', status: 'running', shot_id: null, revision: null, message: null, progress: 'half' })],
   ])('rejects %s', (_, text) => {

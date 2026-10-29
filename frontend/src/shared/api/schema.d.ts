@@ -580,6 +580,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/voices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Voices
+         * @description The voices and languages offered. `available` is false when Text-to-Speech is not configured.
+         */
+        get: operations["list_voices_voices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/voices/{voice}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Voice
+         * @description One sentence in the voice and language, as WAV. Synthesized once, then kept.
+         */
+        get: operations["preview_voice_voices__voice__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -739,6 +779,24 @@ export interface components {
              */
             status: "queued" | "running" | "succeeded" | "failed" | "unknown";
         };
+        /** LanguageOut */
+        LanguageOut: {
+            /**
+             * Code
+             * @description "fr"
+             */
+            code: string;
+            /**
+             * Locale
+             * @description "fr-FR": send it as the session's language.
+             */
+            locale: string;
+            /**
+             * Name
+             * @description The language's own name.
+             */
+            name: string;
+        };
         /** LayerOut */
         LayerOut: {
             /** Deleted */
@@ -786,6 +844,8 @@ export interface components {
         };
         /** LimitsOut */
         LimitsOut: {
+            /** Episodes Per Script */
+            episodes_per_script: number;
             /** Exports Per Project */
             exports_per_project: number;
             /** Narration Minutes Per Session */
@@ -794,8 +854,10 @@ export interface components {
             projects_per_visitor_per_day: number;
             /** Renders Per Project */
             renders_per_project: number;
-            /** Shots Per Project */
-            shots_per_project: number;
+            /** Script Characters */
+            script_characters: number;
+            /** Shots Per Episode */
+            shots_per_episode: number;
         };
         /** MaskOut */
         MaskOut: {
@@ -813,10 +875,17 @@ export interface components {
         NarrationOut: {
             /** Duration Ms */
             duration_ms: number;
+            /** Language */
+            language?: string | null;
             /** Session */
             session: string;
             /** Url */
             url: string;
+            /**
+             * Voice
+             * @description The synthesized voice that read it; null: the user's own.
+             */
+            voice?: string | null;
         };
         /** PanelOut */
         PanelOut: {
@@ -1042,6 +1111,11 @@ export interface components {
         SharedProjectOut: {
             animatic: components["schemas"]["SharedAnimaticOut"] | null;
             /**
+             * Narrated By
+             * @description The synthesized voice that narrated it ("Brandon"); null: the author's own voice.
+             */
+            narrated_by?: string | null;
+            /**
              * Public
              * @description Indexable by search engines; otherwise the page must say noindex.
              */
@@ -1081,6 +1155,12 @@ export interface components {
             dialogue: string;
             /** Duration Ms */
             duration_ms: number;
+            /**
+             * Episode
+             * @description Shots are numbered through the story; the studio counts per episode.
+             * @default 1
+             */
+            episode: number;
             /** Framing */
             framing: string;
             /** Id */
@@ -1155,8 +1235,19 @@ export interface components {
         };
         /** TurnOut */
         TurnOut: {
+            /**
+             * Direction
+             * @description From a script: the paragraph as written, with its cues.
+             * @default
+             */
+            direction: string;
             /** End Ms */
             end_ms: number;
+            /**
+             * Episode
+             * @default 1
+             */
+            episode: number;
             /** Id */
             id: string;
             /** Speaker */
@@ -1178,6 +1269,39 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VoiceOut */
+        VoiceOut: {
+            /**
+             * Accent
+             * @description "en-US" or "en-GB".
+             */
+            accent: string;
+            /** Display Name */
+            display_name: string;
+            /** Gender */
+            gender: string;
+            /** Languages */
+            languages: components["schemas"]["LanguageOut"][];
+            /** Name */
+            name: string;
+            /**
+             * Preview Url
+             * @description Add ?language=fr-FR for another language.
+             */
+            preview_url: string;
+        };
+        /** VoicesOut */
+        VoicesOut: {
+            /**
+             * Available
+             * @description False when Text-to-Speech is not set up: hide "Read it to me".
+             */
+            available: boolean;
+            /** Default */
+            default: string;
+            /** Voices */
+            voices: components["schemas"]["VoiceOut"][];
         };
     };
     responses: never;
@@ -2712,6 +2836,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudioStatusOut"];
+                };
+            };
+        };
+    };
+    list_voices_voices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoicesOut"];
+                };
+            };
+        };
+    };
+    preview_voice_voices__voice__preview_get: {
+        parameters: {
+            query?: {
+                language?: string;
+            };
+            header?: never;
+            path: {
+                voice: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/wav": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -2,7 +2,7 @@ import type { Character, Panel, Project, Review, Shot, SupervisorEntry, Turn } f
 import type { ServerEvent } from '../shared/events'
 
 export function turn(n: number, text = `words of beat ${n}`, over: Partial<Turn> = {}): Turn {
-  return { id: `t-b${n}`, text, start_ms: (n - 1) * 5000, end_ms: n * 5000, speaker: null, ...over }
+  return { id: `t-b${n}`, text, start_ms: (n - 1) * 5000, end_ms: n * 5000, speaker: null, direction: '', episode: 1, ...over }
 }
 
 export function shot(n: number, over: Partial<Shot> = {}): Shot {
@@ -16,6 +16,7 @@ export function shot(n: number, over: Partial<Shot> = {}): Shot {
     dialogue: '',
     duration_ms: 5000,
     source_turn_ids: [`t-b${n}`],
+    episode: 1,
     panel: null,
     ...over,
   }
