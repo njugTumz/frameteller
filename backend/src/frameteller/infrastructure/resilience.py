@@ -40,11 +40,33 @@ class RetryPolicy:
     timeout_s: float = 60.0
     base_delay_s: float = 0.5
     max_delay_s: float = 8.0
+    # A 429 means "later", not "broken": it gets more tries, waits longer, and never opens the breaker, so a
+    # busy minute queues work instead of failing it (ADR 0016).
+    rate_limited_attempts: int = 6
+    rate_limited_max_delay_s: float = 20.0
 
     def delay(self, attempt: int, rand: Callable[[], float] = random.random) -> float:
         """Full jitter: uniform in [0, min(max, base * 2**attempt)]."""
         cap: float = min(self.max_delay_s, self.base_delay_s * 2**attempt)
         return rand() * cap
+
+    def rate_limited_delay(self, attempt: int, retry_after_s: float | None, rand: Callable[[], float]) -> float:
+        """The server's Retry-After when it gives one (capped), else jittered backoff from at least 1 s."""
+        if retry_after_s is not None:
+            return min(self.rate_limited_max_delay_s, max(0.0, retry_after_s)) + rand()
+        cap: float = min(self.rate_limited_max_delay_s, max(1.0, self.base_delay_s * 2 ** (attempt + 1)))
+        return cap / 2 + rand() * cap / 2
+
+
+def retry_after(exc: BaseException) -> float | None:
+    """Seconds from a Retry-After header on a provider's 429, when there is one."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    value = headers.get("retry-after") if headers is not None else None
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass(slots=True)
@@ -158,7 +180,9 @@ class ModelCaller:
         policy: RetryPolicy,
     ) -> T:
         breaker = self._breakers.for_model(model)
-        for attempt in range(policy.attempts):
+        attempts = max(policy.attempts, policy.rate_limited_attempts)
+        failures = 0  # attempts that failed for a reason other than a rate limit
+        for attempt in range(attempts):
             breaker.before_call()
             started = time.perf_counter()
             try:
@@ -172,15 +196,21 @@ class ModelCaller:
                 if mapped is None:
                     raise
                 error, retryable = mapped
-                if retryable:
+                limited = isinstance(error, ModelRateLimitedError)
+                if retryable and not limited:
                     breaker.failure()
+                    failures += 1
                 log.warning(
                     "model call failed",
                     extra={"model": model, "operation": operation, "attempt": attempt + 1, "error": str(error)},
                 )
-                if not retryable or attempt + 1 == policy.attempts or breaker.is_open:
+                out_of_tries = attempt + 1 == attempts if limited else failures >= policy.attempts
+                if not retryable or out_of_tries or breaker.is_open:
                     raise error from exc
-                await self._sleep(policy.delay(attempt, self._rand))
+                if limited:
+                    await self._sleep(policy.rate_limited_delay(attempt, retry_after(exc), self._rand))
+                else:
+                    await self._sleep(policy.delay(attempt, self._rand))
                 continue
             breaker.success()
             await self.record(model, operation, _since(started), usage, ok=True)

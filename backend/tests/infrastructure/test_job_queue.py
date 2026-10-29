@@ -123,3 +123,38 @@ async def test_join_returns_when_jobs_queue_more_jobs() -> None:
     await queue.enqueue(Job("first", "first:1", {}))
     await asyncio.wait_for(queue.join(), 2)
     assert ran == ["first", "second", "third"]
+
+
+async def test_exports_run_in_their_own_lane_and_waiters_learn_their_place() -> None:
+    from frameteller.application.capacity import Gate
+
+    release = asyncio.Event()
+    ran: list[str] = []
+    places: list[tuple[str, int]] = []
+
+    async def export(job: Job) -> None:
+        ran.append(job.idempotency_key)
+        await release.wait()
+
+    async def panel(job: Job) -> None:
+        ran.append(job.idempotency_key)
+
+    async def on_waiting(job: Job, place: int, estimate_s: float) -> None:
+        places.append((job.idempotency_key, place))
+
+    q = InProcessJobQueue(
+        {"export": export, "panel": panel},
+        concurrency=4,
+        lanes={"export": Gate("exports", 1, typical_s=30)},
+        on_waiting=on_waiting,
+    )
+    for key in ("e1", "e2"):
+        await q.enqueue(Job("export", key))
+    await q.enqueue(Job("panel", "p1"))
+    await asyncio.sleep(0.01)
+    assert ran == ["e1", "p1"]  # the panel did not wait behind the exports
+    assert places == [("e2", 1)]
+    release.set()
+    await q.join()
+    assert ran == ["e1", "p1", "e2"]
+    assert places[-1] == ("e2", 0)

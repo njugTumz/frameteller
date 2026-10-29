@@ -20,8 +20,8 @@ from tests.fakes import InMemorySpendLedger
 REQ = httpx2.Request("POST", "https://api.meta.ai/v1/responses")
 
 
-def status_error(code: int) -> openai.APIStatusError:
-    response = httpx2.Response(code, request=REQ)
+def status_error(code: int, headers: dict[str, str] | None = None) -> openai.APIStatusError:
+    response = httpx2.Response(code, request=REQ, headers=headers)
     cls = openai.RateLimitError if code == 429 else openai.APIStatusError
     return cls(f"HTTP {code}", response=response, body=None)
 
@@ -64,8 +64,30 @@ async def test_retries_rate_limits_and_5xx_with_backoff_then_succeeds() -> None:
     h = Harness()
     result = await h.caller.call("muse-image-1.0", "generate", h.flaky(status_error(429), status_error(503)), POLICY)
     assert result == "ok"
-    assert h.sleeps == [0.5, 1.0]
+    assert h.sleeps == [1.0, 1.0]  # a 429 waits at least 1 s
     assert [u.ok for u in h.ledger.usage] == [False, False, True]
+
+
+async def test_rate_limits_queue_longer_and_never_open_the_breaker() -> None:
+    h = Harness()  # the breaker opens after 3 failures, and the policy allows 3 attempts for other errors
+    result = await h.caller.call("muse-image-1.0", "generate", h.flaky(*[status_error(429)] * 5), POLICY)
+    assert result == "ok"
+    assert len(h.sleeps) == 5
+    assert not h.breakers.for_model("muse-image-1.0").is_open
+    assert max(h.sleeps) <= POLICY.rate_limited_max_delay_s + 1
+
+
+async def test_rate_limits_give_up_after_their_own_bound() -> None:
+    h = Harness()
+    with pytest.raises(ModelRateLimitedError):
+        await h.caller.call("muse-image-1.0", "generate", h.flaky(*[status_error(429)] * 9), POLICY)
+    assert len(h.sleeps) == POLICY.rate_limited_attempts - 1
+
+
+async def test_rate_limits_honour_retry_after() -> None:
+    h = Harness()
+    await h.caller.call("muse-image-1.0", "generate", h.flaky(status_error(429, {"retry-after": "7"})), POLICY)
+    assert h.sleeps == [8.0]  # 7 s and up to 1 s of jitter
 
 
 async def test_does_not_retry_client_errors() -> None:

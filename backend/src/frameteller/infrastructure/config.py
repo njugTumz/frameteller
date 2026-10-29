@@ -8,6 +8,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from frameteller.application.budget import BudgetCalendar, parse_days
+from frameteller.application.capacity import CapacityLimits
 from frameteller.application.limits import DemoLimits
 
 AppEnv = Literal["local", "staging", "production"]
@@ -46,8 +48,26 @@ class Settings(BaseSettings):
     sam_max_side: int | None = Field(default=768, ge=256)  # ADR 0007
 
     budget_per_project_usd: float = Field(default=2.0, gt=0)
-    # The global daily cap across every project: past it, "The studio is full for today".
+    # The global daily cap across every project: past it, "The studio is full for today". Days are dates at
+    # BUDGET_UTC_OFFSET_HOURS (the team's UTC+4); BUDGET_DAYS_USD raises the cap on launch and judging days.
     budget_per_day_usd: float = Field(default=10.0, gt=0)
+    budget_days_usd: str = "2026-11-02:25,2026-11-05:25,2026-11-06:25,2026-11-07:25,2026-11-08:25"
+    budget_utc_offset_hours: float = Field(default=4, ge=-12, le=14)
+
+    # The judge pass: a private link (/judge#<JUDGE_TOKEN>) sets a signed cookie. Judges skip the per-visitor
+    # caps and the waiting room, and spend from their own reserved pool. Rotate by changing the token.
+    judge_token: SecretStr | None = None
+    judge_budget_per_day_usd: float = Field(default=15.0, ge=0)
+    judge_pass_days: int = Field(default=21, ge=1, le=60)
+    # The gallery's admin page: /admin#<ADMIN_TOKEN>, sent as a bearer token. Unset: no admin API.
+    admin_token: SecretStr | None = None
+
+    # Global concurrency (ADR 0016): past these, work waits in line with its place and an estimate.
+    capacity_sessions: int = Field(default=24, ge=1)  # live voice sessions and readings
+    capacity_images: int = Field(default=8, ge=1)  # Muse Image calls in flight
+    capacity_sam: int = Field(default=4, ge=1)  # SAM calls in flight
+    capacity_exports: int = Field(default=2, ge=1)  # animatic renders (ffmpeg), in their own queue
+    capacity_jobs: int = Field(default=32, ge=1)  # background jobs running at once (they mostly wait on models)
 
     # Public-demo guardrails (production defaults). A visitor is a hash of IP and browser id.
     limit_projects_per_visitor_per_day: int = Field(default=3, ge=1)
@@ -114,11 +134,26 @@ class Settings(BaseSettings):
         "glimmer_api_key",
         "rubrics_dir",
         "azure_speech_key",
+        "judge_token",
+        "admin_token",
         mode="before",
     )
     @classmethod
     def _empty_means_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("budget_days_usd")
+    @classmethod
+    def _days_parse(cls, value: str) -> str:
+        parse_days(value)  # ValueError: "BUDGET_DAYS_USD: ..." at startup
+        return value
+
+    @field_validator("judge_token", "admin_token")
+    @classmethod
+    def _long_tokens(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 32:
+            raise ValueError("needs at least 32 characters (make one with secrets.token_urlsafe(32))")
+        return value
 
     @model_validator(mode="after")
     def _director_for_env(self) -> Settings:
@@ -165,6 +200,24 @@ class Settings(BaseSettings):
             episodes_per_script=self.limit_episodes_per_script,
             script_characters=self.limit_script_characters,
             speech_characters_per_visitor_per_day=self.limit_speech_characters_per_visitor_per_day,
+        )
+
+    @property
+    def budget_calendar(self) -> BudgetCalendar:
+        return BudgetCalendar(
+            per_day_usd=self.budget_per_day_usd,
+            judge_per_day_usd=self.judge_budget_per_day_usd if self.judge_token else 0.0,
+            days_usd=parse_days(self.budget_days_usd),
+            utc_offset_hours=self.budget_utc_offset_hours,
+        )
+
+    @property
+    def capacity_limits(self) -> CapacityLimits:
+        return CapacityLimits(
+            sessions=self.capacity_sessions,
+            images=self.capacity_images,
+            sam=self.capacity_sam,
+            exports=self.capacity_exports,
         )
 
     @property

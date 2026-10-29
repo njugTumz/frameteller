@@ -606,7 +606,8 @@ class StudioStatusOut(BaseModel):
     """Whether the studio takes new work: the studio checks this before starting a story."""
 
     paused: bool = Field(description="The kill switch is on: show the back-soon page (shared storyboards still open).")
-    full: bool = Field(description="Today's global spend cap is reached: no new work until tomorrow (UTC).")
+    full: bool = Field(description="Today's spend cap is reached: no new work until midnight UTC+4.")
+    judge: bool = Field(default=False, description="This browser has a valid judge pass (show the badge).")
     limits: LimitsOut
 
     @classmethod

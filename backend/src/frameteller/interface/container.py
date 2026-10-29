@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 
 from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
+from frameteller.application.capacity import Capacity, GatedImages, GatedSegmentation
 from frameteller.application.events import JobUpdated
 from frameteller.application.limits import ProjectAllowance, SpeechAllowance, VisitorAllowance
 from frameteller.application.ports import (
@@ -152,6 +153,7 @@ class Container:
     apply_fix: ApplySuggestedFix
     accept_review: AcceptReview
     continuity_checks: SetContinuityChecks
+    capacity: Capacity = field(default_factory=Capacity)
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
     glimmer_lease: GlimmerLease | None = None  # set by the warm-up script (POST /internal/glimmer/lease)
@@ -192,12 +194,12 @@ def wire(
     clock = clock or SystemClock()
     limits = settings.demo_limits
     allowance = ProjectAllowance(repo, limits)
-    budget = LimitBudgetGuard(
-        ledger,
-        clock,
-        per_project_usd=settings.budget_per_project_usd,
-        per_day_usd=settings.budget_per_day_usd,
-    )
+    calendar = settings.budget_calendar
+    budget = LimitBudgetGuard(ledger, clock, per_project_usd=settings.budget_per_project_usd, calendar=calendar)
+    # ADR 0016: model calls in flight are limited globally; past a limit, work waits in line.
+    capacity = Capacity(settings.capacity_limits)
+    images = GatedImages(images, capacity.images)
+    segmentation = GatedSegmentation(segmentation, capacity.sam)
 
     async def on_status(job: Job, status: JobStatus, message: str | None) -> None:
         revision = job.payload.get("revision")
@@ -211,8 +213,27 @@ def wire(
         )
         await hub.publish(job.payload["project_id"], event)
 
+    async def on_waiting(job: Job, place: int, estimate_s: float) -> None:
+        revision = job.payload.get("revision")
+        event = JobUpdated(
+            job.kind,
+            job.idempotency_key,
+            "queued" if place else "running",
+            job.payload.get("shot_id"),
+            int(revision) if revision else None,
+            position=place or None,
+            estimate_s=estimate_s if place else None,
+        )
+        await hub.publish(job.payload["project_id"], event)
+
     handlers: dict[str, Handler] = {}
-    queue = InProcessJobQueue(handlers, on_status=on_status)
+    queue = InProcessJobQueue(
+        handlers,
+        concurrency=settings.capacity_jobs,
+        on_status=on_status,
+        lanes={job_kinds.EXPORT_ANIMATIC: capacity.exports},  # exports never hold up drawing
+        on_waiting=on_waiting,
+    )
 
     generate_panel = GeneratePanel(repo, images, budget, queue)
     pre_segment = PreSegmentPanel(repo, segmentation, budget, queue)
@@ -313,9 +334,8 @@ def wire(
         correct_transcript=correct_transcript,
         transcribe_instruction=TranscribeInstruction(repo, speech),
         delete_narration=DeleteNarration(repo, storage),
-        studio_status=GetStudioStatus(
-            ledger, clock, per_day_usd=settings.budget_per_day_usd, paused=settings.demo_paused, limits=limits
-        ),
+        studio_status=GetStudioStatus(ledger, clock, calendar=calendar, paused=settings.demo_paused, limits=limits),
+        capacity=capacity,
         apply_fix=ApplySuggestedFix(repo, queue, request_cast),
         accept_review=AcceptReview(repo),
         continuity_checks=SetContinuityChecks(repo),
@@ -357,7 +377,7 @@ def build_reviewer(
         policy = RetryPolicy(settings.retry_attempts, settings.text_timeout_s)
         return GlimmerReviewerAdapter(glimmer_client, caller, storage, settings.glimmer_model, policy)
     # One short try: a cold or slow Glimmer hands the review to Spark at once instead of retrying.
-    quick = RetryPolicy(1, settings.glimmer_timeout_s)
+    quick = RetryPolicy(1, settings.glimmer_timeout_s, rate_limited_attempts=1)
     glimmer = GlimmerReviewerAdapter(glimmer_client, caller, storage, settings.glimmer_model, quick)
     screen = settings.reviewer == "screen"
     if lease is None:

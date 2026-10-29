@@ -1,5 +1,9 @@
 """InProcessJobQueue: asyncio tasks with idempotency keys and status callbacks.
 
+Most jobs share one pool of slots (they mostly wait on models, whose own gates limit the calls in flight). A job
+kind can have its own gate instead, a lane: exports run in theirs, so a line of exports never holds up drawing
+(ADR 0016). While a job waits at any gate, its place in line goes to `on_waiting`.
+
 Fine for one container. Jobs are lost on restart, which is acceptable because every job is idempotent and
 the client can re-request it; a durable queue can replace this behind JobQueuePort.
 """
@@ -8,9 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from enum import StrEnum
 
+from frameteller.application.capacity import Gate, waiting_var
 from frameteller.application.errors import ApplicationError
 from frameteller.application.ports import Job
 
@@ -27,15 +32,24 @@ class JobStatus(StrEnum):
 
 
 StatusCallback = Callable[[Job, JobStatus, str | None], Awaitable[None]]
+# (job, place in line, estimated seconds); place 0: the wait is over.
+WaitingCallback = Callable[[Job, int, float], Awaitable[None]]
 
 
 class InProcessJobQueue:
     def __init__(
-        self, handlers: dict[str, Handler], *, concurrency: int = 3, on_status: StatusCallback | None = None
+        self,
+        handlers: dict[str, Handler],
+        *,
+        concurrency: int = 3,
+        on_status: StatusCallback | None = None,
+        lanes: Mapping[str, Gate] | None = None,
+        on_waiting: WaitingCallback | None = None,
     ) -> None:
         self._handlers = handlers
-        self._slots = asyncio.Semaphore(concurrency)
-        self._on_status = on_status
+        self._slots = Gate("jobs", concurrency, typical_s=20)
+        self._lanes = dict(lanes or {})
+        self._on_status, self._on_waiting = on_status, on_waiting
         self._status: dict[str, JobStatus] = {}
         self._messages: dict[str, str] = {}
         self._tasks: set[asyncio.Task[None]] = set()
@@ -65,8 +79,18 @@ class InProcessJobQueue:
             # this, gathering tasks that are already done never yields and the loop spins forever.
             await asyncio.sleep(0)
 
+    def gates(self) -> list[Gate]:
+        return [self._slots, *self._lanes.values()]
+
     async def _run(self, job: Job) -> None:
-        async with self._slots:
+        if self._on_waiting is not None:
+            on_waiting = self._on_waiting
+
+            async def report(place: int, estimate_s: float) -> None:
+                await on_waiting(job, place, estimate_s)
+
+            waiting_var.set(report)  # this task's own context: model gates inside the job report through it
+        async with self._lanes.get(job.kind, self._slots).slot():
             await self._set(job, JobStatus.RUNNING)
             try:
                 await self._handlers[job.kind](job)

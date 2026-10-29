@@ -56,6 +56,8 @@ class JobUpdated:
     revision: int | None = None
     message: str | None = None  # user-facing, on failure
     progress: float | None = None  # 0-1, for long jobs (the animatic export) while running
+    position: int | None = None  # queued behind a capacity limit: 1 is next (ADR 0016)
+    estimate_s: float | None = None  # about how long until it starts
 
 
 @dataclass(frozen=True, slots=True)

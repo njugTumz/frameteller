@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from frameteller.application.errors import ApplicationError, ProjectNotFoundError, ScriptError
 from frameteller.application.events import ProjectEvent
+from frameteller.application.lanes import is_judge
 from frameteller.application.scripts import accept_script
 from frameteller.application.use_cases import ClientInput, ReadControl, ReadingOptions
 from frameteller.application.use_cases.voices import DEFAULT_VOICE
@@ -212,6 +213,75 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
         await _close(ws, CLOSE_BAD_REQUEST)
         return
 
+    async with _seat(ws, c) as seat:
+        if seat is not None:  # None: left the waiting room
+            await _session(ws, project_id, c, start, script, reading, seat)
+    await _close(ws, 1000)
+
+
+@contextlib.asynccontextmanager
+async def _seat(ws: WebSocket, c: Deps) -> AsyncIterator[asyncio.Event | None]:
+    """A seat among the live sessions (ADR 0016), given up by setting the event it yields.
+
+    Past the limit the client waits in line, told its place and an estimate (queue.waiting) whenever the line
+    moves. Judges never wait. Yields None if the client left or ended while waiting."""
+
+    async def report(place: int, estimate_s: float) -> None:
+        if place:
+            await _send(ws, {"type": "queue.waiting", "position": place, "estimate_s": estimate_s})
+
+    seated, leave = asyncio.Event(), asyncio.Event()
+
+    async def hold() -> None:
+        async with c.capacity.sessions.slot(report, bypass=is_judge()):
+            seated.set()
+            await leave.wait()
+
+    holder = asyncio.create_task(hold())
+    await asyncio.sleep(0)  # a free seat is taken at once, before anything is read from the socket
+    try:
+        if seated.is_set() or await _wait_for(seated, ws):
+            yield leave
+        else:
+            yield None
+    finally:
+        leave.set()
+        if not seated.is_set():
+            holder.cancel()  # still in line: leave it
+        with contextlib.suppress(asyncio.CancelledError):
+            await holder
+
+
+async def _wait_for(seated: asyncio.Event, ws: WebSocket) -> bool:
+    """Wait for the seat while watching the socket: False if the client leaves or ends first."""
+    while not seated.is_set():
+        granted = asyncio.create_task(seated.wait())
+        message = asyncio.create_task(ws.receive())
+        done, _ = await asyncio.wait({granted, message}, return_when=asyncio.FIRST_COMPLETED)
+        if message not in done:
+            message.cancel()  # the client sends nothing before session.started
+            with contextlib.suppress(asyncio.CancelledError, WebSocketDisconnect):
+                await message
+            return True
+        granted.cancel()
+        try:
+            received = message.result()
+        except WebSocketDisconnect:
+            return False
+        if received["type"] == "websocket.disconnect" or isinstance(_parse(received.get("text")), ClientEnd):
+            return False
+    return True
+
+
+async def _session(
+    ws: WebSocket,
+    project_id: str,
+    c: Deps,
+    start: SessionStart,
+    script: Script | None,
+    reading: ReadingOptions | None,
+    seat: asyncio.Event,
+) -> None:
     audio = Audio(ws)
     with c.hub.subscribe(project_id) as events:
         forward = asyncio.create_task(_forward(ws, events))
@@ -230,6 +300,7 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
                 log.exception("voice session failed")
                 await _send(ws, error_message(ApplicationError.user_message, fatal=True))
             c.sessions.release(project_id)  # a new narration may start; this socket keeps reporting jobs
+            seat.set()  # and someone in the waiting room may start theirs
             if not audio.disconnected:
                 await _drain_until_closed(ws, project_id, c)
         finally:
@@ -237,7 +308,6 @@ async def _run(ws: WebSocket, project_id: str, c: Deps) -> None:
             forward.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await forward
-    await _close(ws, 1000)
 
 
 async def _drain_until_closed(ws: WebSocket, project_id: str, c: Deps) -> None:
