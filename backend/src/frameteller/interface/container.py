@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.events import JobUpdated
+from frameteller.application.limits import ProjectAllowance, VisitorAllowance
 from frameteller.application.ports import (
     Clock,
     CompositorPort,
@@ -22,6 +23,7 @@ from frameteller.application.ports import (
     SpeechToTextPort,
     SpendLedger,
     VideoRendererPort,
+    VisitorQuota,
 )
 from frameteller.application.use_cases import (
     ApproveCast,
@@ -39,6 +41,7 @@ from frameteller.application.use_cases import (
     GenerateCharacterReference,
     GeneratePanel,
     GetProject,
+    GetStudioStatus,
     MergeCharacters,
     MovePanelObject,
     OpenShare,
@@ -62,6 +65,7 @@ from frameteller.infrastructure.azure import (
     BlobProjectRepository,
     BlobShareIndex,
     BlobSpendLedger,
+    BlobVisitorQuota,
     blob_service,
 )
 from frameteller.infrastructure.config import Settings
@@ -73,6 +77,7 @@ from frameteller.infrastructure.jobs import Handler, InProcessJobQueue, JobStatu
 from frameteller.infrastructure.local import (
     FileShareIndex,
     FileSpendLedger,
+    FileVisitorQuota,
     JsonFileProjectRepository,
     LocalFileMediaStorage,
 )
@@ -118,6 +123,7 @@ class Container:
     correct_transcript: CorrectTranscript
     transcribe_instruction: TranscribeInstruction
     delete_narration: DeleteNarration
+    studio_status: GetStudioStatus
     sessions: ActiveSessions = field(default_factory=ActiveSessions)
     readiness: dict[str, ReadinessCheck] = field(default_factory=dict)
 
@@ -138,15 +144,19 @@ def wire(
     compositor: CompositorPort | None = None,
     renderer: VideoRendererPort | None = None,
     shares: ShareIndex,
+    quota: VisitorQuota | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
     compositor = compositor or PillowCompositor()  # local work, no network: tests use it too
     renderer = renderer or FfmpegVideoRenderer()
     hub = EventHub()
+    clock = clock or SystemClock()
+    limits = settings.demo_limits
+    allowance = ProjectAllowance(repo, limits)
     budget = LimitBudgetGuard(
         ledger,
-        clock or SystemClock(),
+        clock,
         per_project_usd=settings.budget_per_project_usd,
         per_day_usd=settings.budget_per_day_usd,
     )
@@ -209,7 +219,7 @@ def wire(
         storage=storage,
         jobs=queue,
         hub=hub,
-        create_project=CreateProject(repo, ids),
+        create_project=CreateProject(repo, ids, VisitorAllowance(quota, clock, limits) if quota else None),
         get_project=GetProject(repo),
         find_shot=FindShot(repo),
         approve_cast=ApproveCast(repo, queue, ids),
@@ -217,11 +227,11 @@ def wire(
         rename_character=RenameCharacter(repo),
         remove_character=RemoveCharacter(repo),
         merge_characters=MergeCharacters(repo, queue),
-        request_render=RequestPanelRender(repo, queue),
-        request_edit=RequestPanelEdit(repo, queue),
+        request_render=RequestPanelRender(repo, queue, allowance),
+        request_edit=RequestPanelEdit(repo, queue, allowance),
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),
         move_object=MovePanelObject(repo, queue),
-        request_animatic=RequestAnimaticExport(repo, queue),
+        request_animatic=RequestAnimaticExport(repo, queue, allowance),
         storyboard_pdf=ExportStoryboardPdf(repo, storage, PillowStoryboardSheet()),
         share_project=ShareProject(repo, shares, ids),
         revoke_share=RevokeShare(repo, shares),
@@ -229,11 +239,22 @@ def wire(
         share_preview=SharePreview(open_share, storage, PillowSharePreview()),
         reorder_shots=ReorderShots(repo),
         voice_session=RunVoiceSession(
-            speech, DirectTurn(repo, director, ids), correct_transcript, request_cast, hub, ids, repo, storage
+            speech,
+            DirectTurn(repo, director, ids, max_shots=limits.shots_per_project),
+            correct_transcript,
+            request_cast,
+            hub,
+            ids,
+            repo,
+            storage,
+            limits,
         ),
         correct_transcript=correct_transcript,
         transcribe_instruction=TranscribeInstruction(repo, speech),
         delete_narration=DeleteNarration(repo, storage),
+        studio_status=GetStudioStatus(
+            ledger, clock, per_day_usd=settings.budget_per_day_usd, paused=settings.demo_paused, limits=limits
+        ),
         readiness=readiness or {},
     )
 
@@ -249,12 +270,14 @@ def build_container(settings: Settings) -> Container:
         storage: MediaStoragePort = blob_media
         repo, ledger, check = BlobProjectRepository(projects), BlobSpendLedger(projects), blob_media.check_writable
         shares: ShareIndex = BlobShareIndex(projects)
+        quota: VisitorQuota = BlobVisitorQuota(projects)
     else:
         root = settings.local_storage_dir
         local_media = LocalFileMediaStorage(root)
         storage = local_media
         repo, ledger, check = JsonFileProjectRepository(root), FileSpendLedger(root), local_media.check_writable
         shares = FileShareIndex(root)
+        quota = FileVisitorQuota(root)
     caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s))
     client = meta_client(settings)
     return wire(
@@ -268,4 +291,5 @@ def build_container(settings: Settings) -> Container:
         ledger=ledger,
         readiness={"storage": check},
         shares=shares,
+        quota=quota,
     )

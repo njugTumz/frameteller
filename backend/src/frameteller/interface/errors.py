@@ -10,12 +10,14 @@ from fastapi.responses import JSONResponse
 from frameteller.application.errors import (
     ApplicationError,
     BudgetExceededError,
+    LimitReachedError,
     ModelError,
     ModelRateLimitedError,
     ModelTimeoutError,
     NothingToSegmentError,
     ProjectNotFoundError,
     ShareNotFoundError,
+    StudioFullError,
 )
 from frameteller.domain import (
     DomainError,
@@ -34,7 +36,9 @@ _STATUS: list[tuple[type[Exception], int, str]] = [
     (UnknownShotError, 404, "shot_not_found"),
     (UnknownCharacterError, 404, "character_not_found"),
     (UnknownObjectError, 404, "object_not_found"),
+    (StudioFullError, 503, "studio_full"),  # before its base: the global cap, not this project's
     (BudgetExceededError, 402, "budget_exceeded"),
+    (LimitReachedError, 429, "limit_reached"),
     (NothingToSegmentError, 422, "nothing_to_select"),
     (ModelRateLimitedError, 503, "model_busy"),
     (ModelTimeoutError, 504, "model_timeout"),

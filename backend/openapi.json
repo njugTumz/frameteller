@@ -397,6 +397,39 @@
         "title": "LayerRequest",
         "type": "object"
       },
+      "LimitsOut": {
+        "properties": {
+          "exports_per_project": {
+            "title": "Exports Per Project",
+            "type": "integer"
+          },
+          "narration_minutes_per_session": {
+            "title": "Narration Minutes Per Session",
+            "type": "number"
+          },
+          "projects_per_visitor_per_day": {
+            "title": "Projects Per Visitor Per Day",
+            "type": "integer"
+          },
+          "renders_per_project": {
+            "title": "Renders Per Project",
+            "type": "integer"
+          },
+          "shots_per_project": {
+            "title": "Shots Per Project",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "projects_per_visitor_per_day",
+          "narration_minutes_per_session",
+          "shots_per_project",
+          "renders_per_project",
+          "exports_per_project"
+        ],
+        "title": "LimitsOut",
+        "type": "object"
+      },
       "MaskOut": {
         "properties": {
           "box": {
@@ -997,6 +1030,31 @@
         "title": "ShotsOut",
         "type": "object"
       },
+      "StudioStatusOut": {
+        "description": "Whether the studio takes new work: the studio checks this before starting a story.",
+        "properties": {
+          "full": {
+            "description": "Today's global spend cap is reached: no new work until tomorrow (UTC).",
+            "title": "Full",
+            "type": "boolean"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/LimitsOut"
+          },
+          "paused": {
+            "description": "The kill switch is on: show the back-soon page (shared storyboards still open).",
+            "title": "Paused",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused",
+          "full",
+          "limits"
+        ],
+        "title": "StudioStatusOut",
+        "type": "object"
+      },
       "TicketOut": {
         "description": "A queued job. Follow it with job.updated events on the session WebSocket, or poll the project.",
         "properties": {
@@ -1201,6 +1259,7 @@
     },
     "/projects": {
       "post": {
+        "description": "Start a story. A visitor can start a few a day on the public demo (429 limit_reached).",
         "operationId": "create_project_projects_post",
         "requestBody": {
           "content": {
@@ -2849,6 +2908,28 @@
         "summary": "Shared Panel",
         "tags": [
           "shares"
+        ]
+      }
+    },
+    "/status": {
+      "get": {
+        "description": "Paused (kill switch) or full for today (global spend cap), and the public-demo limits.",
+        "operationId": "studio_status_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Studio Status",
+        "tags": [
+          "health"
         ]
       }
     }

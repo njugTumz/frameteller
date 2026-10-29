@@ -6,6 +6,7 @@ import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from frameteller.interface.dto import StudioStatusOut
 from frameteller.interface.routes.deps import Deps
 
 router = APIRouter(tags=["health"])
@@ -33,3 +34,9 @@ async def readyz(c: Deps) -> JSONResponse:
             results[name] = "failed"
     ready = all(v == "ok" for v in results.values())
     return JSONResponse({"status": "ready" if ready else "not_ready", "checks": results}, 200 if ready else 503)
+
+
+@router.get("/status")
+async def studio_status(c: Deps) -> StudioStatusOut:
+    """Paused (kill switch) or full for today (global spend cap), and the public-demo limits."""
+    return StudioStatusOut.of(await c.studio_status.execute())

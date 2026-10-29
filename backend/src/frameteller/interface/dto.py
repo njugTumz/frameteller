@@ -20,7 +20,14 @@ from frameteller.application.events import (
     TurnFinished,
 )
 from frameteller.application.ports import Quality, SpeechMode, SpeechOptions
-from frameteller.application.use_cases import Beat, CastReview, JobTicket, Selection, TranscriptCorrection
+from frameteller.application.use_cases import (
+    Beat,
+    CastReview,
+    JobTicket,
+    Selection,
+    StudioStatus,
+    TranscriptCorrection,
+)
 from frameteller.application.use_cases.correct_transcript import MAX_TURN_CHARS
 from frameteller.domain import (
     AnimaticExport,
@@ -390,6 +397,36 @@ class CastReviewOut(BaseModel):
     @classmethod
     def of(cls, r: CastReview) -> CastReviewOut:
         return cls(approved=r.approved, redrawing=list(r.redrawing), job_key=r.job_key)
+
+
+class LimitsOut(BaseModel):
+    projects_per_visitor_per_day: int
+    narration_minutes_per_session: float
+    shots_per_project: int
+    renders_per_project: int
+    exports_per_project: int
+
+
+class StudioStatusOut(BaseModel):
+    """Whether the studio takes new work: the studio checks this before starting a story."""
+
+    paused: bool = Field(description="The kill switch is on: show the back-soon page (shared storyboards still open).")
+    full: bool = Field(description="Today's global spend cap is reached: no new work until tomorrow (UTC).")
+    limits: LimitsOut
+
+    @classmethod
+    def of(cls, s: StudioStatus) -> StudioStatusOut:
+        return cls(
+            paused=s.paused,
+            full=s.full,
+            limits=LimitsOut(
+                projects_per_visitor_per_day=s.limits.projects_per_visitor_per_day,
+                narration_minutes_per_session=s.limits.narration_ms_per_session / 60_000,
+                shots_per_project=s.limits.shots_per_project,
+                renders_per_project=s.limits.renders_per_project,
+                exports_per_project=s.limits.exports_per_project,
+            ),
+        )
 
 
 class JobStatusOut(BaseModel):

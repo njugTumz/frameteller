@@ -28,6 +28,7 @@ from frameteller.interface.dto import (
     TicketOut,
 )
 from frameteller.interface.routes.deps import Deps, ProjectId
+from frameteller.interface.visitor import visitor_id
 
 router = APIRouter(
     prefix="/projects", tags=["projects"], responses={404: {"model": ErrorOut}, 409: {"model": ErrorOut}}
@@ -38,8 +39,10 @@ CharacterId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_project(body: ProjectCreate, c: Deps) -> ProjectOut:
-    return ProjectOut.of(await c.create_project.execute(body.title, body.as_style()))
+async def create_project(body: ProjectCreate, request: Request, c: Deps) -> ProjectOut:
+    """Start a story. A visitor can start a few a day on the public demo (429 limit_reached)."""
+    project = await c.create_project.execute(body.title, body.as_style(), visitor=visitor_id(request))
+    return ProjectOut.of(project)
 
 
 @router.get("/{project_id}")

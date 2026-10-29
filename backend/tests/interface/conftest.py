@@ -29,6 +29,7 @@ from tests.fakes import (
     InMemoryProjectRepository,
     InMemoryShareIndex,
     InMemorySpendLedger,
+    InMemoryVisitorQuota,
     SequentialIds,
 )
 
@@ -46,6 +47,7 @@ class Fakes:
     compositor: FakeCompositor = field(default_factory=FakeCompositor)
     renderer: FakeVideoRenderer = field(default_factory=FakeVideoRenderer)
     shares: InMemoryShareIndex = field(default_factory=InMemoryShareIndex)
+    quota: InMemoryVisitorQuota = field(default_factory=InMemoryVisitorQuota)
     ready: bool = True
 
     def __post_init__(self) -> None:
@@ -91,6 +93,7 @@ def build(settings: Settings, f: Fakes) -> Container:
         compositor=f.compositor,
         renderer=f.renderer,
         shares=f.shares,
+        quota=f.quota,
     )
 
 

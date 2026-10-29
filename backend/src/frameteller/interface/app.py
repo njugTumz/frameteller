@@ -11,8 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from frameteller.infrastructure.config import Settings
 from frameteller.interface import errors
 from frameteller.interface.container import Container, build_container
-from frameteller.interface.middleware import BodyLimitMiddleware, RateLimitMiddleware, RequestContextMiddleware
+from frameteller.interface.middleware import (
+    BodyLimitMiddleware,
+    PauseMiddleware,
+    RateLimitMiddleware,
+    RequestContextMiddleware,
+)
 from frameteller.interface.routes import health, media, projects, session, shares
+from frameteller.interface.visitor import VISITOR_HEADER
 
 DESCRIPTION = """Frameteller turns spoken stories into storyboards.
 
@@ -46,6 +52,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     config = settings or (container.settings if container else None)
     # Added inside out: the last one added runs first.
     app.add_middleware(BodyLimitMiddleware)
+    app.add_middleware(PauseMiddleware, paused=bool(config and config.demo_paused))
     app.add_middleware(
         RateLimitMiddleware,
         per_minute=config.rate_limit_per_minute if config else 120,
@@ -56,7 +63,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
             CORSMiddleware,
             allow_origins=config.origins,
             allow_methods=["GET", "POST", "PATCH", "DELETE"],
-            allow_headers=["Content-Type", "X-Request-ID"],
+            allow_headers=["Content-Type", "X-Request-ID", VISITOR_HEADER],
             expose_headers=["X-Request-ID"],
         )
     app.add_middleware(RequestContextMiddleware)

@@ -172,3 +172,30 @@ class RateLimitMiddleware:
             return
         body = {"error": {"code": "rate_limited", "message": "Too many requests. Wait a moment and try again."}}
         await _send_json(send, 429, body, [(b"retry-after", str(math.ceil(wait)).encode())])
+
+
+PAUSED_MESSAGE = "Frameteller is taking a short break. Back soon."
+# Still served while paused: probes, the status the studio checks, and shared storyboards.
+_OPEN_WHILE_PAUSED = re.compile(r"^/(healthz|readyz|status|s/[^/]+|shares/.+)$")
+
+
+class PauseMiddleware:
+    """DEMO_PAUSED: the kill switch. Every endpoint but the open ones answers 503 "back soon"; sessions close."""
+
+    def __init__(self, app: ASGIApp, *, paused: bool) -> None:
+        self.app, self.paused = app, paused
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if not self.paused or scope["type"] not in ("http", "websocket") or _OPEN_WHILE_PAUSED.match(scope["path"]):
+            await self.app(scope, receive, send)
+            return
+        if scope["type"] == "websocket":
+            await receive()  # websocket.connect
+            await send({"type": "websocket.close", "code": 4503, "reason": "paused"})
+            return
+        if scope.get("method") == "OPTIONS":  # let CORS preflights through, so the browser sees the 503 body
+            await self.app(scope, receive, send)
+            return
+        await _send_json(
+            send, 503, {"error": {"code": "paused", "message": PAUSED_MESSAGE}}, [(b"retry-after", b"600")]
+        )

@@ -53,7 +53,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Project */
+        /**
+         * Create Project
+         * @description Start a story. A visitor can start a few a day on the public demo (429 limit_reached).
+         */
         post: operations["create_project_projects_post"];
         delete?: never;
         options?: never;
@@ -473,6 +476,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Studio Status
+         * @description Paused (kill switch) or full for today (global spend cap), and the public-demo limits.
+         */
+        get: operations["studio_status_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -659,6 +682,19 @@ export interface components {
              * @default 1
              */
             scale: number;
+        };
+        /** LimitsOut */
+        LimitsOut: {
+            /** Exports Per Project */
+            exports_per_project: number;
+            /** Narration Minutes Per Session */
+            narration_minutes_per_session: number;
+            /** Projects Per Visitor Per Day */
+            projects_per_visitor_per_day: number;
+            /** Renders Per Project */
+            renders_per_project: number;
+            /** Shots Per Project */
+            shots_per_project: number;
         };
         /** MaskOut */
         MaskOut: {
@@ -897,6 +933,23 @@ export interface components {
         ShotsOut: {
             /** Shots */
             shots: components["schemas"]["ShotOut"][];
+        };
+        /**
+         * StudioStatusOut
+         * @description Whether the studio takes new work: the studio checks this before starting a story.
+         */
+        StudioStatusOut: {
+            /**
+             * Full
+             * @description Today's global spend cap is reached: no new work until tomorrow (UTC).
+             */
+            full: boolean;
+            limits: components["schemas"]["LimitsOut"];
+            /**
+             * Paused
+             * @description The kill switch is on: show the back-soon page (shared storyboards still open).
+             */
+            paused: boolean;
         };
         /**
          * TicketOut
@@ -2182,6 +2235,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    studio_status_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioStatusOut"];
                 };
             };
         };
