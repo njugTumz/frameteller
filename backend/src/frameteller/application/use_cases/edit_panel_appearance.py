@@ -6,17 +6,24 @@ from frameteller.application import costs
 from frameteller.application.jobs import pre_segment_job
 from frameteller.application.ports import (
     BudgetGuard,
+    EditRequest,
     ImageGenerationPort,
     JobQueuePort,
     ProjectRepository,
     Quality,
 )
 from frameteller.application.prompts import edit_prompt
-from frameteller.domain import Panel, Project
+from frameteller.domain import MediaRef, Panel, Project
+
+
+def reference_sheets(project: Project, shot_id: str) -> tuple[MediaRef, ...]:
+    """The approved sheets of the shot's characters, so an edit redraws them as they were cast."""
+    cast = (project.bible.get(c) for c in project.shot(shot_id).character_ids if c in project.bible)
+    return tuple(c.reference for c in cast if c.reference)
 
 
 class EditPanelAppearance:
-    """Change how a selected object looks with a chained Muse Image edit (ADR 0005). Never geometry."""
+    """Change how a selected object looks: a Muse Image edit of the stored render (ADR 0005, 0014). Not geometry."""
 
     def __init__(
         self,
@@ -32,13 +39,11 @@ class EditPanelAppearance:
     ) -> Panel:
         snapshot = await self._repo.get(project_id)
         snapshot.require_cast_approved()
-        _, response_id = snapshot.panel(shot_id).require_ready()
-        prompt = edit_prompt(change, target, parts)
+        image, _ = snapshot.panel(shot_id).require_ready()
+        request = EditRequest(image, edit_prompt(change, target, parts), quality, reference_sheets(snapshot, shot_id))
         revision = snapshot.panel(shot_id).current_revision + 1
         await self._budget.charge(project_id, costs.IMAGE, f"edit {shot_id} r{revision}")
-        stored = await self._images.edit(
-            response_id, prompt, quality, store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}/image"
-        )
+        stored = await self._images.edit(request, store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}/image")
 
         def apply(project: Project) -> Panel:
             panel = project.panel(shot_id)

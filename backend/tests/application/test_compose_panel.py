@@ -43,10 +43,10 @@ async def test_first_move_removes_the_object_once_then_pastes_its_cut_out(ready:
     composite = await compose(ready, compositor).execute("p1", "s2", 1)
 
     assert composite is not None
-    [(response_id, prompt)] = ready.images.edits
-    assert response_id == "resp_1"  # chained from the base render
-    assert prompt.startswith("Remove the 8-year-old girl")  # a visual phrase, not the name
-    assert "Keep everything else identical" in prompt
+    [request] = ready.images.edits
+    assert request.image.key == "projects/p1/panels/s2/r1/image"  # an edit of the stored render, not a chain
+    assert request.prompt.startswith("Remove the 8-year-old girl")  # a visual phrase, not the name
+    assert "Keep everything else identical" in request.prompt
     assert ready.budget.total == pytest.approx(spent + costs.IMAGE)
     [(background, layers, size)] = compositor.calls
     assert background == b"image-2"  # the clean plate
@@ -70,15 +70,16 @@ async def test_moving_the_same_object_again_reuses_its_clean_plate(ready: World)
     assert ready.project().panel("s2").current_revision == 3
 
 
-async def test_a_second_object_chains_one_more_removal_from_the_first_plate(ready: World) -> None:
+async def test_a_second_object_is_removed_from_the_first_plate(ready: World) -> None:
     compositor = FakeCompositor()
     await move(ready, MIRA_ID, dx=40)
     await compose(ready, compositor).execute("p1", "s2", 1)
     await move(ready, CAT_ID, deleted=True)
     await compose(ready, compositor).execute("p1", "s2", 1)
 
-    assert [r for r, _ in ready.images.edits] == ["resp_1", "resp_2"]
-    assert "Grey Cat" not in ready.images.edits[1][1]
+    first_plate = ready.project().panel("s2").plates[MIRA_ID].image
+    assert [r.image for r in ready.images.edits] == [MediaRef("projects/p1/panels/s2/r1/image"), first_plate]
+    assert "Grey Cat" not in ready.images.edits[1].prompt
     _, layers, _ = compositor.calls[-1]
     assert layers == [CutoutLayer(b"mira-cut", 140, 100, 1.0)]  # the deleted cat is just not pasted back
     assert set(ready.project().panel("s2").plates) == {MIRA_ID, f"{CAT_ID}+{MIRA_ID}"}

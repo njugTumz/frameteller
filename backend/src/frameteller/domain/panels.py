@@ -117,7 +117,7 @@ class CleanPlate:
 
     object_ids: tuple[str, ...]  # sorted
     image: MediaRef
-    response_id: str  # chain the next removal from here
+    response_id: str  # recorded for tracing; the next removal edits `image`, never a chain (ADR 0014)
 
     @property
     def key(self) -> str:

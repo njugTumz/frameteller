@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx2
 
-from frameteller.application.ports import ImageRequest
+from frameteller.application.ports import EditRequest, ImageRequest
 from frameteller.domain import MediaRef, Point, TranscriptTurn
 from frameteller.infrastructure.config import load_settings
 from frameteller.infrastructure.local import LocalFileMediaStorage
@@ -98,14 +98,14 @@ async def main() -> None:
     recorder.take("director_turn")
     spent()
 
-    print("image: draft panel with two references, then a chained edit")
+    print("image: draft panel with two references, then an edit of the stored panel (ADR 0014)")
     mira = await storage.put("refs/mira.webp", image("ref_mira.webp"), "image/webp")
     cat = await storage.put("refs/cat.webp", image("ref_cat.webp"), "image/webp")
     images = MetaImageAdapter(client, caller, storage, settings)
     panel = await images.generate(ImageRequest(PANEL_PROMPT, "low", "panel", (mira, cat)), "panels/s1/r1")
     recorder.take("image_generate")
     spent()
-    await images.edit(panel.response_id, EDIT_PROMPT, "low", "panels/s1/r2")
+    await images.edit(EditRequest(panel.ref, EDIT_PROMPT, "low", (mira,)), "panels/s1/r2")
     recorder.take("image_edit")
     spent()
 

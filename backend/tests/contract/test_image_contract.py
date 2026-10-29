@@ -1,3 +1,4 @@
+import base64
 import json
 from collections.abc import Callable
 from typing import Any
@@ -7,7 +8,7 @@ import pytest
 from openai import AsyncOpenAI
 
 from frameteller.application.errors import InvalidModelOutputError, ModelRejectedError
-from frameteller.application.ports import ImageRequest
+from frameteller.application.ports import EditRequest, ImageRequest
 from frameteller.domain import MediaRef, Size
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.local import LocalFileMediaStorage
@@ -89,19 +90,43 @@ async def test_reference_sheet_is_square_and_final_quality(
     assert len(sent(seen[0])["input"][0]["content"]) == 1
 
 
-async def test_edit_chains_on_the_previous_response(
+async def red_coat(storage: LocalFileMediaStorage, *references: MediaRef) -> EditRequest:
+    panel = await storage.put("panels/s1/r1", image("panel_small.webp"), "image/webp")
+    return EditRequest(panel, "Make her raincoat red.", "low", references)
+
+
+async def test_edit_sends_our_stored_panel_and_the_sheets_and_never_chains(
+    client_for: Client, caller: ModelCaller, storage: LocalFileMediaStorage, settings: Settings
+) -> None:
+    transport, seen = replay("image_edit")
+    adapter = MetaImageAdapter(client_for(transport), caller, storage, settings)
+    mira, _ = await refs(storage)
+
+    out = await adapter.edit(await red_coat(storage, mira), "panels/s1/r2")
+
+    req = sent(seen[0])
+    assert "previous_response_id" not in req  # chains expired within minutes (ADR 0014)
+    [message] = req["input"]
+    text, panel, sheet = message["content"]
+    assert text["text"].startswith("Edit the first image. Make her raincoat red. Keep the composition")
+    assert "reference sheets" in text["text"]
+    assert panel["image_url"] == "data:image/webp;base64," + base64.b64encode(image("panel_small.webp")).decode()
+    assert sheet["image_url"].startswith("data:image/webp;base64,")
+    assert req["tools"][0]["size"] == "1536x1024"
+    assert out.response_id == "resp_fixture6"
+    assert out.ref.key == "panels/s1/r2"
+
+
+async def test_an_edit_without_characters_sends_only_the_image(
     client_for: Client, caller: ModelCaller, storage: LocalFileMediaStorage, settings: Settings
 ) -> None:
     transport, seen = replay("image_edit")
     adapter = MetaImageAdapter(client_for(transport), caller, storage, settings)
 
-    out = await adapter.edit("resp_fixture2", "Make her raincoat red.", "low", "panels/s1/r2")
+    await adapter.edit(await red_coat(storage), "panels/s1/r2")
 
-    req = sent(seen[0])
-    assert req["previous_response_id"] == "resp_fixture2"
-    assert req["input"] == "Make her raincoat red."
-    assert out.response_id == "resp_fixture6"
-    assert out.ref.key == "panels/s1/r2"
+    text, _ = sent(seen[0])["input"][0]["content"]
+    assert "reference sheets" not in text["text"]
 
 
 async def test_rate_limit_is_retried(
@@ -114,7 +139,7 @@ async def test_rate_limit_is_retried(
     transport, seen = replay([status(429), status(503), *load("image_edit")])
     adapter = MetaImageAdapter(client_for(transport), caller, storage, settings)
 
-    out = await adapter.edit("resp_fixture2", "red coat", "low", "panels/s1/r2")
+    out = await adapter.edit(await red_coat(storage), "panels/s1/r2")
 
     assert out.response_id == "resp_fixture6"
     assert len(seen) == 3
@@ -129,7 +154,7 @@ async def test_bad_request_is_not_retried(
     adapter = MetaImageAdapter(client_for(transport), caller, storage, settings)
 
     with pytest.raises(ModelRejectedError):
-        await adapter.edit("resp_fixture2", "red coat", "low", "panels/s1/r2")
+        await adapter.edit(await red_coat(storage), "panels/s1/r2")
     assert len(seen) == 1
 
 
@@ -143,4 +168,4 @@ async def test_response_without_an_image_is_invalid_output(
     adapter = MetaImageAdapter(client_for(transport), caller, storage, settings)
 
     with pytest.raises(InvalidModelOutputError):
-        await adapter.edit("resp_fixture2", "red coat", "low", "panels/s1/r2")
+        await adapter.edit(await red_coat(storage), "panels/s1/r2")

@@ -1,4 +1,4 @@
-"""MetaImageAdapter: panels and reference sheets with Muse Image on the Responses API (ADR 0003, 0005)."""
+"""MetaImageAdapter: panels and reference sheets with Muse Image on the Responses API (ADR 0003, 0005, 0014)."""
 
 from __future__ import annotations
 
@@ -8,11 +8,21 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from frameteller.application.errors import InvalidModelOutputError
-from frameteller.application.ports import ImageRequest, MediaStoragePort, Quality, StoredImage
+from frameteller.application.ports import EditRequest, ImageRequest, MediaStoragePort, Quality, StoredImage
+from frameteller.domain import MediaRef
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.meta.images import data_url, inspect_image
 from frameteller.infrastructure.pricing import IMAGE_USD
 from frameteller.infrastructure.resilience import ModelCaller, RetryPolicy, Usage
+
+EDIT = (
+    "Edit the first image. {change} Keep the composition, framing, poses, lighting, line work and style of the "
+    "first image exactly."
+)
+WITH_SHEETS = (
+    " The other images are the characters' reference sheets: keep each character's face, hair, colours and build "
+    "as they show."
+)
 
 
 def image_tool(size: str, quality: Quality) -> dict[str, Any]:
@@ -36,22 +46,24 @@ class MetaImageAdapter:
 
     async def generate(self, request: ImageRequest, store_as: str) -> StoredImage:
         size = self._settings.image_panel_size if request.aspect == "panel" else self._settings.image_reference_size
-        content: list[dict[str, Any]] = [{"type": "input_text", "text": request.prompt}]
-        for ref in request.references:
+        kwargs = await self._request(request.prompt, request.references, size, request.quality)
+        return await self._render("generate", kwargs, store_as)
+
+    async def edit(self, request: EditRequest, store_as: str) -> StoredImage:
+        """Edit from our stored image, with the reference sheets after it. previous_response_id is not used: a
+        chain failed at once and after 3 minutes in spike 4, while a 49-minute-old one held (ADR 0014)."""
+        prompt = EDIT.format(change=request.prompt.strip()) + (WITH_SHEETS if request.references else "")
+        images = (request.image, *request.references)
+        kwargs = await self._request(prompt, images, self._settings.image_panel_size, request.quality)
+        return await self._render("edit", kwargs, store_as)
+
+    async def _request(self, prompt: str, images: tuple[MediaRef, ...], size: str, quality: Quality) -> dict[str, Any]:
+        content: list[dict[str, Any]] = [{"type": "input_text", "text": prompt}]
+        for ref in images:
             data = await self._storage.get(ref)
             _, content_type = inspect_image(data)
             content.append({"type": "input_image", "image_url": data_url(data, content_type)})
-        kwargs = {"input": [{"role": "user", "content": content}], "tools": [image_tool(size, request.quality)]}
-        return await self._render("generate", kwargs, store_as)
-
-    async def edit(self, previous_response_id: str, prompt: str, quality: Quality, store_as: str) -> StoredImage:
-        """Chained appearance edit: send only the change (CLAUDE.md section 5)."""
-        kwargs = {
-            "previous_response_id": previous_response_id,
-            "input": prompt,
-            "tools": [image_tool(self._settings.image_panel_size, quality)],
-        }
-        return await self._render("edit", kwargs, store_as)
+        return {"input": [{"role": "user", "content": content}], "tools": [image_tool(size, quality)]}
 
     async def _render(self, operation: str, kwargs: dict[str, Any], store_as: str) -> StoredImage:
         model = self._settings.image_model

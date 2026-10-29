@@ -84,6 +84,17 @@ class ImageRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class EditRequest:
+    """An edit of an image we stored: it goes back to the model with the reference sheets, never chained by
+    response id, because Muse Image may forget a response within minutes (ADR 0014)."""
+
+    image: MediaRef
+    prompt: str
+    quality: Quality
+    references: tuple[MediaRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class StoredImage:
     """An image the adapter already persisted. Model output is never kept anywhere else."""
 
@@ -214,7 +225,7 @@ class DirectorPort(Protocol):
 class ImageGenerationPort(Protocol):
     async def generate(self, request: ImageRequest, store_as: str) -> StoredImage: ...
 
-    async def edit(self, previous_response_id: str, prompt: str, quality: Quality, store_as: str) -> StoredImage: ...
+    async def edit(self, request: EditRequest, store_as: str) -> StoredImage: ...
 
 
 @dataclass(frozen=True, slots=True)

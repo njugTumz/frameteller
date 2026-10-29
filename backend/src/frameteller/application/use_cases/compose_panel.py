@@ -10,6 +10,7 @@ from frameteller.application.ports import (
     BudgetGuard,
     CompositorPort,
     CutoutLayer,
+    EditRequest,
     ImageGenerationPort,
     MediaStoragePort,
     ProjectRepository,
@@ -30,7 +31,8 @@ def layers_signature(panel: Panel) -> str:
 class ComposePanel:
     """Background job: clean plate without the moved objects, then their cut-outs at their new place.
 
-    The plate comes from chained Muse Image edits that each remove one object, cached per base revision, so
+    The plate comes from Muse Image edits of our stored images that each remove one object (ADR 0014), cached
+    per base revision, so
     moving the same object again costs nothing and moving a second one costs one more edit. Pasting is ours.
     """
 
@@ -83,21 +85,19 @@ class ComposePanel:
             default=None,
         )
         removed = list(start.object_ids) if start else []
-        response_id = start.response_id if start else panel.require_ready()[1]
+        source = start.image if start else panel.require_ready()[0]
         plate = start
         for object_id in sorted(set(object_ids) - set(removed)):
             removed.append(object_id)
             key = plate_key(removed)
             name = hashlib.sha256(key.encode()).hexdigest()[:12]
             await self._budget.charge(project.id, costs.IMAGE, f"clean plate {panel.shot_id} r{panel.revision}")
+            request = EditRequest(source, clean_plate_prompt(self._noun_phrase(project, panel, object_id)), "high")
             stored = await self._images.edit(
-                response_id,
-                clean_plate_prompt(self._noun_phrase(project, panel, object_id)),
-                "high",
-                store_as=f"projects/{project.id}/panels/{panel.shot_id}/r{panel.revision}/plates/{name}",
+                request, store_as=f"projects/{project.id}/panels/{panel.shot_id}/r{panel.revision}/plates/{name}"
             )
             plate = CleanPlate(tuple(sorted(removed)), stored.ref, stored.response_id)
-            response_id = stored.response_id
+            source = stored.ref
             await self._repo.update(project.id, _cache(panel.shot_id, panel.revision, plate))
         assert plate is not None
         return plate

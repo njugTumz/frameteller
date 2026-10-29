@@ -112,7 +112,7 @@ async def test_a_fixable_draft_is_edited_then_re_reviewed_and_marked_fixed(world
     assert review.outcome is Outcome.FIXED
     assert review.revision == 2
     assert review.fixes == 1
-    assert "remove the blue vest" in world.images.edits[0][1]
+    assert "remove the blue vest" in world.images.edits[0].prompt
     second = s.reviewer.requests[1]
     assert [r.id for r in second.rubric.rubrics] == ["panel-continuity", "shot", "edit"]
     assert second.subject == "Requested edit: remove the blue vest (on the girl)"

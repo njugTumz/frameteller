@@ -223,9 +223,9 @@ async def test_edit_by_command_routes_through_the_director(world: World) -> None
 
     assert panel.revision == 2
     assert director.calls == ["interpret_edit:her coat is red now"]
-    [(previous, prompt)] = world.images.edits
-    assert previous == "resp_1"
-    assert "the raincoat and the hood" in prompt
+    [request] = world.images.edits
+    assert request.image.key == "projects/p1/panels/s1/r1/image"
+    assert "the raincoat and the hood" in request.prompt
 
 
 async def test_cast_references_are_drawn_then_proposed(draft_world: World) -> None:

@@ -17,10 +17,10 @@ from frameteller.application.ports import (
     CutoutLayer,
     DirectedTurn,
     EditIntent,
+    EditRequest,
     ImageRequest,
     Job,
     Progress,
-    Quality,
     ReviewRequest,
     Segment,
     SpeechEvent,
@@ -128,7 +128,7 @@ class FakeImageGeneration:
     def __init__(self, storage: InMemoryMediaStorage) -> None:
         self.storage = storage
         self.generated: list[ImageRequest] = []
-        self.edits: list[tuple[str, str]] = []
+        self.edits: list[EditRequest] = []
         self.fail_next = False
 
     async def generate(self, request: ImageRequest, store_as: str) -> StoredImage:
@@ -138,8 +138,8 @@ class FakeImageGeneration:
         self.generated.append(request)
         return await self._store(store_as)
 
-    async def edit(self, previous_response_id: str, prompt: str, quality: Quality, store_as: str) -> StoredImage:
-        self.edits.append((previous_response_id, prompt))
+    async def edit(self, request: EditRequest, store_as: str) -> StoredImage:
+        self.edits.append(request)
         return await self._store(store_as)
 
     async def _store(self, key: str) -> StoredImage:

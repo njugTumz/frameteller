@@ -81,14 +81,15 @@ async def test_failed_render_marks_panel_failed_and_reraises(world: World) -> No
     assert world.jobs.jobs == []
 
 
-async def test_edit_chains_the_previous_response_and_names_every_part(world: World) -> None:
+async def test_edit_sends_the_stored_render_and_the_sheets_and_names_every_part(world: World) -> None:
     await generate(world).execute("p1", "s1", revision=1)
     panel = await edit(world).execute("p1", "s1", "raincoat", ["hood", "sleeves"], "make it red")
 
-    previous_id, prompt = world.images.edits[0]
-    assert previous_id == "resp_1"
-    assert "the hood" in prompt
-    assert "the sleeves" in prompt
+    [request] = world.images.edits
+    assert request.image == MediaRef("projects/p1/panels/s1/r1/image")  # our copy, never a response chain
+    assert request.references == (MediaRef("refs/mira.webp"),)  # the shot's cast, as approved
+    assert "the hood" in request.prompt
+    assert "the sleeves" in request.prompt
     assert panel.revision == 2
     assert world.project().panel("s1").response_id == "resp_2"
     assert world.jobs.jobs[-1].idempotency_key == "pre_segment_panel:p1:s1:r2"

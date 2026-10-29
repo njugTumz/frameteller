@@ -255,8 +255,8 @@ async def test_moving_an_object_saves_a_layer_and_shows_the_composite(api: Api) 
     assert "/composites/" in panel["image_url"]
     assert panel["layers"] == [{"object_id": "character:mira", "dx": 30, "dy": 5, "scale": 1.25, "deleted": False}]
     assert (await api.client.get(panel["image_url"])).status_code == 200
-    [(_, prompt)] = api.fakes.images.edits
-    assert prompt.startswith("Remove the 8-year-old girl")
+    [request] = api.fakes.images.edits
+    assert request.prompt.startswith("Remove the 8-year-old girl")
 
 
 async def test_layers_need_a_known_object_and_a_sane_scale(api: Api) -> None:
