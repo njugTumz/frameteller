@@ -50,3 +50,14 @@ def test_numbers_and_accents_match_either_way() -> None:
 def test_a_short_paragraph() -> None:
     assert paragraph_end("Night falls.", heard("night falls")) == 1
     assert paragraph_end("Night falls.", heard("night")) is None
+
+
+def test_tail_words_that_turn_up_by_chance_in_another_reading_do_not_count() -> None:
+    # Measured on staging: the Mira recording read against the lighthouse script matched this tail by chance.
+    paragraph = "A tiny lighthouse on a rock in the middle of a stormy sea. Waves crash all around it."
+    words = heard(
+        "Scene one night a narrow alley in the rain Mira a girl in a yellow raincoat with a red scarf walks home "
+        "alone she hears a tiny sound under a wooden crate Mira walks out of the alley with the cat on her "
+        "shoulder the rain stops close up on the cat it looks back at the alley"
+    )
+    assert paragraph_end(paragraph, words) is None

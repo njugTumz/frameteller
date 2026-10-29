@@ -2,8 +2,8 @@
 
 The transcriber's words are matched against the end of the current paragraph. Matching is fuzzy, so misheard
 words ("Lena" heard as "Lina", a dropped "the") still line up: a paragraph counts as read when most of its last
-words were heard, in order, including one of its last two. The session then cuts the beat there once the reader
-pauses, or at once if they have already read on into the next paragraph.
+words were heard, in order, including one of its last two, and at least half of all its words were. The session
+then cuts the beat there once the reader pauses, or at once if they have already read on into the next paragraph.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from difflib import SequenceMatcher
 TAIL_WORDS = 5  # the paragraph's last words that must be heard
 MIN_TAIL_SHARE = 0.6  # of them, at least this share, in order
 MIN_PARAGRAPH_SHARE = 0.5  # and the reader has said at least half as many words as the paragraph has
+MIN_COVERAGE = 0.5  # and at least half the paragraph's words were heard, in order: it was this paragraph
 SIMILAR = 0.72  # two words match when their letters are this similar ("lina" ~ "lena")
 NUMBERS = {
     "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four", "5": "five",
@@ -66,6 +67,11 @@ def paragraph_end(paragraph: str, heard: Sequence[str]) -> int | None:
     count, last, last_tail, late = _align(tail, heard)
     needed = max(min(2, len(tail)), round(MIN_TAIL_SHARE * len(tail)))
     if count < needed or not late:
+        return None
+    # A few tail words can turn up by chance in a long, unrelated reading ("all" ~ "alley", "it"), so the
+    # paragraph as a whole must have been read too.
+    covered, _, _, _ = _align(words, heard[: last + 1])
+    if covered < MIN_COVERAGE * len(words):
         return None
     # A misheard last word ("roof" heard as "ruf") still belongs to this paragraph: take the words it was owed.
     return min(last + len(tail) - 1 - last_tail, len(heard) - 1)
