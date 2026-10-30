@@ -4,9 +4,12 @@ One segment per shot between a title card and an end card. Each segment is a sti
 zoompan move, cross-faded into the next. A segment is lengthened by the fade, so every shot still starts at
 its own time and the voice (cut per shot from the kept narration) stays in sync to the frame.
 
-Captions are a soft mov_text track, and optionally burned in: one overlay per caption line, shown only while
-that line is spoken, large and on a soft dark band inside the bottom title-safe area. ffmpeg runs at a lower
-priority with few threads, so an export never slows live sessions on the same replica (ADR 0016).
+Captions are a soft mov_text track, and optionally burned in: large, on a soft dark band inside the bottom
+title-safe area, each line shown only while it is spoken. All lines come in as one stream (a concat list of
+caption images and transparent gaps) through one overlay, so memory stays flat however many lines there are:
+an input and overlay per line cost about 13 MiB each, and two long exports at once ran out of memory.
+ffmpeg runs at a lower priority with few threads, so an export never slows live sessions on the same replica
+(ADR 0016).
 """
 
 from __future__ import annotations
@@ -56,7 +59,7 @@ class _Segment:
 class _Captions:
     srt: Path
     language: str
-    burned: tuple[tuple[Path, float, float], ...]  # (overlay, start s, end s)
+    burned: Path | None  # ffconcat list of caption images and gaps, timed from 0
 
 
 class FfmpegVideoRenderer:
@@ -144,15 +147,36 @@ def _prepare(
     if captions is not None and captions.cues:
         srt = work / "captions.srt"
         srt.write_text(to_srt(captions.cues), "utf-8")
-        burned = []
-        if captions.burn:
-            for n, cue in enumerate(captions.cues):
-                overlay = work / f"caption{n}.png"
-                _caption(cue.text).save(overlay)
-                burned.append((overlay, cue.start_ms / 1000, cue.end_ms / 1000))
+        burned = _caption_stream(captions, work) if captions.burn else None
         language = ISO639_2.get(captions.language.split("-")[0].lower(), "und")
-        track = _Captions(srt, language, tuple(burned))
+        track = _Captions(srt, language, burned)
     return segments, audio_files, track
+
+
+def _caption_stream(captions: CaptionTrack, work: Path) -> Path:
+    """An ffconcat list that shows each caption image while its line is spoken and a transparent gap between."""
+    gap = work / "caption-gap.png"
+    Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0)).save(gap)
+    entries: list[tuple[Path, int]] = []
+    at = 0
+    for n, cue in enumerate(captions.cues):
+        start, end = max(cue.start_ms, at), max(cue.end_ms, at)
+        if end <= start:
+            continue
+        if start > at:
+            entries.append((gap, start - at))
+        image = work / f"caption{n}.png"
+        _caption(cue.text).save(image)
+        entries.append((image, end - start))
+        at = end
+    entries.append((gap, 1000))
+    lines = ["ffconcat version 1.0"]
+    for path, ms in entries:
+        lines += [f"file '{path.name}'", f"duration {ms / 1000:.3f}"]
+    lines.append(f"file '{gap.name}'")  # the concat demuxer only honours the last duration if a file follows it
+    listing = work / "captions.ffconcat"
+    listing.write_text("\n".join(lines) + "\n", "utf-8")
+    return listing
 
 
 def _command(
@@ -206,10 +230,11 @@ def _command(
             f"[{chained}][v{i}]xfade=transition=fade:duration={FADE_FRAMES / FPS:.4f}:offset={offset:.4f}[x{i}]"
         )
         chained = f"x{i}"
-    for n, (overlay, start, end) in enumerate(captions.burned if captions else ()):
-        source = add_input("-i", str(overlay))
-        graph.append(f"[{chained}][{source}:v]overlay=0:0:enable='between(t,{start:.3f},{end:.3f})'[cap{n}]")
-        chained = f"cap{n}"
+    if captions is not None and captions.burned is not None:
+        source = add_input("-f", "concat", "-safe", "0", "-i", str(captions.burned))
+        graph.append(f"[{source}:v]format=rgba,settb=1/{FPS}[cap]")
+        graph.append(f"[{chained}][cap]overlay=0:0:eof_action=pass[captioned]")
+        chained = "captioned"
     graph.append("".join(f"[a{i}]" for i in range(len(segments))) + f"concat=n={len(segments)}:v=0:a=1[aout]")
     subtitle_args: list[str] = []
     if captions is not None:

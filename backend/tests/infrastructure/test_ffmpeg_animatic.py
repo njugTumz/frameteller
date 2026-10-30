@@ -75,3 +75,31 @@ async def test_a_broken_frame_fails_with_a_clear_error() -> None:
     clips = (AnimaticClip("s1", 1, MediaRef("a"), 0, 500),)
     with pytest.raises(Exception, match="cannot identify image"):
         await asyncio.wait_for(FfmpegVideoRenderer().render(Animatic("p1", "x", clips), {"s1": b"nope"}, {}), 60)
+
+
+def caption_band(video: Path, at_s: float, tmp_path: Path) -> int:
+    """Brightest pixel in the bottom caption band of the frame at `at_s` (white text lights it up)."""
+    still = tmp_path / f"f{at_s}.png"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-ss", f"{at_s}", "-i", str(video), "-frames:v", "1", str(still)], check=True
+    )
+    with Image.open(still) as im:
+        _, high = im.convert("L").crop((0, 800, 1536, 940)).getextrema()
+        assert isinstance(high, int)
+        return high
+
+
+async def test_burned_captions_show_only_while_their_line_is_spoken(tmp_path: Path) -> None:
+    clips = (AnimaticClip("s1", 1, MediaRef("a"), 0, 4000, Motion.STATIC),)
+    cues = tuple(Cue(1000 + n * 100, 1000 + (n + 1) * 100, f"line {n}") for n in range(10))  # many lines, one stream
+    track = CaptionTrack((*cues, Cue(2500, 3500, "The kite drifts over the rooftops.")), "en-US", burn=True)
+
+    video = await FfmpegVideoRenderer().render(
+        Animatic("p1", "Kites", clips), {"s1": panel((20, 20, 20))}, {}, captions=track
+    )
+
+    out = tmp_path / "a.mp4"
+    out.write_bytes(video)
+    assert caption_band(out, 3.0, tmp_path) > 200  # the last line, white on the dark band
+    assert caption_band(out, 2.3, tmp_path) < 60  # the gap between lines: only the panel
+    assert caption_band(out, 4.2, tmp_path) < 60  # after the last line
