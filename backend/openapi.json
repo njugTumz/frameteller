@@ -260,6 +260,18 @@
             ],
             "description": "Why the last sheet could not be drawn, in plain words; offer Try again and Edit.",
             "title": "Sheet Error"
+          },
+          "suggested_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Muse Image refused this description twice: offer this instead (Use this description); Try again with the same description answers 409 edit_first.",
+            "title": "Suggested Description"
           }
         },
         "required": [
@@ -957,6 +969,18 @@
             ],
             "description": "Why its sheet could not be drawn; offer Try again.",
             "title": "Sheet Error"
+          },
+          "suggested_clothes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Muse Image refused these clothes twice: offer this instead (Use this description); Try again with the same clothes answers 409 edit_first.",
+            "title": "Suggested Clothes"
           }
         },
         "required": [
