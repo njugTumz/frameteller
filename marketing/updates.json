@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-30T17:15:00Z",
+  "updated_at": "2026-10-30T18:20:00Z",
   "items": [
+    {
+      "date": "2026-10-30",
+      "status": "shipped",
+      "title": "Fewer refused drawings",
+      "body": "Some character sheets were turned down by the image model's safety filter before a second try drew them. Frameteller now describes every character as a friendly, fully clothed storybook character from the start, so they draw first time. If a sheet is still refused, it suggests a description you can use in one click."
+    },
     {
       "date": "2026-10-30",
       "status": "shipped",
