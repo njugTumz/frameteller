@@ -14,6 +14,15 @@ export function regenerateReference(projectId: string, characterId: string): Pro
 
 const characterPath = (projectId: string, characterId: string) => ({ params: { path: { project_id: projectId, character_id: characterId } } })
 
+/** "Try again" on one of a character's looks (ADR 0018): its sheet is drawn again from the everyday one. */
+export function regenerateLook(projectId: string, characterId: string, lookId: string): Promise<Ticket> {
+  return call(() =>
+    api.POST('/projects/{project_id}/cast/{character_id}/looks/{look_id}/regenerate', {
+      params: { path: { project_id: projectId, character_id: characterId, look_id: lookId } },
+    }),
+  )
+}
+
 export function renameCharacter(projectId: string, characterId: string, name: string): Promise<Project> {
   return call(() => api.PATCH('/projects/{project_id}/cast/{character_id}', { ...characterPath(projectId, characterId), body: { name } }))
 }

@@ -92,3 +92,48 @@ describe('approval gating', () => {
     expect(nameFromId('grey_cat')).toBe('Grey cat')
   })
 })
+
+describe('looks: a costume put on mid-story (ADR 0018)', () => {
+  const farmer = { id: 'farmer_costume', label: 'Farmer costume', clothes: 'blue denim overalls, red bandana', reference_url: '/media/wren/looks/farmer', from_shots: [2, 3], sheet_error: null }
+  const wren = character('wren', { looks: [farmer] })
+  const wrenUndrawn = character('wren', { looks: [{ ...farmer, reference_url: null }] })
+  const inCostume = shot(3, { character_ids: ['wren'], looks: { wren: 'farmer_costume' } })
+  const approved: CastState = { ...initialCast, status: 'approved', characters: [character('wren')] }
+
+  it('waits for the costume sheet when a shot wears a new look', () => {
+    const next = reduceCast(approved, { type: 'shot.created', shot: inCostume })
+    expect(next.expected).toEqual(['wren/farmer_costume'])
+    expect(next.status).toBe('draft')
+    expect(nameFromId('wren/farmer_costume')).toBe('Wren’s farmer costume')
+    expect(approvalBlock(next)).toBe('drawing')
+  })
+
+  it('a shot updated into the costume waits too', () => {
+    expect(reduceCast(approved, { type: 'shot.updated', shot: inCostume }).expected).toEqual(['wren/farmer_costume'])
+  })
+
+  it('the drawn costume arrives, clears what was waiting or being redrawn, and needs approval', () => {
+    const waiting: CastState = { ...approved, status: 'draft', expected: ['wren/farmer_costume'], redrawing: { 'wren/farmer_costume': true }, edits: { 'wren/farmer_costume': 'x' } }
+    const next = reduceCast(waiting, { type: 'cast.proposed', characters: [wren] })
+    expect(next.expected).toEqual([])
+    expect(next.redrawing).toEqual({})
+    expect(next.edits).toEqual({})
+    expect(approvalBlock(next)).toBeNull()
+  })
+
+  it('a look without its sheet blocks approval', () => {
+    expect(approvalBlock({ ...approved, status: 'draft', characters: [wrenUndrawn] })).toBe('missing-sheet')
+  })
+
+  it('a panel in the costume is drawn only once its sheet is here and approved', () => {
+    expect(castReadyFor({ ...approved, characters: [wrenUndrawn] }, inCostume)).toBe(false)
+    expect(castReadyFor({ ...approved, characters: [wren] }, inCostume)).toBe(true)
+    expect(castReadyFor({ ...approved, characters: [wren], redrawing: { 'wren/farmer_costume': true } }, inCostume)).toBe(false)
+    expect(castReadyFor({ ...approved, characters: [wrenUndrawn] }, shot(1, { character_ids: ['wren'] }))).toBe(true)
+  })
+
+  it('loading a project expects the looks its shots wear', () => {
+    const p = project({ cast: { status: 'draft', characters: [wrenUndrawn] }, shots: [inCostume] })
+    expect(loadCast(initialCast, p.cast, p.shots).expected).toEqual(['wren/farmer_costume'])
+  })
+})

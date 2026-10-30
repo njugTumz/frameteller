@@ -50,10 +50,10 @@ class StoryDirector:
                     continue
                 directed = await self._direct.execute(project_id, item)
                 for shot in directed.revised:
-                    await self._events.publish(project_id, ShotUpdated(shot))
+                    await self._events.publish(project_id, ShotUpdated(shot, directed.looks.get(shot.id, ())))
                 for shot in directed.shots:
                     shots += 1
-                    await self._events.publish(project_id, ShotCreated(shot))
+                    await self._events.publish(project_id, ShotCreated(shot, directed.looks.get(shot.id, ())))
                 if directed.refusal:
                     await self._events.publish(project_id, SessionFailed(directed.refusal))
                 if directed.capped and self._limits and not told_full:

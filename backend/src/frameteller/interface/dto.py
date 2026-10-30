@@ -783,10 +783,10 @@ def event_message(event: ProjectEvent) -> dict[str, Any]:
             return {"type": "transcript.partial", "text": text}
         case TurnFinished(turn):
             return {"type": "turn.completed", "turn": TurnOut.of(turn).model_dump()}
-        case ShotCreated(shot):
-            return {"type": "shot.created", "shot": ShotOut.of(shot).model_dump()}
-        case ShotUpdated(shot):
-            return {"type": "shot.updated", "shot": ShotOut.of(shot).model_dump()}
+        case ShotCreated(shot, looks):
+            return {"type": "shot.created", "shot": ShotOut.of(shot, looks=dict(looks)).model_dump()}
+        case ShotUpdated(shot, looks):
+            return {"type": "shot.updated", "shot": ShotOut.of(shot, looks=dict(looks)).model_dump()}
         case ShotsReplaced(turn, removed, shots):
             return {
                 "type": "shots.replaced",

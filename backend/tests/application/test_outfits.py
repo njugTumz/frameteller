@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-from frameteller.application.events import CastProposed, ShotUpdated
+from frameteller.application.events import CastProposed, ShotCreated, ShotUpdated
 from frameteller.application.ports import DirectedTurn, LookChange, ShotDraft
 from frameteller.application.use_cases import (
     ApproveCast,
@@ -212,3 +212,21 @@ async def test_a_correction_says_again_who_changes_clothes() -> None:
     [change] = p.outfits
     assert p.shot(change.from_shot_id).number == 2  # the corrected shot took shot 2's place
     assert p.look_in(p.shots[-1].id, "wren") is not None
+
+
+async def test_shot_events_say_who_wears_which_look() -> None:
+    repo, events, jobs = InMemoryProjectRepository(Project(id="p1")), RecordingPublisher(), InMemoryJobQueue()
+    director = scripted()
+    cast = RequestCastReferences(repo, jobs, SequentialIds("c"))
+    story = StoryDirector(
+        DirectTurn(repo, director, SequentialIds("e")),
+        CorrectTranscript(repo, director, SequentialIds("x"), cast, events),
+        cast,
+        events,
+    )
+    work: asyncio.Queue[TranscriptTurn | TranscriptCorrection | None] = asyncio.Queue()
+    for item in (costume_turn(1), costume_turn(2), costume_turn(3), None):
+        work.put_nowait(item)
+    await story.run("p1", work)
+    created = [e for e in events.of(ShotCreated) if isinstance(e, ShotCreated)]
+    assert [e.looks for e in created] == [(), (("wren", "farmer_costume"),), (("wren", "farmer_costume"),)]

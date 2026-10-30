@@ -22,13 +22,16 @@ class TurnFinished:
 @dataclass(frozen=True, slots=True)
 class ShotCreated:
     shot: Shot
+    looks: tuple[tuple[str, str], ...] = ()  # (character id, look id) for those out of their everyday clothes
 
 
 @dataclass(frozen=True, slots=True)
 class ShotUpdated:
-    """A later turn revealed who or what an earlier shot showed. Its panel is outdated until redrawn."""
+    """A later turn revealed who or what an earlier shot showed, or what they wear. Its panel is outdated until
+    redrawn."""
 
     shot: Shot
+    looks: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

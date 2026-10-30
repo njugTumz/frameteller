@@ -1,8 +1,9 @@
 import { CastTray } from '../../features/cast/components/CastTray'
 import { CharacterCard } from '../../features/cast/components/CharacterCard'
+import { LookCard } from '../../features/cast/components/LookCard'
 import { useCastManage } from '../../features/cast/hooks/useCastManage'
 import { useCastReview } from '../../features/cast/hooks/useCastReview'
-import { approvalBlock, nameFromId, useCastStore } from '../../features/cast/store'
+import { approvalBlock, lookKey, nameFromId, useCastStore } from '../../features/cast/store'
 import { NeedsYourEye } from '../../features/supervisor/components/NeedsYourEye'
 import { ReviewBadge } from '../../features/supervisor/components/ReviewBadge'
 import { useSupervisorActions } from '../../features/supervisor/hooks/useSupervisorActions'
@@ -43,6 +44,23 @@ export function CastZone({ projectId, onProject }: { projectId: string; onProjec
           onRemove={() => manage.remove(c.id)}
           onMerge={(into) => manage.merge(c.id, into)}
           badge={c.review ? <ReviewBadge review={c.review} /> : null}
+          looks={(c.looks ?? []).map((look) => {
+            const key = lookKey(c.id, look.id)
+            return (
+              <LookCard
+                key={look.id}
+                look={look}
+                name={c.name}
+                imageSrc={mediaUrl(look.reference_url)}
+                clothes={cast.edits[key] ?? look.clothes}
+                redrawing={!!cast.redrawing[key]}
+                locked={locked}
+                onDescribe={(text) => edit(key, text)}
+                onRegenerate={() => void regenerate(key)}
+                onRedrawWith={() => void redrawWith(key)}
+              />
+            )
+          })}
           review={
             c.review?.outcome === 'needs_user' && !locked ? (
               <NeedsYourEye

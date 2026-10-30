@@ -41,10 +41,27 @@ function upsert(list: Character[], incoming: Character[]): Character[] {
   return next
 }
 
+/** How the store names one of a character's looks (ADR 0018): "wren/farmer_costume", as the API does. */
+export function lookKey(characterId: string, lookId: string): string {
+  return `${characterId}/${lookId}`
+}
+
+/** Whether a sheet is here: a character's everyday sheet, or one of its looks ("wren/farmer_costume"). */
+function hasSheet(characters: Character[], key: string): boolean {
+  const [id, lookId] = key.split('/')
+  const c = characters.find((x) => x.id === id)
+  if (!c) return false
+  return lookId ? !!c.looks?.some((l) => l.id === lookId && l.reference_url) : !!c.reference_url
+}
+
+/** The sheets these shots need that are not here yet: new characters, and the looks they wear. */
+function missingFor(characters: Character[], shots: Shot[]): string[] {
+  const keys = shots.flatMap((s) => [...s.character_ids, ...Object.entries(s.looks ?? {}).map(([id, look]) => lookKey(id, look))])
+  return keys.filter((k) => !hasSheet(characters, k))
+}
+
 function expectedFrom(state: CastState, shots: Shot[]): string[] {
-  const known = new Set(state.characters.map((c) => c.id))
-  const ids = shots.flatMap((s) => s.character_ids).filter((id) => !known.has(id))
-  return [...new Set([...state.expected, ...ids])]
+  return [...new Set([...state.expected, ...missingFor(state.characters, shots)])]
 }
 
 function omit<T>(record: Record<string, T>, keys: Iterable<string>): Record<string, T> {
@@ -55,7 +72,8 @@ function omit<T>(record: Record<string, T>, keys: Iterable<string>): Record<stri
 /** Apply one server event. Pure, so every event type is unit-tested. */
 export function reduceCast(state: CastState, event: ServerEvent): CastState {
   switch (event.type) {
-    case 'shot.created': {
+    case 'shot.created':
+    case 'shot.updated': {
       const expected = expectedFrom(state, [event.shot])
       return expected.length === state.expected.length ? state : { ...state, expected, status: 'draft' }
     }
@@ -64,15 +82,17 @@ export function reduceCast(state: CastState, event: ServerEvent): CastState {
       return expected.length === state.expected.length ? state : { ...state, expected, status: 'draft' }
     }
     case 'cast.proposed': {
-      const ids = event.characters.map((c) => c.id)
+      const characters = upsert(state.characters, event.characters)
+      // Everything these characters now have a sheet for: their own, and each drawn look.
+      const drawn = event.characters.flatMap((c) => [c.id, ...(c.looks ?? []).filter((l) => l.reference_url).map((l) => lookKey(c.id, l.id))])
       return {
         ...state,
         // New or redrawn sheets need a look before panels use them (ADR 0004).
         status: 'draft',
-        characters: upsert(state.characters, event.characters),
-        expected: state.expected.filter((id) => !ids.includes(id)),
-        redrawing: omit(state.redrawing, ids),
-        edits: omit(state.edits, ids),
+        characters,
+        expected: state.expected.filter((key) => !hasSheet(characters, key)),
+        redrawing: omit(state.redrawing, drawn),
+        edits: omit(state.edits, drawn),
       }
     }
     case 'job.updated':
@@ -87,8 +107,7 @@ export function reduceCast(state: CastState, event: ServerEvent): CastState {
 
 export function loadCast(state: CastState, cast: Project['cast'], shots: Project['shots']): CastState {
   const next = { ...state, status: cast.status === 'approved' ? ('approved' as const) : ('draft' as const), characters: cast.characters }
-  const known = new Set(cast.characters.map((c) => c.id))
-  return { ...next, expected: [...new Set(shots.flatMap((s) => s.character_ids))].filter((id) => !known.has(id)) }
+  return { ...next, expected: [...new Set(missingFor(cast.characters, shots))] }
 }
 
 export type ApprovalBlock = 'no-cast' | 'drawing' | 'missing-sheet' | null
@@ -97,20 +116,26 @@ export type ApprovalBlock = 'no-cast' | 'drawing' | 'missing-sheet' | null
 export function approvalBlock(state: CastState): ApprovalBlock {
   if (state.characters.length === 0) return 'no-cast'
   if (state.drawing || state.expected.length > 0 || Object.keys(state.redrawing).length > 0) return 'drawing'
-  if (state.characters.some((c) => !c.reference_url)) return 'missing-sheet'
+  if (state.characters.some((c) => !c.reference_url || c.looks?.some((l) => !l.reference_url))) return 'missing-sheet'
   return null
 }
 
-/** Whether a shot's panel can be drawn: the cast is approved and every character in it has its sheet. */
+/** Whether a shot's panel can be drawn: the cast is approved and every character in it has the sheet of the look
+ * they wear in it. */
 export function castReadyFor(state: CastState, shot: Shot): boolean {
   if (state.status !== 'approved') return false
-  return shot.character_ids.every((id) => state.characters.some((c) => c.id === id && c.reference_url) && !state.redrawing[id])
+  const looks = Object.entries(shot.looks ?? {}).map(([id, look]) => lookKey(id, look))
+  return [...shot.character_ids, ...looks].every((key) => hasSheet(state.characters, key) && !state.redrawing[key])
 }
 
-/** "grey_cat" → "Grey cat", for characters whose sheets have not arrived yet. */
+const words = (id: string) => id.replace(/[_-]+/g, ' ').trim()
+
+/** "grey_cat" → "Grey cat", "wren/farmer_costume" → "Wren's farmer costume", for sheets not here yet. */
 export function nameFromId(id: string): string {
-  const words = id.replace(/[_-]+/g, ' ').trim()
-  return words.charAt(0).toUpperCase() + words.slice(1)
+  const [character = id, look] = id.split('/')
+  const name = words(character)
+  const capitalised = name.charAt(0).toUpperCase() + name.slice(1)
+  return look ? `${capitalised}’s ${words(look)}` : capitalised
 }
 
 interface CastActions {

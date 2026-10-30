@@ -1,7 +1,15 @@
 import { useCallback } from 'react'
 import { ApiError } from '../../../shared/api/client'
-import { approveCast, regenerateReference } from '../api'
+import type { Character } from '../../../shared/api/types'
+import { approveCast, regenerateLook, regenerateReference } from '../api'
 import { approvalBlock, useCastStore } from '../store'
+
+/** The text a key's sheet is drawn from: a character's description, or a look's clothes ("wren/farmer_costume"). */
+function currentText(characters: Character[], key: string): string | undefined {
+  const [id, look] = key.split('/')
+  const c = characters.find((x) => x.id === id)
+  return look ? c?.looks?.find((l) => l.id === look)?.clothes : c?.description
+}
 
 const message = (e: unknown) => (e instanceof ApiError ? e.message : 'The studio did not answer. Try again.')
 
@@ -10,10 +18,7 @@ export function useCastReview(projectId: string) {
     const s = useCastStore.getState()
     if (s.approving || approvalBlock(s)) return
     const descriptions = Object.fromEntries(
-      Object.entries(s.edits).filter(([id, text]) => {
-        const current = s.characters.find((c) => c.id === id)?.description
-        return text.trim() && text.trim() !== current
-      }),
+      Object.entries(s.edits).filter(([key, text]) => text.trim() && text.trim() !== currentText(s.characters, key)),
     )
     s.set({ approving: true, error: null })
     try {
@@ -37,7 +42,8 @@ export function useCastReview(projectId: string) {
       const s = useCastStore.getState()
       s.set({ redrawing: { ...s.redrawing, [characterId]: true }, status: 'draft', error: null })
       try {
-        await regenerateReference(projectId, characterId)
+        const [id = characterId, look] = characterId.split('/')
+        await (look ? regenerateLook(projectId, id, look) : regenerateReference(projectId, characterId))
       } catch (e) {
         const { redrawing } = useCastStore.getState()
         const { [characterId]: _gone, ...rest } = redrawing

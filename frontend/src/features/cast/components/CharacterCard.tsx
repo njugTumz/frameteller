@@ -18,6 +18,7 @@ export function CharacterCard({
   onMerge,
   badge,
   review,
+  looks,
 }: {
   character: Character
   imageSrc: string | null
@@ -38,6 +39,8 @@ export function CharacterCard({
   badge?: ReactNode
   /** Under the sheet: the rubric issues to look at before approving. */
   review?: ReactNode
+  /** The character's other outfits, each with its sheet (ADR 0018). */
+  looks?: ReactNode
 }) {
   const id = useId()
   const [mode, setMode] = useState<'view' | 'rename' | 'remove' | 'merge'>('view')
@@ -76,6 +79,7 @@ export function CharacterCard({
         )}
       </div>
       {!redrawing && review}
+      {(character.looks?.length ?? 0) > 0 && <p className="m-0 -mb-1 text-xs font-bold uppercase tracking-wider text-muted">Everyday</p>}
       {mode === 'rename' ? (
         <form
           className="flex gap-2"
@@ -122,6 +126,7 @@ export function CharacterCard({
           Regenerate
         </Button>
       )}
+      {looks}
       {mode === 'remove' && (
         <div className="flex flex-col gap-2 rounded border-[1.5px] border-danger p-2 text-sm" role="group" aria-label={`Remove ${character.name}`}>
           <p className="m-0">Remove {character.name}? Their shots keep their action, without them.</p>

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from frameteller.application.ports import (
     DirectorPort,
@@ -35,6 +35,7 @@ class DirectedShots:
     capped: bool = False  # the episode reached its shot limit: shots past it were not added
     refusal: str = ""  # the director declined a real person or a copyrighted character, and says why
     new_looks: tuple[str, ...] = ()  # sheets to draw for new outfits, as "wren/farmer_costume" (ADR 0018)
+    looks: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)  # by shot id: who wears what
 
 
 def shots_for_turn(drafts: Sequence[ShotDraft], turn: TranscriptTurn, ids: IdGenerator, first: int) -> list[Shot]:
@@ -108,6 +109,12 @@ def apply_looks(
     return list(dict.fromkeys(sheets)), list(dict.fromkeys(restyled))
 
 
+def wearing(project: Project, shot_id: str) -> tuple[tuple[str, str], ...]:
+    """Who in the shot is out of their everyday clothes, and in which look."""
+    shot = project.shot(shot_id)
+    return tuple((c, look.id) for c in shot.character_ids if (look := project.look_in(shot_id, c)) is not None)
+
+
 class DirectTurn:
     """Direct one finished transcript turn into shots (ADR 0002), revising earlier shots a reveal explains."""
 
@@ -147,7 +154,14 @@ class DirectTurn:
                 if shot_id not in new_ids and all(r.id != shot_id for r in revised):
                     revised.append(project.shot(shot_id))
             return DirectedShots(
-                tuple(shots), new, tuple(revised), tuple(dropped), capped, directed.refusal, tuple(sheets)
+                tuple(shots),
+                new,
+                tuple(revised),
+                tuple(dropped),
+                capped,
+                directed.refusal,
+                tuple(sheets),
+                {s.id: wearing(project, s.id) for s in [*shots, *revised]},
             )
 
         return await self._repo.update(project_id, apply)
