@@ -1,16 +1,19 @@
 import base64
 import io
 import json
+import threading
 from collections.abc import Callable
 from typing import Any
 
 import httpx2
+import pytest
 from openai import AsyncOpenAI
 from PIL import Image
 
 from frameteller.domain import MediaRef, Point
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.local import LocalFileMediaStorage
+from frameteller.infrastructure.meta import sam as sam_module
 from frameteller.infrastructure.meta.sam import MetaSamAdapter
 from frameteller.infrastructure.resilience import ModelCaller
 from tests.fakes import InMemorySpendLedger
@@ -102,3 +105,30 @@ async def test_downscaled_copy_gets_a_scaled_point_and_full_size_masks(
     assert segment is not None
     assert segment.box.right <= W
     assert segment.box.bottom <= H
+
+
+async def test_pixel_work_runs_off_the_event_loop(
+    client_for: Client,
+    caller: ModelCaller,
+    storage: LocalFileMediaStorage,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Decoding, resizing and cut-outs on the loop starved live sessions and the health probe (docs/load-test.md)."""
+    threads: dict[str, int] = {}
+    for name in ("shrink", "cut_out"):
+        real = getattr(sam_module, name)
+
+        def spy(*args: Any, _real: Any = real, _name: str = name) -> Any:
+            threads[_name] = threading.get_ident()
+            return _real(*args)
+
+        monkeypatch.setattr(sam_module, name, spy)
+    transport, _ = replay("sam_concept")
+    sam = MetaSamAdapter(client_for(transport), caller, storage, settings)
+
+    [segment] = await sam.segment_concept(await panel(storage), "girl in yellow raincoat", "masks/mira")
+
+    assert segment.cutout is not None
+    assert set(threads) == {"shrink", "cut_out"}
+    assert threading.get_ident() not in threads.values()

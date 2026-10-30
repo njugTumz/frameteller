@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from collections.abc import Sequence
 from typing import Any
@@ -29,7 +30,10 @@ from frameteller.infrastructure.resilience import ModelCaller, RetryPolicy, Usag
 
 
 class MetaSamAdapter:
-    """SegmentationPort. Masks come back cropped to their box; they are placed at that box and stored as cut-outs."""
+    """SegmentationPort. Masks come back cropped to their box; they are placed at that box and stored as cut-outs.
+
+    Pixel work (resizing, mask decoding, cut-outs) runs in a worker thread: on one core, doing it on the event
+    loop starved live sessions and the health probe while several panels were pre-segmented at once."""
 
     def __init__(self, client: AsyncOpenAI, caller: ModelCaller, storage: MediaStoragePort, settings: Settings) -> None:
         self._client, self._caller, self._storage, self._settings = client, caller, storage, settings
@@ -37,15 +41,13 @@ class MetaSamAdapter:
 
     async def segment_concept(self, image: MediaRef, concept: str, store_prefix: str) -> list[Segment]:
         data = await self._storage.get(image)
-        size, _ = inspect_image(data)
-        work, small = shrink(data, size, self._settings.sam_max_side)
+        size, work, small = await asyncio.to_thread(prepare, data, self._settings.sam_max_side)
         records = await self._segment(work, concept.strip(), "segment_concept")
         return await self._segments(records, data, size, small, concept, store_prefix)
 
     async def segment_point(self, image: MediaRef, point: Point, store_prefix: str) -> Segment | None:
         data = await self._storage.get(image)
-        size, _ = inspect_image(data)
-        work, small = shrink(data, size, self._settings.sam_max_side)
+        size, work, small = await asyncio.to_thread(prepare, data, self._settings.sam_max_side)
         x = min(max(point.x, 0), size.width - 1) * small.width // size.width
         y = min(max(point.y, 0), size.height - 1) * small.height // size.height
         prompt = build_object_prompt(
@@ -58,7 +60,7 @@ class MetaSamAdapter:
 
     async def _segment(self, png: bytes, text: str, operation: str) -> list[SegmentationMaskRecord]:
         model = self._settings.sam_model
-        image_url = data_url(png, "image/png")
+        image_url = await asyncio.to_thread(data_url, png, "image/png")
 
         # A noun phrase OR object prompts in the text part, never both.
         message: Any = {
@@ -85,14 +87,32 @@ class MetaSamAdapter:
     ) -> list[Segment]:
         segments = []
         for n, rec in enumerate(records):
-            bitmap = place_mask(rec, small)
-            if bitmap is not None and small != size:
-                bitmap = scale_mask(bitmap, small, size)
-            if bitmap is None:
+            found = await asyncio.to_thread(mask_and_cutout, rec, image, size, small)
+            if found is None:
                 continue
-            cutout = await self._storage.put(f"{store_prefix}/cutout-{n}.png", cut_out(image, bitmap), "image/png")
+            bitmap, png = found
+            cutout = await self._storage.put(f"{store_prefix}/cutout-{n}.png", png, "image/png")
             segments.append(Segment(bitmap.box, bitmap, label, cutout))
         return segments
+
+
+def prepare(image: bytes, max_side: int | None) -> tuple[Size, bytes, Size]:
+    """The image's size, the PNG SAM sees, and that PNG's size."""
+    size, _ = inspect_image(image)
+    work, small = shrink(image, size, max_side)
+    return size, work, small
+
+
+def mask_and_cutout(
+    rec: SegmentationMaskRecord, image: bytes, size: Size, small: Size
+) -> tuple[MaskBitmap, bytes] | None:
+    """The full-size mask of one record and its RGBA cut-out, or None when it falls outside the image."""
+    bitmap = place_mask(rec, small)
+    if bitmap is not None and small != size:
+        bitmap = scale_mask(bitmap, small, size)
+    if bitmap is None:
+        return None
+    return bitmap, cut_out(image, bitmap)
 
 
 def shrink(image: bytes, size: Size, max_side: int | None) -> tuple[bytes, Size]:
