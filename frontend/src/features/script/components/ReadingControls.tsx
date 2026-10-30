@@ -46,7 +46,7 @@ export function ReadingControls({
               ? 'Paused.'
               : `${voiceName} is reading.`
   return (
-    <section aria-label="Reading" className="flex flex-col gap-4 rounded-md border-[1.5px] border-rule bg-sheet p-4">
+    <section aria-label="Reading" className="flex flex-col gap-4 rounded-md border-[1.5px] border-rule bg-sheet p-4" data-tour="reading">
       <p className="m-0 flex items-center gap-2 font-semibold" role="status">
         <span aria-hidden="true" className={live && reading === 'reading' ? 'live-dot size-2.5 rounded-full bg-marker ring-1 ring-ink' : 'size-2.5 rounded-full bg-rule'} />
         {status}

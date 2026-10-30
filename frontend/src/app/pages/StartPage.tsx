@@ -1,6 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { StartScreen } from '../../features/start/components/StartScreen'
 import { FirstVisitGuide } from '../../features/start/components/FirstVisitGuide'
+import { TourOffer } from '../../features/tour/components/TourOffer'
+import { tourSeen, useTourStore } from '../../features/tour/store'
+import { startTour } from '../tour/start'
 import { useFirstVisit } from '../../features/start/hooks/useFirstVisit'
 import { useSampleStory, useStartStory } from '../../features/start/hooks/useStartStory'
 import { useStartStore } from '../../features/start/store'
@@ -22,6 +25,12 @@ export function StartPage() {
   const start = useStartStory(open)
   const sample = useSampleStory(open)
   const guide = useFirstVisit()
+  const tour = useTourStore()
+  const [seenTour] = useState(tourSeen)
+  // The tour replaces the three-step guide; the guide stays as the fallback if the tour cannot load.
+  const intro = tour.failed
+    ? guide.show && <FirstVisitGuide onDismiss={guide.dismiss} />
+    : !seenTour && !tour.declined && tour.status === 'off' && voices.available && <TourOffer onTake={startTour} onDismiss={tour.decline} />
   return (
     <StartScreen
       form={{ title, style, names, keepAudio, mode, script, format, voice, language }}
@@ -32,7 +41,7 @@ export function StartPage() {
       error={error}
       full={full}
       wakeNotice={<WakeNotice wake={wake} onRetry={retry} />}
-      guide={guide.show ? <FirstVisitGuide onDismiss={guide.dismiss} /> : null}
+      guide={intro || null}
       onChange={(patch) => {
         if (patch.title !== undefined) setTitle(patch.title)
         if (patch.style !== undefined) setStyle(patch.style)

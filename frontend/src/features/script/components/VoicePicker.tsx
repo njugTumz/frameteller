@@ -37,7 +37,7 @@ export function VoicePicker({
         <legend className="mb-2 text-lg font-bold">Pick a voice</legend>
         <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
           {voices.map((v) => (
-            <li key={v.name} className="flex items-center justify-between gap-2 rounded-md border-2 border-ink bg-paper p-2.5 has-checked:bg-wash">
+            <li key={v.name} className="flex items-center justify-between gap-2 rounded-md border-2 border-ink bg-paper p-2.5 has-checked:bg-wash" data-voice={v.name}>
               <label className="flex cursor-pointer items-center gap-2.5">
                 <input type="radio" name="voice" value={v.name} checked={chosen?.name === v.name} onChange={() => pick(v)} className="size-4 accent-[var(--ink)]" />
                 <span>

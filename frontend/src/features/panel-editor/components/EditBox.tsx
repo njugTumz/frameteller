@@ -29,7 +29,7 @@ export function EditBox({
   }
   const recording = dictation === 'recording'
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
+    <form onSubmit={submit} className="flex flex-col gap-2" data-tour="edit-box">
       <label htmlFor={id} className="font-bold">
         Change how it looks
       </label>

@@ -15,6 +15,8 @@ import { TopBar } from './TopBar'
 import { useTheme } from './theme'
 import { JudgePage } from './pages/JudgePage'
 import { JudgeBadge } from '../shared/ui/JudgeBadge'
+import { TourLayer } from './tour/TourLayer'
+import { startTour } from './tour/start'
 
 // Only some visitors open these: they load on demand, so the start page stays small.
 const GalleryPage = lazy(() => import('./pages/GalleryPage').then((m) => ({ default: m.GalleryPage })))
@@ -30,6 +32,11 @@ export function App() {
   const bar = (
     <TopBar>
       {judge && <JudgeBadge />}
+      {(route.name === 'start' || route.name === 'studio') && (
+        <Button size="sm" variant="quiet" onClick={startTour}>
+          Take the tour
+        </Button>
+      )}
       {route.name !== 'gallery' && (
         <a href="/gallery" className="text-sm font-semibold underline-offset-2 hover:underline">
           Gallery
@@ -76,6 +83,7 @@ export function App() {
           </main>
         </>
       )}
+      <TourLayer />
     </div>
   )
 }

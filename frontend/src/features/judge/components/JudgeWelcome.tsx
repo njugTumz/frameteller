@@ -2,7 +2,7 @@ import { Button } from '../../../shared/ui/Button'
 import type { JudgeLinkState } from '../hooks/useJudgeLink'
 
 /** What a judge sees after opening their private link. */
-export function JudgeWelcome({ state, onStart }: { state: JudgeLinkState; onStart: () => void }) {
+export function JudgeWelcome({ state, onStart, onTour }: { state: JudgeLinkState; onStart: () => void; onTour: () => void }) {
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-16 md:py-24" data-testid="judge-welcome">
       {state.kind === 'checking' && (
@@ -17,9 +17,15 @@ export function JudgeWelcome({ state, onStart }: { state: JudgeLinkState; onStar
             Judge access is on in this browser{state.until ? ` until ${new Date(state.until).toLocaleDateString()}` : ''}. You skip the
             public queue and the daily limits, and your stories draw from a budget kept for judging.
           </p>
-          <Button variant="marker" size="lg" className="mt-6 font-extrabold" onClick={onStart}>
-            Start a story
-          </Button>
+          <p className="mt-4 text-lg">New here? The 2-minute tour runs our sample story with you, through to the animatic.</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button variant="marker" size="lg" className="font-extrabold" onClick={onTour}>
+              Take the 2-minute tour
+            </Button>
+            <Button size="lg" onClick={onStart}>
+              Start a story
+            </Button>
+          </div>
         </>
       )}
       {state.kind === 'failed' && (

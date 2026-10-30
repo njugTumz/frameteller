@@ -18,7 +18,7 @@ export function TellingChoice({
   onChange: (mode: TellingMode) => void
 }) {
   return (
-    <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+    <fieldset className="m-0 flex flex-col gap-3 border-0 p-0" data-tour="modes">
       <legend className="mb-3 text-lg font-bold">How you'll tell it</legend>
       <div className="grid gap-3 sm:grid-cols-3">
         {CHOICES.map((c) => {

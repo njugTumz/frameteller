@@ -108,7 +108,7 @@ export function PanelEditor({
               <h3 id="sel-title" className="m-0 text-sm font-bold uppercase tracking-wider text-muted">
                 Selection
               </h3>
-              <p className="m-0" role="status" data-testid="selection-status">
+              <p className="m-0" role="status" data-testid="selection-status" data-selected={selection ? true : undefined}>
                 {selection ? (
                   <>
                     <strong>{selection.mask.label}</strong>{' '}
