@@ -21,7 +21,7 @@ describe('GallerySubmit', () => {
     render(<GallerySubmit {...base} entry={null} onSubmit={onSubmit} />)
     const submit = screen.getByRole('button', { name: 'Submit to gallery' })
     expect(submit).toHaveProperty('disabled', true)
-    await userEvent.click(screen.getByLabelText('With the Brandon voice instead'))
+    await userEvent.click(screen.getByLabelText('Publish with the Ava voice instead'))
     await userEvent.click(screen.getByLabelText(CONSENT))
     await userEvent.click(submit)
     expect(onSubmit).toHaveBeenCalledWith('voice')
@@ -29,8 +29,8 @@ describe('GallerySubmit', () => {
 
   it('offers my voice only when the recording was kept', () => {
     render(<GallerySubmit {...base} voiceKept={false} entry={null} onSubmit={vi.fn()} />)
-    expect(screen.getByLabelText<HTMLInputElement>(/With my voice/).disabled).toBe(true)
-    expect(screen.getByLabelText<HTMLInputElement>('With the Brandon voice instead').checked).toBe(true)
+    expect(screen.getByLabelText<HTMLInputElement>(/Publish with my voice/).disabled).toBe(true)
+    expect(screen.getByLabelText<HTMLInputElement>('Publish with the Ava voice instead').checked).toBe(true)
   })
 
   it('shows where the entry stands and can withdraw it', async () => {

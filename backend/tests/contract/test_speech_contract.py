@@ -128,7 +128,7 @@ async def test_the_recorded_voice_list_offers_the_curated_voices_and_is_fetched_
     assert await storage.exists(MediaRef(VOICES_KEY))
     curated = offered(voices)
     assert [v.name for v in curated] == list(CURATED)
-    assert [v.display_name for v in curated] == ["Brandon", "Ava", "Andrew", "Ada", "Ollie"]  # not "Ada Multilingual"
+    assert [v.display_name for v in curated] == ["Ava", "Brandon", "Andrew", "Ada", "Ollie"]  # not "Ada Multilingual"
     assert {v.accent for v in curated} == {"en-US", "en-GB"}
     assert {v.gender for v in curated} == {"Male", "Female"}
     for v in curated:

@@ -111,9 +111,9 @@ class SubmitToGallery:
         except DomainError:
             raise GallerySubmissionError("Draw every shot before you submit to the gallery.") from None
         if audio == "mine" and not project.narrations:
-            raise GallerySubmissionError("Your recording wasn't kept. Choose the Brandon voice or no audio.")
+            raise GallerySubmissionError("Your recording wasn't kept. Choose the Ava voice or no audio.")
         if audio == "voice" and not self._voice:
-            raise GallerySubmissionError("The Brandon voice isn't available right now. Choose your voice or no audio.")
+            raise GallerySubmissionError("The Ava voice isn't available right now. Choose your voice or no audio.")
         if self._allowance:
             self._allowance.check(project, EXPORTS)
         token = await self._share.execute(project_id, public=project.share_public)

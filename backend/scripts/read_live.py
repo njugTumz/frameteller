@@ -97,7 +97,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--api", required=True)
     parser.add_argument("--script", type=Path, required=True)
-    parser.add_argument("--voice", default="en-US-BrandonMultilingualNeural")
+    parser.add_argument("--voice", default="en-US-AvaMultilingualNeural")
     parser.add_argument("--language", default="en-US")
     parser.add_argument("--title", default="Read it to me check")
     parser.add_argument("--export", action="store_true")

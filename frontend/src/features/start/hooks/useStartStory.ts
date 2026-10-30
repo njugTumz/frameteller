@@ -32,7 +32,7 @@ export function useStartStory(onCreated: (projectId: string) => void): () => Pro
   }, [onCreated])
 }
 
-/** "Try a sample story": the built-in script, read by the Brandon voice, in a new project of its own. */
+/** "Try a sample story": the built-in script, read by the Ava voice, in a new project of its own. */
 export function useSampleStory(onCreated: (projectId: string) => void): () => Promise<void> {
   return useCallback(async () => {
     const s = useStartStore.getState()

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { fetchVoices, type Voices } from '../api'
+import { DEFAULT_VOICE } from '../store'
 
-const NONE: Voices = { available: false, default: 'en-US-BrandonMultilingualNeural', voices: [] }
+const NONE: Voices = { available: false, default: DEFAULT_VOICE, voices: [] }
 
 /** The voices offered, fetched once per page. Until they arrive (or if the studio is unreachable), none. */
 export function useVoices(): Voices {

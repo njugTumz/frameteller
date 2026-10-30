@@ -26,6 +26,7 @@ from frameteller.application.ports import (
     VideoRendererPort,
 )
 from frameteller.application.use_cases.requests import JobTicket
+from frameteller.application.use_cases.voices import DEFAULT_VOICE
 from frameteller.domain import TITLE_MS, Animatic, AnimaticExport, AudioCut, MediaRef, Project, caption_cues, to_srt
 
 log = logging.getLogger("frameteller.export")
@@ -34,14 +35,14 @@ PROGRESS_STEP = 0.05  # publish progress every 5% of the timeline
 # Pillow's bundled font draws Latin script only: other captions are a soft track and an .srt (the player's fonts).
 BURNABLE = ("en", "fr", "es", "pt")
 Audio = Literal["mine", "voice", "none"]
-GALLERY_VOICE = "en-US-BrandonMultilingualNeural"  # "the Brandon voice instead": speaks every language we offer
+GALLERY_VOICE = DEFAULT_VOICE  # "the Ava voice instead": speaks every language we offer
 
 
 @dataclass(frozen=True, slots=True)
 class AnimaticOptions:
     subtitles: bool = True  # burn the captions into the picture
     caption_language: str | None = None  # a locale to translate the captions into; None: as spoken
-    audio: Audio = "mine"  # the kept narration, the Brandon voice reading the captions, or silent
+    audio: Audio = "mine"  # the kept narration, the Ava voice reading the captions, or silent
 
     def payload(self) -> dict[str, str]:
         return {
@@ -174,7 +175,7 @@ class ExportAnimatic:
         return AnimaticExport(ref, animatic.duration_ms, burn, animatic.has_voice, srt, translated)
 
     async def _voiced(self, project_id: str, animatic: Animatic, language: str, base: str) -> Animatic:
-        """Each shot's words read by the Brandon voice, cut to the shot. Silent without Text-to-Speech."""
+        """Each shot's words read by the Ava voice, cut to the shot. Silent without Text-to-Speech."""
         if self._synthesizer is None:
             return _silent(animatic)
         clips = []

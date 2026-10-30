@@ -11,24 +11,24 @@ const FORM: StartForm = {
   mode: 'narrate',
   script: '',
   format: 'text',
-  voice: 'en-US-BrandonMultilingualNeural',
+  voice: 'en-US-AvaMultilingualNeural',
   language: 'en-US',
 }
 
 const VOICES: Voices = {
   available: true,
-  default: 'en-US-BrandonMultilingualNeural',
+  default: 'en-US-AvaMultilingualNeural',
   voices: [
     {
-      name: 'en-US-BrandonMultilingualNeural',
-      display_name: 'Brandon',
-      gender: 'Male',
+      name: 'en-US-AvaMultilingualNeural',
+      display_name: 'Ava',
+      gender: 'Female',
       accent: 'en-US',
       languages: [
         { code: 'en', locale: 'en-US', name: 'English' },
         { code: 'fr', locale: 'fr-FR', name: 'Français' },
       ],
-      preview_url: '/voices/en-US-BrandonMultilingualNeural/preview',
+      preview_url: '/voices/en-US-AvaMultilingualNeural/preview',
     },
     {
       name: 'en-GB-AdaMultilingualNeural',
@@ -100,6 +100,6 @@ describe('StartScreen', () => {
     expect([...screen.getByLabelText<HTMLSelectElement>('Language').options].map((o) => o.text)).toEqual(['English', 'Français'])
     fireEvent.click(screen.getByRole('radio', { name: /Ada/ }))
     expect(onChange).toHaveBeenCalledWith({ voice: 'en-GB-AdaMultilingualNeural', language: 'en-GB' }) // Ada reads English only
-    expect(screen.getByRole('button', { name: 'Hear Brandon' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Hear Ava' })).toBeTruthy()
   })
 })

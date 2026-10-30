@@ -78,7 +78,7 @@ async def test_every_shot_must_be_drawn_and_my_voice_must_have_been_kept(world: 
         await GeneratePanel(world.repo, world.images, world.budget, world.jobs).execute("p1", shot_id, 1)
     with pytest.raises(GallerySubmissionError, match="recording wasn't kept"):
         await g.submit.execute("p1", consent=True, audio="mine")
-    with pytest.raises(GallerySubmissionError, match="Brandon voice isn't available"):
+    with pytest.raises(GallerySubmissionError, match="Ava voice isn't available"):
         await Gallery(world, voice=False).submit.execute("p1", consent=True, audio="voice")
 
 
@@ -127,13 +127,13 @@ async def test_an_unsure_pass_and_a_failed_check_both_wait(world: World) -> None
     assert e.note == COULD_NOT_CHECK
 
 
-async def test_the_brandon_voice_reads_each_shot_instead_of_mine(world: World) -> None:
+async def test_the_ava_voice_reads_each_shot_instead_of_mine(world: World) -> None:
     p = world.project()
     p.keep_narration(Narration("t1", MediaRef("projects/p1/narration/t1.wav"), 4000))
     await world.repo.save(p)
     g = Gallery(world)
     assert await g.submitted("voice") is EntryStatus.PUBLISHED
-    assert [call[1] for call in g.synthesis.calls] == ["en-US-BrandonMultilingualNeural"] * 3
+    assert [call[1] for call in g.synthesis.calls] == ["en-US-AvaMultilingualNeural"] * 3
     animatic, _, recordings, _ = g.renderer.rendered[0]
     assert all(len(c.audio) == 1 and c.audio[0].end_ms <= c.duration_ms for c in animatic.clips)
     assert recordings  # the voice clips were mixed in, then deleted

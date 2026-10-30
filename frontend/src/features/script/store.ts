@@ -106,5 +106,5 @@ export interface TellingChoice {
   language: string
 }
 
-export const DEFAULT_VOICE = 'en-US-BrandonMultilingualNeural'
+export const DEFAULT_VOICE = 'en-US-AvaMultilingualNeural'
 export const DEFAULT_CHOICE: TellingChoice = { mode: 'narrate', script: '', format: 'text', voice: DEFAULT_VOICE, language: 'en-US' }

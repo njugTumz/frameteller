@@ -14,10 +14,10 @@ from frameteller.application.errors import ScriptError
 from frameteller.application.ports import BudgetGuard, MediaStoragePort, SpeechSynthesisPort, Voice
 from frameteller.domain import MediaRef
 
-DEFAULT_VOICE = "en-US-BrandonMultilingualNeural"
+DEFAULT_VOICE = "en-US-AvaMultilingualNeural"  # Ava, first in the list; projects keep the voice they were read in
 CURATED = (
     DEFAULT_VOICE,
-    "en-US-AvaMultilingualNeural",
+    "en-US-BrandonMultilingualNeural",
     "en-US-AndrewMultilingualNeural",
     "en-GB-AdaMultilingualNeural",
     "en-GB-OllieMultilingualNeural",

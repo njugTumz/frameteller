@@ -40,9 +40,9 @@ export function GallerySubmit({
   const [consent, setConsent] = useState(false)
   const [audio, setAudio] = useState<GalleryAudio>(voiceKept ? 'mine' : 'voice')
   const choices: { value: GalleryAudio; label: string; disabled?: boolean }[] = [
-    { value: 'mine', label: 'With my voice', disabled: !voiceKept },
-    { value: 'voice', label: 'With the Brandon voice instead' },
-    { value: 'none', label: 'Without audio' },
+    { value: 'mine', label: 'Publish with my voice', disabled: !voiceKept },
+    { value: 'voice', label: 'Publish with the Ava voice instead' },
+    { value: 'none', label: 'Publish without audio' },
   ]
   const retry = entry?.status === 'failed'
   return (

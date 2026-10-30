@@ -167,9 +167,7 @@ async def models(draw: bool) -> None:
                 raise RuntimeError("no AZURE_SPEECH_KEY or ~/.config/frameteller/speech.key")
             async with httpx2.AsyncClient() as http:
                 voices = await AzureSpeechSynthesizer(http, caller, storage, settings).voices()
-            return (
-                f"{len(voices)} voices, Brandon {'listed' if any('Brandon' in v.name for v in voices) else 'MISSING'}"
-            )
+            return f"{len(voices)} voices, Ava {'listed' if any('Ava' in v.name for v in voices) else 'MISSING'}"
 
         await timed("Muse Spark", spark)
         await timed("SAM 3.1", sam)

@@ -15,7 +15,7 @@ from typing import Literal
 from frameteller.domain.errors import InvalidValueError
 from frameteller.domain.media import MediaRef
 
-GalleryAudio = Literal["mine", "voice", "none"]  # the creator's voice, the Brandon voice instead, or silent
+GalleryAudio = Literal["mine", "voice", "none"]  # the creator's voice, the Ava voice instead, or silent
 REPORTS_TO_HIDE = 3  # distinct visitors reporting a published entry hide it until the admin decides
 MAX_REPORT_CHARS = 300
 

@@ -1,8 +1,8 @@
 import type { PanelStyle } from '../../shared/api/types'
-import type { TellingChoice } from '../script/store'
+import { DEFAULT_VOICE, type TellingChoice } from '../script/store'
 
 /**
- * "Try a sample story": an original script of ours (the team's rooftop story), read aloud by the Brandon voice
+ * "Try a sample story": an original script of ours (the team's rooftop story), read aloud by the Ava voice
  * through the real pipeline, so a visitor without a microphone sees the whole flow. It is a normal story: it
  * counts toward the per-visitor caps like any other (judges are exempt, as always).
  */
@@ -27,6 +27,6 @@ export const SAMPLE_CHOICE: TellingChoice = {
   mode: 'read',
   script: SAMPLE_STORY.script,
   format: 'text',
-  voice: 'en-US-BrandonMultilingualNeural',
+  voice: DEFAULT_VOICE,
   language: 'en-US',
 }

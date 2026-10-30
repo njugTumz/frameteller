@@ -829,7 +829,7 @@ def error_message(message: str, *, fatal: bool = False) -> dict[str, Any]:
 class GallerySubmitRequest(BaseModel):
     consent: bool = Field(description="The creator agreed to show this storyboard publicly in the gallery.")
     audio: GalleryAudio = Field(
-        default="mine", description='"mine": the kept narration; "voice": the Brandon voice instead; "none": silent.'
+        default="mine", description='"mine": the kept narration; "voice": the Ava voice instead; "none": silent.'
     )
 
 

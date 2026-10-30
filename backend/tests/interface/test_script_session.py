@@ -15,6 +15,7 @@ from tests.interface.conftest import Api, Fakes, WsClient
 PATH = "/ws/projects/p1/session"
 FRAME = b"\x00\x00" * 1920  # 80 ms at 24 kHz
 BRANDON = "en-US-BrandonMultilingualNeural"
+AVA = "en-US-AvaMultilingualNeural"
 ROOFTOP = "Wide shot. Lena feeds the pigeons.\n\nA kite drifts down."
 
 
@@ -57,7 +58,7 @@ async def test_pause_and_continue_are_accepted_while_a_voice_reads(api: Api) -> 
     fresh(api)
     ws = WsClient(api.app, PATH)
     assert await ws.connect()
-    await ws.send_json({"mode": "read", "script": ROOFTOP})  # Brandon in English by default
+    await ws.send_json({"mode": "read", "script": ROOFTOP})  # Ava in English by default
     await ws.send_json({"type": "pause"})
     paused = await ws.until("script.paused")
     assert paused[-1]["reason"] == "user"
@@ -67,6 +68,8 @@ async def test_pause_and_continue_are_accepted_while_a_voice_reads(api: Api) -> 
 
     assert "script.resumed" in [e["type"] for e in events]
     assert len([e for e in paused + events if e["type"] == "script.voiced"]) == 2
+    [narration] = api.project().narrations.values()
+    assert narration.voice == AVA  # the default voice
 
 
 async def test_teleprompter_cuts_the_script_paragraphs_from_the_reading(api: Api) -> None:
@@ -130,8 +133,9 @@ async def test_voices_lists_the_curated_set_with_languages_and_a_cached_preview(
     body = (await api.client.get("/voices")).json()
 
     assert body["available"] is True
-    assert body["default"] == BRANDON
-    [voice] = body["voices"]  # the fake resource has only Brandon
+    assert body["default"] == AVA
+    assert [v["name"] for v in body["voices"]] == [AVA, BRANDON]  # the default first
+    voice = body["voices"][0]
     assert [x["locale"] for x in voice["languages"]] == ["en-US", "fr-FR"]
 
     first = await api.client.get(voice["preview_url"], params={"language": "fr-FR"})
@@ -139,13 +143,13 @@ async def test_voices_lists_the_curated_set_with_languages_and_a_cached_preview(
     assert (first.status_code, first.headers["content-type"]) == (200, "audio/wav")
     assert again.content == first.content
     assert len(api.fakes.synthesis.calls) == 1  # synthesized once, then kept
-    assert (await api.client.get(f"/voices/{BRANDON}/preview", params={"language": "hi-IN"})).status_code == 422
+    assert (await api.client.get(f"/voices/{AVA}/preview", params={"language": "hi-IN"})).status_code == 422
 
 
 async def test_without_text_to_speech_read_it_to_me_is_not_offered(make_api: Callable[..., Api], fakes: Fakes) -> None:
     fakes.tts = False
     api = make_api()
-    assert (await api.client.get("/voices")).json() == {"available": False, "default": BRANDON, "voices": []}
+    assert (await api.client.get("/voices")).json() == {"available": False, "default": AVA, "voices": []}
     assert (await api.client.get(f"/voices/{BRANDON}/preview")).status_code == 503
     ws = WsClient(api.app, PATH)
     assert await ws.connect()

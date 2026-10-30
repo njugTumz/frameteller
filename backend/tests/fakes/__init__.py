@@ -434,7 +434,10 @@ class FakeSpeechSynthesis:
         self.fail = fail
 
     async def voices(self) -> list[Voice]:
-        return [Voice("en-US-BrandonMultilingualNeural", "Brandon", "Male", "en-US", ("en-US", "fr-FR"))]
+        return [
+            Voice("en-US-AvaMultilingualNeural", "Ava", "Female", "en-US", ("en-US", "fr-FR")),
+            Voice("en-US-BrandonMultilingualNeural", "Brandon", "Male", "en-US", ("en-US", "fr-FR")),
+        ]
 
     async def synthesize(self, text: str, voice: str, language: str, store_as: str) -> SpokenClip:
         if self.fail:
