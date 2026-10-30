@@ -38,7 +38,7 @@ class GeneratePanel:
         if panel.has_render(revision):
             return panel
 
-        cast = [snapshot.bible.get(cid) for cid in shot.character_ids]
+        cast = snapshot.cast_in(shot_id)  # each in the look they wear by this shot (ADR 0018)
         references = tuple(c.reference for c in cast if c.reference is not None)
         await self._budget.charge(project_id, costs.IMAGE, f"panel {shot_id} r{revision}")
         try:

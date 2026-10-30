@@ -55,6 +55,19 @@ class ShotRevision:
 
 
 @dataclass(frozen=True, slots=True)
+class LookChange:
+    """A character changes clothes (ADR 0018): from shot `from_shot` on (numbered as the director saw the story,
+    new shots after the shots so far), they wear this look until the next change. look_id EVERYDAY: back to the
+    clothes of their canonical description."""
+
+    character_id: str
+    look_id: str
+    label: str
+    clothes: str
+    from_shot: int
+
+
+@dataclass(frozen=True, slots=True)
 class DirectedTurn:
     new_characters: tuple[Character, ...]
     shots: tuple[ShotDraft, ...]
@@ -62,6 +75,7 @@ class DirectedTurn:
     # One friendly sentence when the narration named a real person or a copyrighted character: no character or
     # shot was made for them, and the narrator is asked for an original one instead.
     refusal: str = ""
+    looks: tuple[LookChange, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

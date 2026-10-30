@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from frameteller.application.events import ShotsReplaced
 from frameteller.application.ports import DirectorPort, EventPublisher, IdGenerator, ProjectRepository
-from frameteller.application.use_cases.direct_turn import add_new_characters, shots_for_turn
+from frameteller.application.use_cases.direct_turn import add_new_characters, apply_looks, shots_for_turn
 from frameteller.application.use_cases.requests import RequestCastReferences
 from frameteller.domain import InvalidValueError, Project
 
@@ -15,6 +15,7 @@ MAX_TURN_CHARS = 2000
 class _Redirected:
     event: ShotsReplaced
     new_character_ids: list[str]
+    new_looks: list[str]
 
 
 class CorrectTranscript:
@@ -42,17 +43,25 @@ class CorrectTranscript:
         # The director sees the story without the misheard shots, so it does not copy them.
         snapshot.replace_shots([s.id for s in snapshot.shots_from_turn(turn_id)], [])
         directed = await self._director.direct_turn(corrected, snapshot)
+        seen = len(snapshot.shots)  # the director numbered its new shots after these
 
         def apply(project: Project) -> _Redirected:
             turn = project.correct_turn(turn_id, text)
             old = [s.id for s in project.shots_from_turn(turn_id)]
             new = add_new_characters(project, directed.new_characters)
             shots = shots_for_turn(directed.shots, turn, self._ids, 1)
+            project.drop_outfits_from(old)  # the corrected words say again who changes clothes
             placed = project.replace_shots(old, shots)
-            return _Redirected(ShotsReplaced(turn, tuple(old), tuple(placed)), [c.id for c in new])
+
+            def shot_at(number: int) -> str | None:
+                return placed[number - seen - 1].id if 0 < number - seen <= len(placed) else None
+
+            sheets, _ = apply_looks(project, directed.looks, shot_at)
+            event = ShotsReplaced(turn, tuple(old), tuple(project.shot(s.id) for s in placed))
+            return _Redirected(event, [c.id for c in new], sheets)
 
         done = await self._repo.update(project_id, apply)
         await self._events.publish(project_id, done.event)
-        if done.new_character_ids:
-            await self._cast.execute(project_id, done.new_character_ids)
+        if done.new_character_ids or done.new_looks:
+            await self._cast.execute(project_id, [*done.new_character_ids, *done.new_looks])
         return done.event

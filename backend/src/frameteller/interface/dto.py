@@ -61,6 +61,7 @@ from frameteller.domain import (
     SupervisorEntry,
     TranscriptTurn,
     Verdict,
+    sheet_target,
 )
 from frameteller.domain.gallery import MAX_NAME_CHARS, MAX_REPORT_CHARS
 
@@ -366,9 +367,12 @@ class ShotOut(BaseModel):
     source_turn_ids: list[str]
     episode: int = Field(default=1, description="Shots are numbered through the story; the studio counts per episode.")
     panel: PanelOut | None = None
+    looks: dict[str, str] = Field(
+        default_factory=dict, description="Character id -> the look they wear in this shot, when not everyday."
+    )
 
     @classmethod
-    def of(cls, s: Shot, panel: Panel | None = None) -> ShotOut:
+    def of(cls, s: Shot, panel: Panel | None = None, looks: dict[str, str] | None = None) -> ShotOut:
         return cls(
             id=s.id,
             number=s.number,
@@ -381,7 +385,19 @@ class ShotOut(BaseModel):
             source_turn_ids=list(s.source_turn_ids),
             episode=s.episode,
             panel=PanelOut.of(panel) if panel else None,
+            looks=looks or {},
         )
+
+
+class LookOut(BaseModel):
+    """Another outfit of a character (ADR 0018), with its own sheet."""
+
+    id: str
+    label: str
+    clothes: str
+    reference_url: str | None
+    from_shots: list[int] = Field(description="The shots that show this look, in order.")
+    sheet_error: str | None = Field(default=None, description="Why its sheet could not be drawn; offer Try again.")
 
 
 class CharacterOut(BaseModel):
@@ -393,10 +409,33 @@ class CharacterOut(BaseModel):
     sheet_error: str | None = Field(
         default=None, description="Why the last sheet could not be drawn, in plain words; offer Try again and Edit."
     )
+    looks: list[LookOut] = Field(
+        default_factory=list, description="Outfits besides the everyday one, each with its sheet."
+    )
 
     @classmethod
-    def of(cls, c: Character, review: SheetReview | None = None, sheet_error: str | None = None) -> CharacterOut:
+    def of(
+        cls,
+        c: Character,
+        review: SheetReview | None = None,
+        sheet_error: str | None = None,
+        project: Project | None = None,
+    ) -> CharacterOut:
         current = review if review and review.reference == c.reference else None
+        looks = []
+        for look in c.looks:
+            worn = [s.number for s in project.shots if _wears(project, s, c.id, look.id)] if project else []
+            failure = project.sheet_failures.get(sheet_target(c.id, look.id)) if project else None
+            looks.append(
+                LookOut(
+                    id=look.id,
+                    label=look.label,
+                    clothes=look.clothes,
+                    reference_url=media_url(look.reference),
+                    from_shots=worn,
+                    sheet_error=failure if look.reference is None else None,
+                )
+            )
         return cls(
             id=c.id,
             name=c.name,
@@ -404,7 +443,21 @@ class CharacterOut(BaseModel):
             reference_url=media_url(c.reference),
             review=ReviewOut.of(current.outcome, current.summary, current.verdict) if current else None,
             sheet_error=sheet_error if c.reference is None else None,
+            looks=looks,
         )
+
+
+def _wears(project: Project, shot: Shot, character_id: str, look_id: str) -> bool:
+    look = project.look_in(shot.id, character_id) if character_id in shot.character_ids else None
+    return look is not None and look.id == look_id
+
+
+def _shot_looks(project: Project, shot: Shot) -> dict[str, str]:
+    return {c: look.id for c in shot.character_ids if (look := project.look_in(shot.id, c)) is not None}
+
+
+class BeatMerge(BaseModel):
+    other: Literal["previous", "next"] = Field(description="Which neighbouring beat to merge this one with.")
 
 
 class CastOut(BaseModel):
@@ -487,12 +540,12 @@ class ProjectOut(BaseModel):
             cast=CastOut(
                 status=p.bible.status.value,
                 characters=[
-                    CharacterOut.of(c, p.sheet_reviews.get(c.id), p.sheet_failures.get(c.id))
+                    CharacterOut.of(c, p.sheet_reviews.get(c.id), p.sheet_failures.get(c.id), p)
                     for c in p.bible.characters.values()
                 ],
             ),
             turns=[TurnOut.of(t) for t in p.turns],
-            shots=[ShotOut.of(s, p.panels.get(s.id)) for s in p.shots],
+            shots=[ShotOut.of(s, p.panels.get(s.id), _shot_looks(p, s)) for s in p.shots],
             narrations=[
                 NarrationOut(
                     session=n.session,

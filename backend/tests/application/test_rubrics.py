@@ -54,3 +54,11 @@ def test_the_library_refuses_unknown_or_unsafe_names(tmp_path: Path) -> None:
         library.get("cast")  # missing
     with pytest.raises(RubricError):
         library.get("shot")  # the file declares another id
+
+
+def test_panel_continuity_checks_the_outfit_worn_in_the_shot() -> None:
+    rubric = parse_rubric((AGENTS / "panel-continuity.md").read_text())
+    assert rubric.version == 2
+    [outfit] = (r for r in rubric.rules if r.id == "CONT-09")
+    assert "not their everyday clothes" in outfit.test
+    assert "never\nagainst what they wore earlier" in rubric.guidance

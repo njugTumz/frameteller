@@ -195,7 +195,7 @@ class SupervisePanel:
 
 
 def _sheets(project: Project, shot: Shot) -> tuple[ReferenceSheet, ...]:
-    cast = (project.bible.get(cid) for cid in shot.character_ids if cid in project.bible)
+    cast = project.cast_in(shot.id)  # the look each wears by this shot, with its sheet (ADR 0018)
     return tuple(ReferenceSheet(c.name, c.canonical_description, c.reference) for c in cast if c.reference)
 
 

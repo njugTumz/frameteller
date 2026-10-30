@@ -7,11 +7,12 @@ import pytest
 from openai import AsyncOpenAI
 
 from frameteller.application.errors import InvalidModelOutputError
+from frameteller.application.ports import LookChange
 from frameteller.domain import Framing, Project, TranscriptTurn
 from frameteller.infrastructure.config import Settings
 from frameteller.infrastructure.meta.director import SYSTEM_PROMPT, MetaSparkDirectorAdapter
 from frameteller.infrastructure.resilience import ModelCaller
-from tests.builders import project
+from tests.builders import FARMER, costume_project, costume_turn, project
 from tests.contract.conftest import FAKE_KEY
 from tests.fakes import InMemorySpendLedger
 from tests.fixtures import load, replay
@@ -201,3 +202,71 @@ async def test_a_real_person_or_a_franchise_character_is_refused_with_a_reason(
 
     assert (out.shots, out.new_characters, out.refusal) == ((), (), no)
     assert "original" in body(seen[0])["messages"][0]["content"]  # the rule is in the stable system prompt
+
+
+def costume_answer(from_shot: int, turn_id: str = "t2") -> dict[str, Any]:
+    return with_content(
+        json.dumps(
+            {
+                "new_characters": [],
+                "shots": [
+                    {
+                        "framing": "medium",
+                        "character_ids": ["wren"],
+                        "setting": "her bedroom",
+                        "action": "Wren puts on her farmer costume and grins at the mirror",
+                        "dialogue": "",
+                        "source_turn_ids": [turn_id],
+                    }
+                ],
+                "outfit_changes": [
+                    {
+                        "character_id": "wren",
+                        "look_id": "farmer_costume",
+                        "label": "Farmer costume",
+                        "clothes": FARMER.clothes,
+                        "from_shot": from_shot,
+                    }
+                ],
+            }
+        )
+    )
+
+
+def costume_story() -> Project:
+    p = costume_project(looks=False)
+    p.shots, p.turns = p.shots[:1], p.turns[:1]
+    p.add_turn(costume_turn(2))
+    return p
+
+
+async def test_a_costume_is_recorded_from_the_shot_that_shows_it(
+    client_for: Client, caller: ModelCaller, settings: Settings
+) -> None:
+    transport, seen = replay([costume_answer(9), costume_answer(2)])
+    out = await MetaSparkDirectorAdapter(client_for(transport), caller, settings).direct_turn(
+        costume_turn(2), costume_story()
+    )
+
+    assert len(seen) == 2  # shot 9 does not exist: retried with the error
+    assert "outfit_changes: from_shot 9 is not one of [1, 2]" in seen[1].content.decode()
+    assert out.looks == (LookChange("wren", "farmer_costume", "Farmer costume", FARMER.clothes, 2),)
+    sent = body(seen[0])
+    assert "outfit_changes" in sent["response_format"]["json_schema"]["schema"]["properties"]
+    assert "outfit_changes" in sent["messages"][0]["content"]
+
+
+async def test_the_director_sees_each_characters_looks_and_who_wears_what(
+    client_for: Client, caller: ModelCaller, settings: Settings
+) -> None:
+    transport, seen = replay([costume_answer(7, "t7")])  # the new shot (7) stays in the costume
+    p = costume_project()
+    p.add_turn(TranscriptTurn("t7", "Wren takes a bow.", 48000, 52000))
+    await MetaSparkDirectorAdapter(client_for(transport), caller, settings).direct_turn(p.turns[-1], p)
+
+    messages = body(seen[0])["messages"]
+    bible = json.loads(messages[1]["content"].removeprefix("Character bible:\n"))
+    assert bible[1]["looks"] == [{"look_id": "farmer_costume", "label": "Farmer costume", "clothes": FARMER.clothes}]
+    assert "looks" not in bible[0]  # Dad has only his everyday clothes
+    shots = json.loads(messages[2]["content"].split("Shots so far:\n")[1].split("\n\nDirect")[0])
+    assert [s.get("looks") for s in shots] == [None, *[{"wren": "farmer_costume"}] * 5]

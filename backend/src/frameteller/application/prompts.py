@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from frameteller.domain import Character, PanelStyle, Shot
+from frameteller.domain import Character, Look, PanelStyle, Shot
 
 STYLES = {
     PanelStyle.PENCIL: "hand-drawn pencil storyboard sketch, clean graphite lines, light grey wash, one accent colour",
@@ -95,6 +95,26 @@ def reference_prompt(
     )
 
 
+def look_reference_prompt(
+    c: Character, look: Look, style: PanelStyle = PanelStyle.PENCIL, correction: str = "", *, safer: bool = False
+) -> str:
+    """A sheet for another outfit of the same character (ADR 0018), drawn from their everyday sheet when it is
+    attached: the same person, only the clothes change."""
+    who = by_role(c.canonical_description) if safer else soften_ages(c.canonical_description)
+    pose = "fully clothed, friendly standing pose" if safer or is_young(c) else "full body, neutral standing pose"
+    clothes = look.clothes.strip().rstrip(".")
+    return (
+        f"Character reference sheet for an original character named {c.name}, in a new outfit: the "
+        f"{look.label.strip().lower()}. The same character as in the attached reference sheet, with the same face, "
+        "hair, skin, build, proportions and drawing style; only the clothes change. "
+        f"Who they are: {who}. Ignore any clothes in that description: now they wear {clothes}. "
+        f"Show the same character twice side by side: a front view and a three-quarter view, {pose}, "
+        "identical in both views. Plain light grey background, no text, no scenery. "
+        f"Style: {STYLES[style]}. {NOT_PHOTOREAL}"
+        + (f" Correction from the continuity review: {correction.strip().rstrip('.')}." if correction.strip() else "")
+    )
+
+
 def panel_prompt(shot: Shot, cast: Sequence[Character], style: PanelStyle = PanelStyle.PENCIL) -> str:
     """`cast` is the shot's characters; those with sheets are attached as references in the same order."""
     who = "; ".join(f"{c.name}: {soften_ages(c.canonical_description)}" for c in cast)
@@ -107,8 +127,8 @@ def panel_prompt(shot: Shot, cast: Sequence[Character], style: PanelStyle = Pane
     if sheets := [c.name for c in cast if c.reference is not None]:
         lines.append(
             f"The attached reference sheets show, in order: {', '.join(sheets)}. Each character appears exactly as "
-            "in their reference sheet: same species, proportions, colours, markings and drawing style, with no "
-            "added clothing, accessories or change of style."
+            "in their reference sheet: same species, proportions, colours, markings, clothes and drawing style, "
+            "with no added clothing, accessories or change of style."
         )
     lines.append(f"Style: {STYLES[style]}. {NOT_PHOTOREAL} No text, captions or panel borders.")
     return " ".join(lines)

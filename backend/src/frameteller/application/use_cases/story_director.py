@@ -59,8 +59,9 @@ class StoryDirector:
                 if directed.capped and self._limits and not told_full:
                     told_full = True
                     await self._events.publish(project_id, SessionFailed(self._limits.shots_full))
-                if directed.new_characters:
-                    await self._cast.execute(project_id, [c.id for c in directed.new_characters])
+                if directed.new_characters or directed.new_looks:
+                    sheets = [*(c.id for c in directed.new_characters), *directed.new_looks]
+                    await self._cast.execute(project_id, sheets)
             except ApplicationError as e:
                 await self._events.publish(project_id, SessionFailed(e.user_message, source="director"))
             except DomainError:

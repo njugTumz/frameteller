@@ -11,9 +11,9 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, ValidationError
 
 from frameteller.application.errors import InvalidModelOutputError
-from frameteller.application.ports import DirectedTurn, EditIntent, ShotDraft, ShotRevision
+from frameteller.application.ports import DirectedTurn, EditIntent, LookChange, ShotDraft, ShotRevision
 from frameteller.application.use_cases.direct_turn import REVEAL_WINDOW
-from frameteller.domain import Character, Framing, InvalidValueError, Project, Shot, TranscriptTurn
+from frameteller.domain import EVERYDAY, Character, Framing, InvalidValueError, Project, Shot, TranscriptTurn
 from frameteller.infrastructure.config import Effort, Settings
 from frameteller.infrastructure.pricing import token_cost
 from frameteller.infrastructure.resilience import ModelCaller, RetryPolicy, Usage
@@ -43,6 +43,15 @@ Never invent a character, name or species the narration does not state. Somethin
 - updated_shots: when this turn reveals who or what an earlier vague or wrongly guessed thing was, revise
   those of the last 3 shots so far: their number, their full character_ids and their action rewritten with
   the reveal. Return [] when nothing is revealed. Never revise older shots.
+- outfit_changes: when a turn says a character puts on a costume or changes clothes, record it so every later
+  panel keeps it: character_id; look_id, a short lowercase slug for the outfit (e.g. "farmer_costume"), or
+  "everyday" when they change back into the clothes of their canonical description; label, two or three words
+  (e.g. "Farmer costume"); clothes, only what they now wear, concretely (garments, colours, shoes, accessories);
+  from_shot, the number of the first shot that shows the new clothes: one of this turn's new shots (numbered on
+  from the shots so far) or, when the turn reveals a change that already happened, one of the last 3 shots so
+  far. They keep wearing it until another change. To change back into a look the bible already lists for them,
+  reuse its look_id. A character's canonical_description describes what they wear when we first meet them. Return
+  [] when nobody changes clothes.
 - refusal: "" normally. Stories must be original. When a turn names a real, identifiable person (a public
   figure, a celebrity, a politician) or a well-known copyrighted character (from films, TV, comics, games or
   books), create no character and no shot for them, and set refusal to one short, friendly sentence asking
@@ -88,10 +97,19 @@ class UpdatedShotOut(BaseModel):
     action: str = Field(min_length=1)
 
 
+class OutfitChangeOut(BaseModel):
+    character_id: str
+    look_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    label: str = Field(max_length=40)
+    clothes: str = Field(max_length=400)
+    from_shot: int = Field(ge=1)
+
+
 class DirectorOutput(BaseModel):
     new_characters: list[CharacterOut]
     shots: list[ShotOut]
     updated_shots: list[UpdatedShotOut] = Field(default_factory=list, max_length=3)
+    outfit_changes: list[OutfitChangeOut] = Field(default_factory=list, max_length=8)
     refusal: str = Field(default="", max_length=300)
 
 
@@ -191,9 +209,19 @@ class MetaSparkDirectorAdapter:
         known = set(project.bible.characters)
         revisable = {s.number for s in project.shots[-REVEAL_WINDOW:]}
 
+        first_new = len(project.shots) + 1
+
         def check(out: DirectorOutput) -> list[str]:
             errors = []
             cast = known | {c.id for c in out.new_characters}
+            startable = revisable | set(range(first_new, first_new + len(out.shots)))
+            for o in out.outfit_changes:
+                if o.character_id not in cast:
+                    errors.append(f"outfit_changes: character_id {o.character_id!r} is unknown")
+                if o.from_shot not in startable:
+                    errors.append(f"outfit_changes: from_shot {o.from_shot} is not one of {sorted(startable)}")
+                if o.look_id != EVERYDAY and not (o.label.strip() and o.clothes.strip()):
+                    errors.append(f"outfit_changes: {o.look_id!r} needs a label and the clothes")
             for n, s in enumerate(out.shots, start=1):
                 if unknown := set(s.character_ids) - cast:
                     errors.append(f"shot {n}: character_ids {sorted(unknown)} are not in the bible or new_characters")
@@ -284,7 +312,11 @@ class MetaSparkDirectorAdapter:
             for u in out.updated_shots
             if u.number in by_number
         )
-        return DirectedTurn(characters, tuple(drafts), revisions, out.refusal.strip())
+        looks = tuple(
+            LookChange(o.character_id, o.look_id, o.label.strip(), o.clothes.strip(), o.from_shot)
+            for o in out.outfit_changes
+        )
+        return DirectedTurn(characters, tuple(drafts), revisions, out.refusal.strip(), looks)
 
 
 def _character(c: CharacterOut) -> Character:
@@ -293,7 +325,12 @@ def _character(c: CharacterOut) -> Character:
 
 def _bible_message(characters: Sequence[Character]) -> str:
     # Stable prefix part 2: sorted and compact, so it only changes when the cast changes.
-    rows = [{"id": c.id, "name": c.name, "canonical_description": c.canonical_description} for c in characters]
+    rows: list[dict[str, Any]] = []
+    for c in characters:
+        row: dict[str, Any] = {"id": c.id, "name": c.name, "canonical_description": c.canonical_description}
+        if c.looks:
+            row["looks"] = [{"look_id": lk.id, "label": lk.label, "clothes": lk.clothes} for lk in c.looks]
+        rows.append(row)
     return "Character bible:\n" + json.dumps(sorted(rows, key=lambda r: r["id"]), ensure_ascii=False)
 
 
@@ -305,10 +342,18 @@ def _turns_json(turns: Sequence[TranscriptTurn]) -> str:
 
 
 def _shots_json(project: Project) -> str:
-    rows = [
-        {"number": s.number, "framing": s.framing.value, "character_ids": list(s.character_ids), "action": s.action}
-        for s in project.shots
-    ]
+    rows = []
+    for s in project.shots:
+        row: dict[str, Any] = {
+            "number": s.number,
+            "framing": s.framing.value,
+            "character_ids": list(s.character_ids),
+            "action": s.action,
+        }
+        wearing = {c: look.id for c in s.character_ids if (look := project.look_in(s.id, c)) is not None}
+        if wearing:
+            row["looks"] = wearing  # who is out of their everyday clothes in this shot
+        rows.append(row)
     return json.dumps(rows, ensure_ascii=False) if rows else "[]"
 
 

@@ -8,6 +8,7 @@ from frameteller.application.use_cases import MAX_DICTATION_MS
 from frameteller.domain import InvalidValueError, Point, Size
 from frameteller.interface.dto import (
     AnimaticRequest,
+    BeatMerge,
     CastApproval,
     CastReviewOut,
     CharacterMerge,
@@ -39,6 +40,9 @@ router = APIRouter(
 
 ShotNumber = Annotated[int, Path(ge=1, le=10_000)]
 CharacterId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
+LookId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
+TurnId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{1,80}$")]
+ShotId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -69,6 +73,31 @@ async def approve_cast(project_id: ProjectId, body: CastApproval, c: Deps) -> Ca
 @router.post("/{project_id}/cast/{character_id}/regenerate", status_code=status.HTTP_202_ACCEPTED)
 async def regenerate_reference(project_id: ProjectId, character_id: CharacterId, c: Deps) -> TicketOut:
     return TicketOut.of(await c.request_cast.execute(project_id, [character_id]))
+
+
+@router.post("/{project_id}/cast/{character_id}/looks/{look_id}/regenerate", status_code=status.HTTP_202_ACCEPTED)
+async def regenerate_look(project_id: ProjectId, character_id: CharacterId, look_id: LookId, c: Deps) -> TicketOut:
+    """Draw the sheet of one of a character's outfits again (its "Try again")."""
+    return TicketOut.of(await c.request_cast.execute(project_id, [f"{character_id}/{look_id}"]))
+
+
+@router.delete("/{project_id}/turns/{turn_id}", responses={422: {"model": ErrorOut}})
+async def remove_beat(project_id: ProjectId, turn_id: TurnId, c: Deps) -> ProjectOut:
+    """Remove a beat: its words, the shots made only from it and their panels. The animatic and its captions no
+    longer play that stretch of the recording."""
+    return ProjectOut.of(await c.remove_beat.execute(project_id, turn_id))
+
+
+@router.post("/{project_id}/turns/{turn_id}/merge", responses={422: {"model": ErrorOut}})
+async def merge_beats(project_id: ProjectId, turn_id: TurnId, body: BeatMerge, c: Deps) -> ProjectOut:
+    """Merge a beat with the previous or next one of the same recording. Their shots share the merged time."""
+    return ProjectOut.of(await c.merge_beats.execute(project_id, turn_id, body.other))
+
+
+@router.delete("/{project_id}/shots/{shot_id}", responses={422: {"model": ErrorOut}})
+async def delete_shot(project_id: ProjectId, shot_id: ShotId, c: Deps) -> ProjectOut:
+    """Delete a shot (by id) and its panel. Shots are renumbered; the animatic skips the shot's stretch of voice."""
+    return ProjectOut.of(await c.delete_shot.execute(project_id, shot_id))
 
 
 @router.patch("/{project_id}/cast/{character_id}")

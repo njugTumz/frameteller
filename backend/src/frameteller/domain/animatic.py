@@ -10,7 +10,7 @@ from frameteller.domain.errors import PanelNotReadyError, UnknownTurnError
 from frameteller.domain.media import MediaRef
 from frameteller.domain.narration import session_of
 from frameteller.domain.project import Project
-from frameteller.domain.shots import Framing, Shot
+from frameteller.domain.shots import Framing, Shot, voice_offsets
 
 TITLE_MS = 1000  # the title card before the first shot
 END_MS = 1500  # the "Made with Frameteller" card after the last
@@ -111,19 +111,23 @@ def _share(project: Project, shots: list[Shot]) -> list[tuple[str, tuple[AudioCu
         return [("", ())] * len(shots)
     narration = project.narrations.get(session_of(turn.id))
     words = turn.text.split()
-    total = sum(s.duration_ms for s in shots) or 1
-    out, elapsed, taken = [], 0, 0
-    for i, shot in enumerate(shots):
-        last = i == len(shots) - 1
-        upto = len(words) if last else round(len(words) * (elapsed + shot.duration_ms) / total)
+    starts = voice_offsets(shots)
+    gaps = any(s.voice_from_ms is not None for s in shots)  # a sibling was deleted: words follow the time
+    total = (turn.duration_ms if gaps else sum(s.duration_ms for s in shots)) or 1
+    out, taken = [], 0
+    for i, (shot, offset) in enumerate(zip(shots, starts, strict=True)):
+        last = i == len(shots) - 1 and not gaps
+        if gaps:
+            taken = min(len(words), round(len(words) * offset / total))
+        upto = len(words) if last else min(len(words), round(len(words) * (offset + shot.duration_ms) / total))
         caption = " ".join(words[taken:upto])
         audio: tuple[AudioCut, ...] = ()
         if narration is not None:
-            start = min(turn.start_ms + elapsed, narration.duration_ms)
+            start = min(turn.start_ms + offset, narration.duration_ms)
             end = min(start + shot.duration_ms, narration.duration_ms)
             audio = (AudioCut(narration.recording, start, end),) if end > start else ()
         out.append((caption, audio))
-        elapsed, taken = elapsed + shot.duration_ms, upto
+        taken = upto
     return out
 
 

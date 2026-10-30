@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,7 @@ from frameteller.infrastructure.local import (
     JsonFileProjectRepository,
     LocalFileMediaStorage,
 )
-from tests.builders import bitmap, project
+from tests.builders import bitmap, costume_project, project
 from tests.fakes import FixedClock
 
 
@@ -58,6 +59,19 @@ async def test_repository_round_trips_a_full_project(tmp_path: Path) -> None:
 
     assert loaded == p
     assert loaded.bible.is_approved
+
+
+async def test_repository_keeps_looks_outfits_and_voice_offsets(tmp_path: Path) -> None:
+    p = costume_project()
+    p.change_outfit("wren", None, "s6")
+    p.shots[2] = replace(p.shots[2], voice_from_ms=1200)
+    repo = JsonFileProjectRepository(tmp_path)
+    await repo.save(p)
+    loaded = await repo.get("p1")
+    assert loaded.bible.get("wren").looks == p.bible.get("wren").looks
+    assert loaded.outfits == p.outfits
+    assert loaded.shots[2].voice_from_ms == 1200
+    assert loaded.bible.is_approved is p.bible.is_approved
 
 
 async def test_repository_unknown_project(tmp_path: Path) -> None:

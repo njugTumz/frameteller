@@ -75,6 +75,24 @@
         "title": "AnimaticRequest",
         "type": "object"
       },
+      "BeatMerge": {
+        "properties": {
+          "other": {
+            "description": "Which neighbouring beat to merge this one with.",
+            "enum": [
+              "previous",
+              "next"
+            ],
+            "title": "Other",
+            "type": "string"
+          }
+        },
+        "required": [
+          "other"
+        ],
+        "title": "BeatMerge",
+        "type": "object"
+      },
       "BoxOut": {
         "properties": {
           "bottom": {
@@ -196,6 +214,14 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "looks": {
+            "description": "Outfits besides the everyday one, each with its sheet.",
+            "items": {
+              "$ref": "#/components/schemas/LookOut"
+            },
+            "title": "Looks",
+            "type": "array"
           },
           "name": {
             "title": "Name",
@@ -884,6 +910,63 @@
           "exports_per_project"
         ],
         "title": "LimitsOut",
+        "type": "object"
+      },
+      "LookOut": {
+        "description": "Another outfit of a character (ADR 0018), with its own sheet.",
+        "properties": {
+          "clothes": {
+            "title": "Clothes",
+            "type": "string"
+          },
+          "from_shots": {
+            "description": "The shots that show this look, in order.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "From Shots",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reference_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Url"
+          },
+          "sheet_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why its sheet could not be drawn; offer Try again.",
+            "title": "Sheet Error"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "clothes",
+          "reference_url",
+          "from_shots"
+        ],
+        "title": "LookOut",
         "type": "object"
       },
       "MaskOut": {
@@ -1682,6 +1765,14 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "looks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Character id -> the look they wear in this shot, when not everyday.",
+            "title": "Looks",
+            "type": "object"
           },
           "number": {
             "title": "Number",
@@ -2927,6 +3018,90 @@
           }
         },
         "summary": "Rename Character",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/cast/{character_id}/looks/{look_id}/regenerate": {
+      "post": {
+        "description": "Draw the sheet of one of a character's outfits again (its \"Try again\").",
+        "operationId": "regenerate_look_projects__project_id__cast__character_id__looks__look_id__regenerate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "look_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Look Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Regenerate Look",
         "tags": [
           "projects"
         ]
@@ -4624,6 +4799,238 @@
           }
         },
         "summary": "Select Object",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/shots/{shot_id}": {
+      "delete": {
+        "description": "Delete a shot (by id) and its panel. Shots are renumbered; the animatic skips the shot's stretch of voice.",
+        "operationId": "delete_shot_projects__project_id__shots__shot_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shot_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Shot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Delete Shot",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/turns/{turn_id}": {
+      "delete": {
+        "description": "Remove a beat: its words, the shots made only from it and their panels. The animatic and its captions no\nlonger play that stretch of the recording.",
+        "operationId": "remove_beat_projects__project_id__turns__turn_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "turn_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,80}$",
+              "title": "Turn Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Remove Beat",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/turns/{turn_id}/merge": {
+      "post": {
+        "description": "Merge a beat with the previous or next one of the same recording. Their shots share the merged time.",
+        "operationId": "merge_beats_projects__project_id__turns__turn_id__merge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "turn_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,80}$",
+              "title": "Turn Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeatMerge"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Merge Beats",
         "tags": [
           "projects"
         ]

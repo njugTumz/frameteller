@@ -32,6 +32,7 @@ from frameteller.domain import (
     UnknownCharacterError,
     UnknownObjectError,
     UnknownShotError,
+    UnknownTurnError,
 )
 from frameteller.infrastructure.observability import project_id_var
 
@@ -45,6 +46,7 @@ _STATUS: list[tuple[type[Exception], int, str]] = [
     (GallerySubmissionError, 422, "gallery_submission"),
     (RetryRefusedError, 409, "retry_refused"),
     (UnknownShotError, 404, "shot_not_found"),
+    (UnknownTurnError, 404, "beat_not_found"),
     (UnknownCharacterError, 404, "character_not_found"),
     (UnknownObjectError, 404, "object_not_found"),
     (StudioFullError, 503, "studio_full"),  # before its base: the global cap, not this project's

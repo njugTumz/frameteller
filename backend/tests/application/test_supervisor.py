@@ -22,9 +22,9 @@ from frameteller.application.use_cases import (
     SetContinuityChecks,
     SupervisePanel,
 )
-from frameteller.domain import Decision, InvalidValueError, Issue, Outcome, Severity, Verdict
+from frameteller.domain import Decision, InvalidValueError, Issue, MediaRef, Outcome, Severity, Verdict
 from tests.application.conftest import World, make_world
-from tests.builders import project
+from tests.builders import costume_project, project
 from tests.fakes import (
     FakeReviewer,
     FixedClock,
@@ -242,3 +242,14 @@ async def test_a_redrawn_sheet_drops_the_old_review() -> None:
     s = supervisor(world)
     assert await s.sheet().execute("p1", "cat", "projects/p1/characters/cat/old") is None
     assert s.reviewer.requests == []
+
+
+async def test_a_panel_after_the_costume_is_checked_against_the_costume_sheet() -> None:
+    world = make_world(costume_project())
+    await GeneratePanel(world.repo, world.images, world.budget, world.jobs).execute("p1", "s4", revision=1)
+    s = supervisor(world)
+    await s.panel().execute("p1", "s4", 1, "low")
+    [request] = s.reviewer.requests
+    [wren] = request.reference_sheets
+    assert wren.image == MediaRef("refs/wren-farmer.webp")
+    assert "wears the farmer costume: blue denim overalls" in wren.description

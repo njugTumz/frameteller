@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from frameteller.domain import (
     Box,
     Character,
     Framing,
+    Look,
     MaskBitmap,
     MediaRef,
     Project,
@@ -73,3 +76,47 @@ EMBER = Character("ember", "Ember", "tiny orange butterfly with black-edged wing
 
 def lighthouse_turn(n: int) -> TranscriptTurn:
     return TranscriptTurn(f"t{n}", LIGHTHOUSE[n - 1], (n - 1) * 8000, n * 8000)
+
+
+# "The farmer costume": a tester's bug report (Oct 30), retold with an invented girl, Wren
+# (spikes/fixtures/costume.txt). Paragraph 2 puts the costume on; every later panel must keep it.
+COSTUME = (
+    "Saturday morning in a cosy kitchen. Wren, a little girl with curly brown hair and freckles, sits at the table "
+    "in purple pyjamas and tells her dad she wants to be a farmer for Halloween.",
+    "In her bedroom, Wren puts on her farmer costume: blue denim overalls over a white shirt, a red bandana around "
+    "her neck and brown cowgirl boots. She looks in the mirror and grins.",
+    "Wren runs down the stairs and spins around to show her dad, who claps.",
+    "That evening, Wren walks down the street holding a pumpkin bucket, past houses with glowing jack-o'-lanterns.",
+    "She knocks on a neighbour's door and holds up her bucket with a big smile.",
+    "Back home, Wren tips her sweets out on the kitchen table and counts them one by one.",
+)
+WREN = Character("wren", "Wren", "human little girl, light skin, freckles, curly brown hair, purple pyjamas")
+DAD = Character("dad", "Dad", "human adult man, short brown hair, light blue t-shirt, grey trousers")
+FARMER = Look(
+    "farmer_costume",
+    "Farmer costume",
+    "blue denim overalls over a white shirt, a red bandana around her neck, brown cowgirl boots",
+)
+
+
+def costume_turn(n: int) -> TranscriptTurn:
+    return TranscriptTurn(f"t{n}", COSTUME[n - 1], (n - 1) * 8000, n * 8000)
+
+
+def costume_project(*, looks: bool = True) -> Project:
+    """The costume story directed into six shots, the cast drawn and approved; with `looks`, the costume recorded
+    from shot 2 as the director does now."""
+    p = Project(id="p1", title="The Farmer Costume")
+    p.upsert_character(WREN)
+    p.upsert_character(DAD)
+    p.bible.set_reference("wren", MediaRef("refs/wren.webp"))
+    p.bible.set_reference("dad", MediaRef("refs/dad.webp"))
+    cast = {1: ("wren", "dad"), 3: ("wren", "dad")}
+    for n in range(1, 7):
+        p.add_turn(costume_turn(n))
+    p.append_shots([replace(shot(n, *cast.get(n, ("wren",))), duration_ms=8000) for n in range(1, 7)])
+    if looks:
+        p.change_outfit("wren", FARMER, "s2")
+        p.bible.set_look_reference("wren", "farmer_costume", MediaRef("refs/wren-farmer.webp"))
+    p.bible.approve()
+    return p

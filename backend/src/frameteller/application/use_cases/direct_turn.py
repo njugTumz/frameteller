@@ -1,10 +1,27 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from frameteller.application.ports import DirectorPort, IdGenerator, ProjectRepository, ShotDraft, ShotRevision
-from frameteller.domain import Character, Project, Shot, TranscriptTurn, split_duration
+from frameteller.application.ports import (
+    DirectorPort,
+    IdGenerator,
+    LookChange,
+    ProjectRepository,
+    ShotDraft,
+    ShotRevision,
+)
+from frameteller.domain import (
+    EVERYDAY,
+    Character,
+    InvalidValueError,
+    Look,
+    Project,
+    Shot,
+    TranscriptTurn,
+    sheet_target,
+    split_duration,
+)
 
 REVEAL_WINDOW = 3  # a reveal may revise at most this many of the latest shots
 
@@ -17,6 +34,7 @@ class DirectedShots:
     dropped_character_ids: tuple[str, ...] = ()  # guesses the reveal replaced, no longer in any shot
     capped: bool = False  # the episode reached its shot limit: shots past it were not added
     refusal: str = ""  # the director declined a real person or a copyrighted character, and says why
+    new_looks: tuple[str, ...] = ()  # sheets to draw for new outfits, as "wren/farmer_costume" (ADR 0018)
 
 
 def shots_for_turn(drafts: Sequence[ShotDraft], turn: TranscriptTurn, ids: IdGenerator, first: int) -> list[Shot]:
@@ -63,6 +81,33 @@ def apply_revisions(project: Project, revisions: Sequence[ShotRevision]) -> tupl
     return revised, project.drop_unused_characters(sorted(before))
 
 
+def apply_looks(
+    project: Project, changes: Sequence[LookChange], shot_at: Callable[[int], str | None]
+) -> tuple[list[str], list[str]]:
+    """Record outfit changes from the shot each starts at (ADR 0018). A look the character already has is worn as
+    it is. Returns the sheets to draw ("wren/farmer_costume") and the shots that now show other clothes. A change
+    from a shot that was not added (the episode was full) or for an unknown character is skipped."""
+    sheets, restyled = [], []
+    for change in changes:
+        shot_id = shot_at(change.from_shot)
+        if shot_id is None or change.character_id not in project.bible:
+            continue
+        character = project.bible.get(change.character_id)
+        look: Look | None = None
+        if change.look_id != EVERYDAY:
+            if character.has_look(change.look_id):
+                look = character.look(change.look_id)
+            else:
+                try:
+                    look = Look(change.look_id, change.label.strip(), change.clothes.strip())
+                except InvalidValueError:
+                    continue
+        restyled += project.change_outfit(change.character_id, look, shot_id)
+        if look is not None and project.bible.get(change.character_id).look(look.id).reference is None:
+            sheets.append(sheet_target(change.character_id, look.id))
+    return list(dict.fromkeys(sheets)), list(dict.fromkeys(restyled))
+
+
 class DirectTurn:
     """Direct one finished transcript turn into shots (ADR 0002), revising earlier shots a reveal explains."""
 
@@ -91,6 +136,18 @@ class DirectTurn:
             shots = shots_for_turn(drafts[:room], turn, self._ids, len(project.shots) + 1) if room else []
             project.append_shots(shots)
             capped = len(drafts) > room
-            return DirectedShots(tuple(shots), new, tuple(revised), tuple(dropped), capped, directed.refusal)
+            oldest = len(project.shots) - len(shots) - REVEAL_WINDOW  # a change may start in the reveal window
+
+            def shot_at(number: int) -> str | None:
+                return project.shots[number - 1].id if oldest < number <= len(project.shots) else None
+
+            sheets, restyled = apply_looks(project, directed.looks, shot_at)
+            new_ids = {s.id for s in shots}
+            for shot_id in restyled:
+                if shot_id not in new_ids and all(r.id != shot_id for r in revised):
+                    revised.append(project.shot(shot_id))
+            return DirectedShots(
+                tuple(shots), new, tuple(revised), tuple(dropped), capped, directed.refusal, tuple(sheets)
+            )
 
         return await self._repo.update(project_id, apply)

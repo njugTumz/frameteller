@@ -46,6 +46,7 @@ from frameteller.application.use_cases import (
     CorrectTranscript,
     CreateProject,
     DeleteNarration,
+    DeleteShot,
     DirectTurn,
     EditPanelAppearance,
     EditPanelByCommand,
@@ -58,12 +59,14 @@ from frameteller.application.use_cases import (
     GetProject,
     GetStudioStatus,
     ListVoices,
+    MergeBeats,
     MergeCharacters,
     MovePanelObject,
     OpenShare,
     PreSegmentPanel,
     PreviewVoice,
     ReadScript,
+    RemoveBeat,
     RemoveCharacter,
     RenameCharacter,
     ReorderShots,
@@ -150,6 +153,9 @@ class Container:
     approve_cast: ApproveCast
     request_cast: RequestCastReferences
     rename_character: RenameCharacter
+    remove_beat: RemoveBeat
+    merge_beats: MergeBeats
+    delete_shot: DeleteShot
     remove_character: RemoveCharacter
     merge_characters: MergeCharacters
     request_render: RequestPanelRender
@@ -282,7 +288,7 @@ def wire(
     compose_panel = ComposePanel(repo, images, storage, compositor, budget)
     edit_appearance = EditPanelAppearance(repo, images, budget, queue)
     edit_by_command = EditPanelByCommand(repo, director, edit_appearance)
-    cast_references = GenerateCastReferences(GenerateCharacterReference(repo, images, budget, queue), hub)
+    cast_references = GenerateCastReferences(GenerateCharacterReference(repo, images, budget, queue), hub, repo)
     request_cast = RequestCastReferences(repo, queue, ids)
     supervise_panel = SupervisePanel(repo, reviewer, rubrics, edit_appearance, budget, hub, clock)
     review_sheet = ReviewSheet(repo, reviewer, rubrics, budget, hub, clock)
@@ -377,6 +383,9 @@ def wire(
         approve_cast=ApproveCast(repo, queue, ids),
         request_cast=request_cast,
         rename_character=RenameCharacter(repo),
+        remove_beat=RemoveBeat(repo),
+        merge_beats=MergeBeats(repo),
+        delete_shot=DeleteShot(repo),
         remove_character=RemoveCharacter(repo),
         merge_characters=MergeCharacters(repo, queue),
         request_render=RequestPanelRender(repo, queue, allowance),

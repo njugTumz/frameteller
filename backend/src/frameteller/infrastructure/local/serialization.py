@@ -18,11 +18,13 @@ from frameteller.domain import (
     Decision,
     Framing,
     Issue,
+    Look,
     MaskBitmap,
     MediaRef,
     Narration,
     ObjectMask,
     Outcome,
+    OutfitChange,
     Panel,
     PanelReview,
     PanelStatus,
@@ -83,8 +85,20 @@ def project_to_dict(p: Project) -> dict[str, Any]:
         "style": p.style.value,
         "cast_status": p.bible.status.value,
         "characters": [
-            {"id": c.id, "name": c.name, "description": c.canonical_description, "reference": _ref(c.reference)}
+            {
+                "id": c.id,
+                "name": c.name,
+                "description": c.canonical_description,
+                "reference": _ref(c.reference),
+                "looks": [
+                    {"id": lk.id, "label": lk.label, "clothes": lk.clothes, "reference": _ref(lk.reference)}
+                    for lk in c.looks
+                ],
+            }
             for c in p.bible.characters.values()
+        ],
+        "outfits": [
+            {"character_id": o.character_id, "look_id": o.look_id, "from_shot_id": o.from_shot_id} for o in p.outfits
         ],
         "turns": [
             {
@@ -110,6 +124,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
                 "source_turn_ids": list(s.source_turn_ids),
                 "duration_ms": s.duration_ms,
                 "episode": s.episode,
+                "voice_from_ms": s.voice_from_ms,
             }
             for s in p.shots
         ],
@@ -250,7 +265,16 @@ def project_from_dict(d: dict[str, Any]) -> Project:
     if d.get("schema") != SCHEMA_VERSION:
         raise ValueError(f"unsupported project schema {d.get('schema')!r}")
     bible = CharacterBible(
-        {c["id"]: Character(c["id"], c["name"], c["description"], _unref(c["reference"])) for c in d["characters"]},
+        {
+            c["id"]: Character(
+                c["id"],
+                c["name"],
+                c["description"],
+                _unref(c["reference"]),
+                tuple(Look(lk["id"], lk["label"], lk["clothes"], _unref(lk["reference"])) for lk in c.get("looks", [])),
+            )
+            for c in d["characters"]
+        },
         CastStatus(d["cast_status"]),
     )
     panels = {}
@@ -304,9 +328,11 @@ def project_from_dict(d: dict[str, Any]) -> Project:
                 tuple(s["source_turn_ids"]),
                 s["duration_ms"],
                 int(s.get("episode", 1)),
+                s.get("voice_from_ms"),
             )
             for s in d["shots"]
         ],
+        outfits=[OutfitChange(o["character_id"], o["look_id"], o["from_shot_id"]) for o in d.get("outfits", [])],
         panels=panels,
         narrations={
             n["session"]: Narration(

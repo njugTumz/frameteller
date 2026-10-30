@@ -8,6 +8,7 @@ from frameteller.application.use_cases.correct_transcript import CorrectTranscri
 from frameteller.application.use_cases.direct_turn import DirectedShots, DirectTurn
 from frameteller.application.use_cases.edit_panel_appearance import EditPanelAppearance
 from frameteller.application.use_cases.edit_panel_by_command import EditPanelByCommand
+from frameteller.application.use_cases.edit_story import DeleteShot, MergeBeats, RemoveBeat
 from frameteller.application.use_cases.export_animatic import AnimaticOptions, ExportAnimatic, RequestAnimaticExport
 from frameteller.application.use_cases.export_storyboard_pdf import ExportStoryboardPdf
 from frameteller.application.use_cases.generate_character_reference import GenerateCharacterReference
@@ -54,6 +55,7 @@ __all__ = [
     "CorrectTranscript",
     "CreateProject",
     "DeleteNarration",
+    "DeleteShot",
     "DirectTurn",
     "DirectedShots",
     "EditPanelAppearance",
@@ -68,6 +70,7 @@ __all__ = [
     "GetStudioStatus",
     "JobTicket",
     "ListVoices",
+    "MergeBeats",
     "MergeCharacters",
     "Merged",
     "MovePanelObject",
@@ -78,6 +81,7 @@ __all__ = [
     "ReadControl",
     "ReadScript",
     "ReadingOptions",
+    "RemoveBeat",
     "RemoveCharacter",
     "RenameCharacter",
     "ReorderShots",

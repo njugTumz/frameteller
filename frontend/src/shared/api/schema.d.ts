@@ -261,6 +261,26 @@ export interface paths {
         patch: operations["rename_character_projects__project_id__cast__character_id__patch"];
         trace?: never;
     };
+    "/projects/{project_id}/cast/{character_id}/looks/{look_id}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Look
+         * @description Draw the sheet of one of a character's outfits again (its "Try again").
+         */
+        post: operations["regenerate_look_projects__project_id__cast__character_id__looks__look_id__regenerate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/cast/{character_id}/merge": {
         parameters: {
             query?: never;
@@ -653,6 +673,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/shots/{shot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Shot
+         * @description Delete a shot (by id) and its panel. Shots are renumbered; the animatic skips the shot's stretch of voice.
+         */
+        delete: operations["delete_shot_projects__project_id__shots__shot_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/turns/{turn_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Beat
+         * @description Remove a beat: its words, the shots made only from it and their panels. The animatic and its captions no
+         *     longer play that stretch of the recording.
+         */
+        delete: operations["remove_beat_projects__project_id__turns__turn_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/turns/{turn_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Beats
+         * @description Merge a beat with the previous or next one of the same recording. Their shots share the merged time.
+         */
+        post: operations["merge_beats_projects__project_id__turns__turn_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/readyz": {
         parameters: {
             query?: never;
@@ -853,6 +934,15 @@ export interface components {
              */
             subtitles: boolean;
         };
+        /** BeatMerge */
+        BeatMerge: {
+            /**
+             * Other
+             * @description Which neighbouring beat to merge this one with.
+             * @enum {string}
+             */
+            other: "previous" | "next";
+        };
         /** BoxOut */
         BoxOut: {
             /** Bottom */
@@ -904,6 +994,11 @@ export interface components {
             description: string;
             /** Id */
             id: string;
+            /**
+             * Looks
+             * @description Outfits besides the everyday one, each with its sheet.
+             */
+            looks?: components["schemas"]["LookOut"][];
             /** Name */
             name: string;
             /** Reference Url */
@@ -1222,6 +1317,30 @@ export interface components {
             script_characters: number;
             /** Shots Per Episode */
             shots_per_episode: number;
+        };
+        /**
+         * LookOut
+         * @description Another outfit of a character (ADR 0018), with its own sheet.
+         */
+        LookOut: {
+            /** Clothes */
+            clothes: string;
+            /**
+             * From Shots
+             * @description The shots that show this look, in order.
+             */
+            from_shots: number[];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Reference Url */
+            reference_url: string | null;
+            /**
+             * Sheet Error
+             * @description Why its sheet could not be drawn; offer Try again.
+             */
+            sheet_error?: string | null;
         };
         /** MaskOut */
         MaskOut: {
@@ -1583,6 +1702,13 @@ export interface components {
             framing: string;
             /** Id */
             id: string;
+            /**
+             * Looks
+             * @description Character id -> the look they wear in this shot, when not everyday.
+             */
+            looks?: {
+                [key: string]: string;
+            };
             /** Number */
             number: number;
             panel?: components["schemas"]["PanelOut"] | null;
@@ -2349,6 +2475,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_look_projects__project_id__cast__character_id__looks__look_id__regenerate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                look_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketOut"];
                 };
             };
             /** @description Not Found */
@@ -3540,6 +3717,160 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    delete_shot_projects__project_id__shots__shot_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shot_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    remove_beat_projects__project_id__turns__turn_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                turn_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    merge_beats_projects__project_id__turns__turn_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                turn_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BeatMerge"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
                 };
             };
             /** @description Not Found */

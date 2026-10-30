@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from frameteller.application.jobs import cast_job, edit_job, panel_job
 from frameteller.application.limits import RENDERS, ProjectAllowance
 from frameteller.application.ports import IdGenerator, Job, JobQueuePort, ProjectRepository, Quality
-from frameteller.domain import InvalidValueError
+from frameteller.domain import InvalidValueError, split_target
 
 MAX_INSTRUCTION_CHARS = 500
 
@@ -79,9 +79,13 @@ class RequestCastReferences:
         self._repo, self._jobs, self._ids = repo, jobs, ids
 
     async def execute(self, project_id: str, character_ids: Sequence[str], correction: str = "") -> JobTicket:
-        """`correction`: what the continuity review asked to change on the sheet (its "Apply fix")."""
+        """`correction`: what the continuity review asked to change on the sheet (its "Apply fix"). A target can name a
+        look: "wren/farmer_costume" (ADR 0018)."""
         project = await self._repo.get(project_id)
-        for cid in character_ids:
-            project.bible.get(cid)  # unknown ids fail here, not in the background
+        for target in character_ids:
+            cid, look = split_target(target)
+            character = project.bible.get(cid)  # unknown ids fail here, not in the background
+            if look is not None:
+                character.look(look)
         job = cast_job(project_id, character_ids, self._ids.new_id(), correction)
         return JobTicket.of(job, await self._jobs.enqueue(job))

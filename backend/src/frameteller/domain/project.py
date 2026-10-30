@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 
-from frameteller.domain.characters import Character, CharacterBible
+from frameteller.domain.characters import EVERYDAY, Character, CharacterBible, Look
 from frameteller.domain.errors import (
     CastNotApprovedError,
     InvalidValueError,
@@ -15,11 +15,12 @@ from frameteller.domain.errors import (
 )
 from frameteller.domain.exports import AnimaticExport
 from frameteller.domain.media import MediaRef
-from frameteller.domain.narration import Narration
+from frameteller.domain.narration import Narration, session_of
 from frameteller.domain.panels import Panel
 from frameteller.domain.review import SUPERVISOR_LOG_SIZE, Outcome, PanelReview, SheetReview, SupervisorEntry
-from frameteller.domain.shots import Shot
+from frameteller.domain.shots import OutfitChange, Shot, voice_offsets
 from frameteller.domain.style import PanelStyle
+from frameteller.domain.timing import split_duration
 from frameteller.domain.transcript import TranscriptTurn
 
 
@@ -42,6 +43,7 @@ class Project:
     # Why a character's sheet could not be drawn, in plain words, until a sheet is drawn for it.
     sheet_failures: dict[str, str] = field(default_factory=dict)
     supervisor_log: list[SupervisorEntry] = field(default_factory=list)  # oldest first, the last 100
+    outfits: list[OutfitChange] = field(default_factory=list)  # who wears which look from which shot (ADR 0018)
 
     # ---- transcript and characters ----
 
@@ -78,6 +80,7 @@ class Project:
         Returns the shots that changed; their panels still show the character, so they are marked outdated.
         """
         self.bible.remove(character_id)
+        self._forget_outfits(character_id)
         return self._recast(character_id, None)
 
     def merge_character(self, character_id: str, into: str) -> list[Shot]:
@@ -89,6 +92,7 @@ class Project:
             raise InvalidValueError("a character cannot be merged into itself")
         self.bible.get(into)
         self.bible.remove(character_id)
+        self._forget_outfits(character_id)
         return self._recast(character_id, into)
 
     def revise_shot(self, shot_id: str, character_ids: tuple[str, ...], action: str) -> Shot:
@@ -109,6 +113,7 @@ class Project:
         dropped = [c for c in dict.fromkeys(character_ids) if c in self.bible and c not in used]
         for c in dropped:
             self.bible.remove(c)
+            self._forget_outfits(c)
         return dropped
 
     def _recast(self, old: str, new: str | None) -> list[Shot]:
@@ -121,6 +126,85 @@ class Project:
             changed.append(self.shots[i])
         self._mark_outdated(s.id for s in changed)
         return changed
+
+    # ---- outfits (ADR 0018) ----
+
+    def look_in(self, shot_id: str, character_id: str) -> Look | None:
+        """The look a character wears in a shot: the latest outfit change at or before it. None: everyday clothes."""
+        order = {s.id: i for i, s in enumerate(self.shots)}
+        if shot_id not in order:
+            raise UnknownShotError(f"no shot {shot_id!r}")
+        current, best = None, -1
+        for change in self.outfits:  # of two changes at the same shot, the later one wins
+            i = order.get(change.from_shot_id)
+            if change.character_id == character_id and i is not None and best <= i <= order[shot_id]:
+                current, best = change, i
+        if current is None or current.look_id == EVERYDAY or character_id not in self.bible:
+            return None
+        character = self.bible.get(character_id)
+        return character.look(current.look_id) if character.has_look(current.look_id) else None
+
+    def cast_in(self, shot_id: str) -> list[Character]:
+        """The shot's characters as it shows them: each in the look they wear by then, with that look's sheet."""
+        shot = self.shot(shot_id)
+        return [self.bible.get(c).dressed(self.look_in(shot_id, c)) for c in shot.character_ids if c in self.bible]
+
+    def change_outfit(self, character_id: str, look: Look | None, from_shot_id: str) -> list[str]:
+        """From `from_shot_id` on, the character wears `look` (None: everyday clothes again) until the next change.
+
+        Returns the shots that now show other clothes; their drawn panels are outdated.
+        """
+        self.shot(from_shot_id)
+        before = self._wearing(character_id)
+        if look is not None:
+            self.bible.set_look(character_id, look)
+        self.outfits = [
+            o for o in self.outfits if not (o.character_id == character_id and o.from_shot_id == from_shot_id)
+        ]
+        self.outfits.append(OutfitChange(character_id, look.id if look else EVERYDAY, from_shot_id))
+        return self._restyled(character_id, before)
+
+    def restyle_look(self, character_id: str, look_id: str, clothes: str) -> list[str]:
+        """New clothes for a look (the user edited its description): its sheet is redrawn, its panels outdated."""
+        before = self._wearing(character_id)
+        self.bible.set_look(character_id, replace(self.bible.get(character_id).look(look_id), clothes=clothes.strip()))
+        return self._restyled(character_id, before)
+
+    def drop_outfits_from(self, shot_ids: Iterable[str]) -> None:
+        """Forget the outfit changes that start at these shots (their turn is being directed again)."""
+        gone = set(shot_ids)
+        self.outfits = [o for o in self.outfits if o.from_shot_id not in gone]
+
+    def _wearing(self, character_id: str) -> dict[str, tuple[str, str]]:
+        out = {}
+        for s in self.shots:
+            if character_id in s.character_ids:
+                look = self.look_in(s.id, character_id)
+                out[s.id] = (look.id, look.clothes) if look else (EVERYDAY, "")
+        return out
+
+    def _restyled(self, character_id: str, before: dict[str, tuple[str, str]]) -> list[str]:
+        changed = [sid for sid, wore in self._wearing(character_id).items() if before.get(sid) != wore]
+        self._mark_outdated(changed)
+        return changed
+
+    def _forget_outfits(self, character_id: str) -> None:
+        self.outfits = [o for o in self.outfits if o.character_id != character_id]
+
+    def _relocate_outfits(self, old_order: Sequence[str], fallback: str | None = None) -> None:
+        """Outfit changes whose first shot is gone start at the next shot that is left (or `fallback`, the shot
+        that took its place); with none after it, they are dropped."""
+        present = {s.id for s in self.shots}
+        moved = []
+        for o in self.outfits:
+            if o.from_shot_id in present:
+                moved.append(o)
+                continue
+            after = old_order[old_order.index(o.from_shot_id) + 1 :] if o.from_shot_id in old_order else []
+            target = fallback or next((sid for sid in after if sid in present), None)
+            if target is not None:
+                moved.append(replace(o, from_shot_id=target))
+        self.outfits = moved
 
     def _mark_outdated(self, shot_ids: Iterable[str]) -> None:
         for shot_id in shot_ids:
@@ -205,11 +289,13 @@ class Project:
             if missing_turns := set(s.source_turn_ids) - known:
                 raise ShotOrderError(f"a new shot cites unknown turns {sorted(missing_turns)}")
         at = next((i for i, s in enumerate(self.shots) if s.id in old), len(self.shots))  # no old shot before it
+        old_order = [s.id for s in self.shots]
         kept = [s for s in self.shots if s.id not in old]
         ordered = [*kept[:at], *new, *kept[at:]]
         self.shots = [replace(s, number=n) for n, s in enumerate(ordered, start=1)]
         for shot_id in old:
             self.panels.pop(shot_id, None)
+        self._relocate_outfits(old_order, new[0].id if new else None)
         self._check_contiguous()
         new_ids = {s.id for s in new}
         return [s for s in self.shots if s.id in new_ids]
@@ -220,6 +306,72 @@ class Project:
             raise ShotOrderError("a reorder must list every shot exactly once")
         by_id = {s.id: s for s in self.shots}
         self.shots = [replace(by_id[sid], number=n) for n, sid in enumerate(shot_ids, start=1)]
+        self._check_contiguous()
+
+    def delete_shot(self, shot_id: str) -> None:
+        """Delete one shot and its panel. Its words stay in the transcript, but the animatic skips its stretch of the
+        recording: the other shots of its turn keep the voice they had."""
+        shot = self.shot(shot_id)
+        if len(shot.source_turn_ids) == 1:
+            siblings = [s for s in self.shots if s.source_turn_ids == shot.source_turn_ids]
+            starts = dict(zip((s.id for s in siblings), voice_offsets(siblings), strict=True))
+            self.shots = [replace(s, voice_from_ms=starts[s.id]) if s.id in starts else s for s in self.shots]
+        self._drop_shots([shot_id])
+
+    def remove_turn(self, turn_id: str) -> list[str]:
+        """Take a beat out of the story (a word said by mistake): its words, the shots made only from it and their
+        panels. The animatic plays turns, so its stretch of the recording is no longer heard. A shot made from it
+        and other turns keeps the others. Returns the removed shots' ids."""
+        turn = self.turn(turn_id)
+        sharing = [s for s in self.shots if turn_id in s.source_turn_ids]
+        removed = [s.id for s in sharing if s.source_turn_ids == (turn_id,)]
+        for i, s in enumerate(self.shots):
+            if turn_id in s.source_turn_ids and s.id not in removed:
+                rest = tuple(t for t in s.source_turn_ids if t != turn_id)
+                shorter = max(1, s.duration_ms - turn.duration_ms // len(sharing))
+                self.shots[i] = replace(s, source_turn_ids=rest, duration_ms=shorter)
+        self.turns = [t for t in self.turns if t.id != turn_id]
+        self._drop_shots(removed)
+        return removed
+
+    def merge_turns(self, first_id: str, second_id: str) -> TranscriptTurn:
+        """Join two neighbouring beats of one recording (a sentence cut in two). The beat runs from the first's start
+        to the second's end, and its shots share that time again by their words (ADR 0008)."""
+        ids = [t.id for t in self.turns]
+        first, second = self.turn(first_id), self.turn(second_id)
+        if ids.index(second_id) != ids.index(first_id) + 1:
+            raise InvalidValueError("only a beat and the one right after it can be merged")
+        if session_of(first.id) != session_of(second.id) or first.episode != second.episode:
+            raise InvalidValueError("only beats of the same recording and episode can be merged")
+        direction = f"{first.for_director}\n\n{second.for_director}" if first.direction or second.direction else ""
+        merged = replace(
+            first,
+            text=f"{first.text} {second.text}".strip(),
+            end_ms=max(first.end_ms, second.end_ms),
+            direction=direction,
+        )
+        self.turns = [merged if t.id == first.id else t for t in self.turns if t.id != second.id]
+        for i, s in enumerate(self.shots):
+            if second.id in s.source_turn_ids:
+                sources = tuple(dict.fromkeys(first.id if t == second.id else t for t in s.source_turn_ids))
+                self.shots[i] = replace(s, source_turn_ids=sources)
+        own = [s for s in self.shots if s.source_turn_ids == (first.id,)]
+        durations = split_duration(merged.duration_ms, [len(f"{s.action} {s.dialogue}".split()) for s in own])
+        retimed = {s.id: d for s, d in zip(own, durations, strict=True)}
+        self.shots = [
+            replace(s, duration_ms=retimed[s.id], voice_from_ms=None) if s.id in retimed else s for s in self.shots
+        ]
+        return merged
+
+    def _drop_shots(self, shot_ids: Sequence[str]) -> None:
+        """Remove shots and their panels, renumber 1..n and move outfit changes that started at them."""
+        gone = set(shot_ids)
+        old_order = [s.id for s in self.shots]
+        kept = [s for s in self.shots if s.id not in gone]
+        self.shots = [replace(s, number=n) for n, s in enumerate(kept, start=1)]
+        for shot_id in gone:
+            self.panels.pop(shot_id, None)
+        self._relocate_outfits(old_order)
         self._check_contiguous()
 
     def _check_contiguous(self) -> None:

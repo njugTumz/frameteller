@@ -18,7 +18,7 @@ from frameteller.domain import MediaRef, Panel, Project
 
 def reference_sheets(project: Project, shot_id: str) -> tuple[MediaRef, ...]:
     """The approved sheets of the shot's characters, so an edit redraws them as they were cast."""
-    cast = (project.bible.get(c) for c in project.shot(shot_id).character_ids if c in project.bible)
+    cast = project.cast_in(shot_id)  # in the looks they wear by this shot (ADR 0018)
     return tuple(c.reference for c in cast if c.reference)
 
 
