@@ -370,4 +370,5 @@ Keep `SUBMISSION.md` updated as we build; paste from it on Nov 4.
 - When P0 is at risk, cut scope (move to P1/P2) rather than cut quality.
 - After any user-visible milestone, add a build-log entry to `marketing/updates.json`.
 - **Never push to `main` while the user is running a live test**: a push redeploys staging and cuts the test off. Commit locally and push afterwards.
+- **v1.0.0 freeze (Oct 30):** after v1.0.0, only bug fixes go to `main` until submission. The parallax animatic (P1 item 2) happens only if the user explicitly asks for it.
 - **After the submission deadline, no commits to `main` until judging ends (Nov 16).** Later work goes on a branch.
