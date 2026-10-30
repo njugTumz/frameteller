@@ -4,6 +4,7 @@ each outfit is a look with its own reference sheet (ADR 0018)."""
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
@@ -142,10 +143,16 @@ class CharacterBible:
         self.characters[character_id] = replace(character, looks=looks)
         self.status = CastStatus.DRAFT
 
-    def approve(self) -> None:
+    def approve(self, unworn: Collection[str] = ()) -> None:
+        """`unworn`: looks no shot shows ("wren/farmer_costume"), which need no sheet yet."""
         missing = sorted(
             [c.id for c in self.characters.values() if c.reference is None]
-            + [f"{c.id}/{lk.id}" for c in self.characters.values() for lk in c.looks if lk.reference is None]
+            + [
+                target
+                for c in self.characters.values()
+                for lk in c.looks
+                if lk.reference is None and (target := f"{c.id}/{lk.id}") not in unworn
+            ]
         )
         if not self.characters or missing:
             raise MissingReferenceError(f"cannot approve the cast; missing reference sheets: {missing or 'all'}")

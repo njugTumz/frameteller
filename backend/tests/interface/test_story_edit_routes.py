@@ -110,3 +110,17 @@ async def test_a_refused_sheet_offers_a_description_and_try_again_asks_for_an_ed
     )
     assert r.status_code == 200
     assert (await api.client.post("/projects/p1/cast/wren/regenerate")).status_code == 202
+
+
+async def test_the_cast_hides_a_costume_no_shot_shows(api: Api) -> None:
+    from frameteller.domain import Look
+
+    p = costume_project()
+    cowgirl = Look("cowgirl_costume", "Cowgirl farmer costume", "denim overalls, red bandana, cowgirl boots")
+    p.change_outfit("wren", cowgirl, "s2")  # replaces the Farmer costume from the same shot
+    p.bible.set_look_reference("wren", "cowgirl_costume", MediaRef("refs/wren-cowgirl.webp"))
+    await api.fakes.repo.save(p)
+    wren = next(c for c in (await api.client.get("/projects/p1")).json()["cast"]["characters"] if c["id"] == "wren")
+    assert [lk["label"] for lk in wren["looks"]] == ["Cowgirl farmer costume"]
+    r = await api.client.post("/projects/p1/cast/approve", json={})
+    assert r.json()["approved"] is True  # the hidden Farmer costume needs no new sheet

@@ -230,3 +230,49 @@ async def test_shot_events_say_who_wears_which_look() -> None:
     await story.run("p1", work)
     created = [e for e in events.of(ShotCreated) if isinstance(e, ShotCreated)]
     assert [e.looks for e in created] == [(), (("wren", "farmer_costume"),), (("wren", "farmer_costume"),)]
+
+
+COWGIRL = LookChange(
+    "wren", "cowgirl_costume", "Cowgirl farmer costume", "denim overalls over a white shirt, red bandana, boots", 2
+)
+
+
+async def test_the_double_costume_draws_only_the_costume_a_shot_shows() -> None:
+    """Staging, Oct 30: the director recorded "Farmer costume" and then "Cowgirl farmer costume" from the same shot.
+    Only the second is worn, so only its sheet is drawn and the cast lists only it."""
+    repo = InMemoryProjectRepository(Project(id="p1"))
+    director = scripted()
+    director.turns["t2"] = replace(director.turns["t2"], looks=(PUTS_ON, COWGIRL))
+    await tell(repo, director, 1)
+    await drawn_cast(repo)
+    assert await tell(repo, director, 2, 3) == ["wren/cowgirl_costume"]
+    p = repo.peek("p1")
+    assert {lk.id for lk in p.bible.get("wren").looks} == {"farmer_costume", "cowgirl_costume"}
+    assert [lk.id for lk in p.shown(p.bible.get("wren")).looks] == ["cowgirl_costume"]
+
+    storage = InMemoryMediaStorage()
+    images, events = FakeImageGeneration(storage), RecordingPublisher()
+    reference = GenerateCharacterReference(repo, images, RecordingBudget())
+    await GenerateCastReferences(reference, events, repo).execute("p1", ["wren"])  # a redraw of her everyday sheet
+    assert "in a new outfit: the cowgirl farmer costume" in images.generated[-1].prompt
+    [proposed] = events.of(CastProposed)
+    assert isinstance(proposed, CastProposed)
+    assert [lk.id for lk in proposed.characters[0].looks] == ["cowgirl_costume"]  # the tray never shows Farmer
+    assert len(images.generated) == 2  # everyday and cowgirl, not farmer
+
+
+async def test_a_correction_that_brings_a_hidden_costume_back_draws_it() -> None:
+    repo = InMemoryProjectRepository(Project(id="p1"))
+    director = scripted()
+    director.turns["t2"] = replace(director.turns["t2"], looks=(PUTS_ON, COWGIRL))
+    await tell(repo, director, 1)
+    await drawn_cast(repo)
+    await tell(repo, director, 2, 3)
+    jobs, events = InMemoryJobQueue(), RecordingPublisher()
+    director.turns["t2"] = replace(
+        director.turns["t2"], looks=(replace(PUTS_ON, from_shot=3),)
+    )  # the corrected words: farmer only
+    cast = RequestCastReferences(repo, jobs, SequentialIds("c"))
+    await CorrectTranscript(repo, director, SequentialIds("x"), cast, events).execute("p1", "t2", COSTUME[1])
+    assert repo.peek("p1").worn_looks() == {"wren/farmer_costume"}
+    assert [j.payload["character_ids"] for j in jobs.jobs] == ["wren/farmer_costume"]

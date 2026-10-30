@@ -117,3 +117,50 @@ def test_a_shot_without_the_character_is_unaffected() -> None:
     p.append_shots([shot(7, "dad", turn_ids=("t6",))])
     assert [c.id for c in p.cast_in("s7")] == ["dad"]
     assert p.look_in("s7", "wren") is not None  # she would still wear it, if she were in it
+
+
+COWGIRL = Look(
+    "cowgirl_costume", "Cowgirl farmer costume", "denim overalls over a white shirt, red bandana, cowgirl boots"
+)
+
+
+def test_a_costume_the_director_replaced_at_the_same_shot_is_hidden_and_needs_no_sheet() -> None:
+    p = costume_project(looks=False)
+    p.change_outfit("wren", FARMER, "s2")
+    p.change_outfit("wren", COWGIRL, "s2")  # the same shot: the later change wins, Farmer is worn nowhere
+    assert p.worn_looks() == {"wren/cowgirl_costume"}
+    assert [lk.id for lk in p.shown(p.bible.get("wren")).looks] == ["cowgirl_costume"]
+    with pytest.raises(MissingReferenceError, match="wren/cowgirl_costume"):
+        p.approve_cast()
+    p.bible.set_look_reference("wren", "cowgirl_costume", MediaRef("refs/wren-cowgirl.webp"))
+    p.approve_cast()  # no sheet for the unworn Farmer costume
+    assert p.bible.is_approved
+
+
+def test_an_unworn_costume_keeps_an_approved_cast_approved_and_comes_back_with_its_sheet() -> None:
+    p = costume_project()  # Farmer from shot 2, drawn and approved
+    p.change_outfit("wren", COWGIRL, "s2")
+    assert p.worn_looks() == {"wren/cowgirl_costume"}
+    assert not p.bible.is_approved  # the worn Cowgirl costume has no sheet yet
+    p.bible.set_look_reference("wren", "cowgirl_costume", MediaRef("refs/wren-cowgirl.webp"))
+    p.approve_cast()
+
+    p.change_outfit("wren", FARMER, "s2")  # a correction: Farmer after all, with the sheet it kept
+    assert p.worn_looks() == {"wren/farmer_costume"}
+    assert p.bible.get("wren").look("farmer_costume").reference == MediaRef("refs/wren-farmer.webp")
+    assert p.bible.is_approved
+
+
+def test_a_costume_whose_shots_are_all_deleted_is_hidden() -> None:
+    p = costume_project()
+    p.change_outfit("wren", None, "s3")  # only shot 2 shows the costume
+    p.delete_shot("s2")
+    assert "wren/farmer_costume" not in p.worn_looks()
+    assert p.shown(p.bible.get("wren")).looks == ()
+    assert p.bible.get("wren").look("farmer_costume").reference is not None  # kept, in case it comes back
+
+
+def test_a_worn_look_without_a_sheet_sends_the_cast_back_to_draft() -> None:
+    p = costume_project(looks=False)
+    p.change_outfit("wren", FARMER, "s6")
+    assert not p.bible.is_approved

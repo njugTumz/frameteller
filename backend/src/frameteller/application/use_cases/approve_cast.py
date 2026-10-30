@@ -42,7 +42,7 @@ class ApproveCast:
                     project.upsert_character(replace(character, canonical_description=text, reference=None))
                     changed.append(cid)
             if not changed:
-                project.bible.approve()
+                project.approve_cast()
             return tuple(changed)
 
         changed = await self._repo.update(project_id, apply)

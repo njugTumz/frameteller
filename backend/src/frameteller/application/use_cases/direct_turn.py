@@ -86,8 +86,9 @@ def apply_looks(
     project: Project, changes: Sequence[LookChange], shot_at: Callable[[int], str | None]
 ) -> tuple[list[str], list[str]]:
     """Record outfit changes from the shot each starts at (ADR 0018). A look the character already has is worn as
-    it is. Returns the sheets to draw ("wren/farmer_costume") and the shots that now show other clothes. A change
-    from a shot that was not added (the episode was full) or for an unknown character is skipped."""
+    it is. Returns the sheets to draw ("wren/farmer_costume"), only of looks some shot shows, and the shots that
+    now show other clothes. A change from a shot that was not added (the episode was full) or for an unknown
+    character is skipped."""
     sheets, restyled = [], []
     for change in changes:
         shot_id = shot_at(change.from_shot)
@@ -106,7 +107,8 @@ def apply_looks(
         restyled += project.change_outfit(change.character_id, look, shot_id)
         if look is not None and project.bible.get(change.character_id).look(look.id).reference is None:
             sheets.append(sheet_target(change.character_id, look.id))
-    return list(dict.fromkeys(sheets)), list(dict.fromkeys(restyled))
+    worn = project.worn_looks()  # a look no shot shows (the director replaced it) is not drawn yet
+    return [t for t in dict.fromkeys(sheets) if t in worn], list(dict.fromkeys(restyled))
 
 
 def wearing(project: Project, shot_id: str) -> tuple[tuple[str, str], ...]:

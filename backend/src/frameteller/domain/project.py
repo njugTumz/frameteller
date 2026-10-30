@@ -5,7 +5,15 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 
-from frameteller.domain.characters import EVERYDAY, Character, CharacterBible, Look, SheetRefusal
+from frameteller.domain.characters import (
+    EVERYDAY,
+    CastStatus,
+    Character,
+    CharacterBible,
+    Look,
+    SheetRefusal,
+    sheet_target,
+)
 from frameteller.domain.errors import (
     CastNotApprovedError,
     InvalidValueError,
@@ -156,25 +164,69 @@ class Project:
         Returns the shots that now show other clothes; their drawn panels are outdated.
         """
         self.shot(from_shot_id)
-        before = self._wearing(character_id)
+        before, approved = self._wearing(character_id), self.bible.is_approved
         if look is not None:
             self.bible.set_look(character_id, look)
         self.outfits = [
             o for o in self.outfits if not (o.character_id == character_id and o.from_shot_id == from_shot_id)
         ]
         self.outfits.append(OutfitChange(character_id, look.id if look else EVERYDAY, from_shot_id))
+        self._resettle(approved)
         return self._restyled(character_id, before)
 
     def restyle_look(self, character_id: str, look_id: str, clothes: str) -> list[str]:
         """New clothes for a look (the user edited its description): its sheet is redrawn, its panels outdated."""
-        before = self._wearing(character_id)
+        before, approved = self._wearing(character_id), self.bible.is_approved
         self.bible.set_look(character_id, replace(self.bible.get(character_id).look(look_id), clothes=clothes.strip()))
+        self._resettle(approved)
         return self._restyled(character_id, before)
 
     def drop_outfits_from(self, shot_ids: Iterable[str]) -> None:
         """Forget the outfit changes that start at these shots (their turn is being directed again)."""
         gone = set(shot_ids)
         self.outfits = [o for o in self.outfits if o.from_shot_id not in gone]
+        self.settle_looks()
+
+    def worn_looks(self) -> set[str]:
+        """The looks some shot shows, as sheet targets ("wren/farmer_costume"). A look no shot shows (a costume
+        the director replaced, or whose shots were deleted) is hidden and needs no sheet until it is worn again;
+        a sheet it already has is kept for then."""
+        return {
+            sheet_target(cid, look.id)
+            for s in self.shots
+            for cid in s.character_ids
+            if cid in self.bible and (look := self.look_in(s.id, cid)) is not None
+        }
+
+    def shown(self, character: Character) -> Character:
+        """The character with only the looks some shot shows: what the cast tray lists."""
+        worn = self.worn_looks()
+        return replace(
+            character, looks=tuple(lk for lk in character.looks if sheet_target(character.id, lk.id) in worn)
+        )
+
+    def approve_cast(self) -> None:
+        self.bible.approve(unworn=self._unworn())
+
+    def settle_looks(self) -> None:
+        """An approved cast stays approved only while every look a shot shows has its sheet."""
+        if self.bible.is_approved and any(
+            look.reference is None
+            for s in self.shots
+            for cid in s.character_ids
+            if cid in self.bible and (look := self.look_in(s.id, cid)) is not None
+        ):
+            self.bible.status = CastStatus.DRAFT
+
+    def _resettle(self, approved: bool) -> None:
+        """After an outfit change: a look no shot shows does not send an approved cast back to draft."""
+        if approved and self.bible.status is CastStatus.DRAFT:
+            self.bible.status = CastStatus.APPROVED
+        self.settle_looks()
+
+    def _unworn(self) -> set[str]:
+        every = {sheet_target(c.id, lk.id) for c in self.bible.characters.values() for lk in c.looks}
+        return every - self.worn_looks()
 
     def _wearing(self, character_id: str) -> dict[str, tuple[str, str]]:
         out = {}
@@ -206,6 +258,7 @@ class Project:
             if target is not None:
                 moved.append(replace(o, from_shot_id=target))
         self.outfits = moved
+        self.settle_looks()
 
     def _mark_outdated(self, shot_ids: Iterable[str]) -> None:
         for shot_id in shot_ids:

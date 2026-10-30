@@ -14,7 +14,7 @@ class GenerateCastReferences:
 
     A target is a character ("wren") or one of its looks ("wren/farmer_costume", ADR 0018). Everyday sheets come
     first, because a look is drawn from its character's everyday sheet. A character redrawn for a new
-    description also gets the looks redrawn that lost their sheets with it.
+    description also gets the looks redrawn that lost their sheets with it, if some shot shows them.
     """
 
     def __init__(
@@ -31,9 +31,14 @@ class GenerateCastReferences:
             project = await self._repo.get(project_id)
             for cid in bases:
                 if cid in project.bible:
-                    looks += [(cid, lk.id) for lk in project.bible.get(cid).looks if lk.reference is None]
+                    looks += [
+                        (cid, lk.id) for lk in project.shown(project.bible.get(cid)).looks if lk.reference is None
+                    ]
         results += await self._draw(project_id, list(dict.fromkeys(looks)), correction)
         drawn = list({r.id: r for r in results if isinstance(r, Character)}.values())
+        if self._repo is not None and drawn:
+            project = await self._repo.get(project_id)
+            drawn = [project.shown(c) for c in drawn]  # the tray lists only the looks some shot shows
         if drawn:
             await self._events.publish(project_id, CastProposed(tuple(drawn)))
         for r in results:

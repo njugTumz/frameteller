@@ -46,3 +46,15 @@ character cannot show a costume change. The fix has to change the sheet, not onl
 - A costume costs one more sheet ($0.01), and one more approval click mid-story.
 - Panels already drawn in the old clothes are marked outdated, not redrawn on their own.
 - Look sheets are not reviewed by the supervisor's sheet check yet. The panels drawn from them are.
+
+## Amendment (Oct 31): only looks a shot shows
+
+On staging the director recorded "Farmer costume" and then "Cowgirl farmer costume" from the same shot. The later
+change wins, so no shot showed the first one, but it was drawn ($0.01) and listed in the cast tray.
+
+- A look counts only while some shot shows it (`Project.worn_looks()`).
+- The cast tray, the cast events and approval ignore the other looks.
+- No sheet is drawn for a look until a shot shows it.
+- A look that stops being shown (a correction or a deleted shot) is hidden again. Its sheet, if drawn, is kept for
+  when it comes back.
+- An approved cast goes back to draft only when a shown look has no sheet.

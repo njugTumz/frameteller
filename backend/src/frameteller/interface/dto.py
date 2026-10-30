@@ -433,7 +433,7 @@ class CharacterOut(BaseModel):
     ) -> CharacterOut:
         current = review if review and review.reference == c.reference else None
         looks = []
-        for look in c.looks:
+        for look in (project.shown(c) if project else c).looks:  # a look no shot shows is hidden
             worn = [s.number for s in project.shots if _wears(project, s, c.id, look.id)] if project else []
             failure = project.sheet_failures.get(sheet_target(c.id, look.id)) if project else None
             looks.append(
