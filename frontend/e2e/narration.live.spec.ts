@@ -157,8 +157,8 @@ test('narrate six paragraphs, approve the cast, get drafts and select an object'
   await page.keyboard.press('Escape')
   await expect(page.getByRole('img', { name: /^Shot 1:/ })).toHaveAttribute('src', /\/composites\//, { timeout: 30_000 })
 
-  // Export the animatic with the narrator's voice and subtitles.
-  await page.getByLabel('Burn in subtitles').check()
+  // Export the animatic with the narrator's voice and captions (burned in by default).
+  await expect(page.getByLabel('Captions in the picture')).toBeChecked() // on by default
   await page.getByRole('button', { name: 'Export animatic' }).click()
   mark('export animatic')
   await expect(page.getByTestId('animatic-player')).toBeVisible({ timeout: 360_000 }) // about 90 s on staging

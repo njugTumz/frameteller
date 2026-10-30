@@ -258,12 +258,12 @@ async function storyBackend(page: Page, { dropDuringExport = false } = {}) {
         // during its grace period, but its job.updated never reaches this page.
         setTimeout(() => void state.ws?.close({ code: 1012, reason: 'service restart' }), 600)
         setTimeout(() => {
-          state.animatic = { url: '/media/projects/p1/exports/animatic-1.mp4', duration_ms: 12400, subtitles: Boolean(body?.subtitles), voiced: true }
+          state.animatic = { url: '/media/projects/p1/exports/animatic-1.mp4', duration_ms: 12400, subtitles: Boolean(body?.subtitles), voiced: true, caption_language: '' }
         }, 2500)
         return json(202, { kind: 'export_animatic', key: 'export_animatic:p1:e1', enqueued: true, shot_id: null, revision: null })
       }
       setTimeout(() => {
-        state.animatic = { url: '/media/projects/p1/exports/animatic-1.mp4', duration_ms: 12400, subtitles: Boolean(body?.subtitles), voiced: true }
+        state.animatic = { url: '/media/projects/p1/exports/animatic-1.mp4', duration_ms: 12400, subtitles: Boolean(body?.subtitles), voiced: true, caption_language: '' }
         send({ type: 'job.updated', kind: 'export_animatic', key: 'e1', status: 'succeeded', shot_id: null, revision: null, message: null, progress: null })
       }, 1200)
       return json(202, { kind: 'export_animatic', key: 'e1', enqueued: true, shot_id: null, revision: null })
@@ -375,13 +375,13 @@ test('manage the cast, follow a reveal, hear the silence warning, move, export a
 
   // Export: progress, then an inline player and a download. The kept recording can be deleted.
   await expect(page.getByTestId('recording-kept')).toBeVisible()
-  await page.getByLabel('Burn in subtitles').check()
+  await expect(page.getByLabel('Captions in the picture')).toBeChecked() // on by default
   await page.getByRole('button', { name: 'Export animatic' }).click()
   await expect(page.getByText(/Rendering the animatic… 50%/)).toBeVisible()
   await expect(page.getByTestId('animatic-player')).toBeVisible({ timeout: 5000 })
   await expect(page.getByRole('link', { name: 'Download MP4' })).toHaveAttribute('href', /animatic-1\.mp4\?download=1$/)
   await expect(page.getByRole('link', { name: 'Download storyboard PDF' })).toHaveAttribute('href', `${API}/projects/p1/exports/storyboard.pdf`)
-  expect(backend.posted.find((p) => p.path.endsWith('/exports/animatic'))?.body).toEqual({ subtitles: true })
+  expect(backend.posted.find((p) => p.path.endsWith('/exports/animatic'))?.body).toEqual({ subtitles: true, caption_language: null })
 
   // Share: an unlisted link that previews on X, a read-only page, made public, then turned off.
   const robots = page.locator('meta[name="robots"]')
