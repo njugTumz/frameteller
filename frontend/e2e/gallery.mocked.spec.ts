@@ -16,6 +16,18 @@ const panel = (n: number) => ({ revision: 1, shown_revision: 1, status: 'ready',
 const shot = (n: number) => ({ id: `s${n}`, number: n, framing: 'wide', character_ids: ['lina'], setting: 'a rooftop', action: `Lina, beat ${n}`, dialogue: '', duration_ms: 2400, source_turn_ids: [`t${n}`], episode: 1, panel: panel(n) })
 const PROJECT = { id: 'p1', title: 'The Rooftop Garden', style: 'pencil', cast: { status: 'approved', characters: [LINA] }, turns: [], shots: [shot(1), shot(2)], narrations: [], animatic: null, share_token: 'tok' }
 
+/** How this browser draws flag emoji, whatever fonts the test machine has: in colour, or as letters (Windows). */
+async function flagEmoji(page: Page, drawn: boolean) {
+  await page.addInitScript((colour) => {
+    const pixel = colour ? [200, 30, 40, 255] : [20, 20, 20, 255]
+    CanvasRenderingContext2D.prototype.getImageData = function (_x: number, _y: number, w: number, h: number) {
+      const data = new Uint8ClampedArray(w * h * 4)
+      for (let i = 0; i < 400; i += 4) data.set(pixel, i)
+      return new ImageData(data, w, h)
+    }
+  }, drawn)
+}
+
 async function fakeBackend(page: Page) {
   const state = { entry: null as Json | null, posted: [] as Json[], patched: [] as Json[] }
   const mine = () => state.entry
@@ -60,6 +72,7 @@ async function fakeBackend(page: Page) {
 }
 
 test('submit to the gallery signed with a name and a confirmed country, then edit and remove it', async ({ page }) => {
+  await flagEmoji(page, true)
   const backend = await fakeBackend(page)
   await page.goto('/projects/p1')
   const dialog = page.getByTestId('gallery-submit')
@@ -95,6 +108,7 @@ test('submit to the gallery signed with a name and a confirmed country, then edi
 })
 
 test('without choosing, the suggested country is never sent', async ({ page }) => {
+  await flagEmoji(page, true)
   const backend = await fakeBackend(page)
   await page.goto('/projects/p1')
   const dialog = page.getByTestId('gallery-submit')
@@ -103,4 +117,24 @@ test('without choosing, the suggested country is never sent', async ({ page }) =
   await dialog.getByRole('button', { name: 'Submit to gallery' }).click()
   await expect(dialog.getByTestId('my-byline')).toContainText('Shown by an anonymous storyteller')
   expect(backend.posted[0]).toEqual({ consent: true, audio: 'none', name: '', country: '' })
+})
+
+test('where flag emoji draw as letters (Windows), the country is named without a flag or code', async ({ page }) => {
+  await flagEmoji(page, false)
+  await fakeBackend(page)
+  await page.goto('/projects/p1')
+  const dialog = page.getByTestId('gallery-submit')
+  await expect(dialog.getByTestId('country-suggestion')).toContainText('A guess from your browser: Kenya.')
+  await dialog.getByLabel('Your name').fill('Ama')
+  await dialog.getByLabel('Country').selectOption('AE')
+  await expect(dialog.getByLabel('Country').locator('option:checked')).toHaveText('United Arab Emirates (AE)')
+  await dialog.getByRole('radio', { name: 'Publish without audio' }).check()
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button', { name: 'Submit to gallery' }).click()
+  await expect(dialog.getByTestId('my-byline')).toContainText('Shown by Ama · United Arab Emirates')
+
+  await page.goto('/gallery')
+  await expect(page.getByTestId('gallery-byline')).toHaveText('by Ama · United Arab Emirates')
+  await page.goto('/s/tok')
+  await expect(page.getByTestId('shared-byline')).toHaveText('by Ama · United Arab Emirates')
 })
