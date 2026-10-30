@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import time
 import urllib.request
 from pathlib import Path
@@ -24,7 +25,7 @@ import websockets
 
 T0 = time.perf_counter()
 # Counted as its own browser for the per-visitor demo limits (the studio sends one per browser too).
-VISITOR = "read-check-0001"
+VISITOR = os.environ.get("READ_LIVE_VISITOR", "read-check-0001")  # a separate staging allowance per check
 
 
 def now() -> float:
