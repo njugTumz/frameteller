@@ -156,6 +156,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               type: 'Liveness'
               httpGet: { path: '/healthz', port: 8000 }
               periodSeconds: 30
+              timeoutSeconds: 5 // the 1 s default restarted the app mid-export under load (docs/load-test.md)
               failureThreshold: 3
             }
             {
