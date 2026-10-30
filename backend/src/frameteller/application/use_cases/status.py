@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from frameteller.application.budget import BudgetCalendar
+from frameteller.application.budget import BudgetCalendar, judge_aware_cap
+from frameteller.application.judge import JudgeDesk
 from frameteller.application.lanes import Lane, current_lane
 from frameteller.application.limits import DemoLimits
 from frameteller.application.ports import Clock, SpendLedger
@@ -34,8 +35,9 @@ class GetStudioStatus:
         limits: DemoLimits,
         per_day_usd: float | None = None,
         calendar: BudgetCalendar | None = None,
+        desk: JudgeDesk | None = None,
     ) -> None:
-        self._ledger, self._clock = ledger, clock
+        self._ledger, self._clock, self._desk = ledger, clock, desk
         self._calendar = calendar or BudgetCalendar(per_day_usd or 0.0)
         self._paused, self._limits = paused, limits
 
@@ -44,6 +46,7 @@ class GetStudioStatus:
         lane = lane or current_lane()
         day = self._calendar.day(self._clock.now())
         spent = await self._ledger.spent_on_day(self._calendar.pool(day, lane))
-        cap = self._calendar.cap(day, lane)
+        cap = await judge_aware_cap(self._calendar, self._desk, day, lane)
         full = spent >= cap - FULL_MARGIN_USD
-        return StudioStatus(self._paused, full, self._limits, lane is Lane.JUDGE, day, cap, round(spent, 4))
+        limits = self._limits.on(day)
+        return StudioStatus(self._paused, full, limits, lane is Lane.JUDGE, day, cap, round(spent, 4))

@@ -57,7 +57,12 @@ class Settings(BaseSettings):
     # The judge pass: a private link (/judge#<JUDGE_TOKEN>) sets a signed cookie. Judges skip the per-visitor
     # caps and the waiting room, and spend from their own reserved pool. Rotate by changing the token.
     judge_token: SecretStr | None = None
+    # Each browser that opens the link gets its own pass, limited to JUDGE_STORIES_PER_PASS_PER_DAY new stories.
+    # The judges' reserve is JUDGE_BUDGET_PER_DAY_USD, raised on judging days by JUDGE_BUDGET_DAYS_USD; the admin
+    # page can lower it without a redeploy.
     judge_budget_per_day_usd: float = Field(default=15.0, ge=0)
+    judge_budget_days_usd: str = "2026-11-05:25,2026-11-06:25,2026-11-07:25,2026-11-08:25"
+    judge_stories_per_pass_per_day: int = Field(default=15, ge=1)
     judge_pass_days: int = Field(default=21, ge=1, le=60)
     # The gallery's admin page: /admin#<ADMIN_TOKEN>, sent as a bearer token. Unset: no admin API.
     admin_token: SecretStr | None = None
@@ -71,6 +76,8 @@ class Settings(BaseSettings):
 
     # Public-demo guardrails (production defaults). A visitor is a hash of IP and browser id.
     limit_projects_per_visitor_per_day: int = Field(default=3, ge=1)
+    # More stories per visitor on the dates named ("date:stories", days at UTC+4): the judging days.
+    limit_projects_per_visitor_days: str = "2026-11-05:5,2026-11-06:5,2026-11-07:5,2026-11-08:5"
     limit_narration_minutes_per_session: float = Field(default=3, gt=0)
     limit_shots_per_episode: int = Field(default=12, ge=1)
     limit_renders_per_project: int = Field(default=60, ge=1)  # panel renders and edits
@@ -142,7 +149,7 @@ class Settings(BaseSettings):
     def _empty_means_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
 
-    @field_validator("budget_days_usd")
+    @field_validator("budget_days_usd", "judge_budget_days_usd", "limit_projects_per_visitor_days")
     @classmethod
     def _days_parse(cls, value: str) -> str:
         parse_days(value)  # ValueError: "BUDGET_DAYS_USD: ..." at startup
@@ -200,6 +207,8 @@ class Settings(BaseSettings):
             episodes_per_script=self.limit_episodes_per_script,
             script_characters=self.limit_script_characters,
             speech_characters_per_visitor_per_day=self.limit_speech_characters_per_visitor_per_day,
+            projects_per_visitor_days={d: int(n) for d, n in parse_days(self.limit_projects_per_visitor_days).items()},
+            stories_per_judge_pass_per_day=self.judge_stories_per_pass_per_day,
         )
 
     @property
@@ -209,6 +218,7 @@ class Settings(BaseSettings):
             judge_per_day_usd=self.judge_budget_per_day_usd if self.judge_token else 0.0,
             days_usd=parse_days(self.budget_days_usd),
             utc_offset_hours=self.budget_utc_offset_hours,
+            judge_days_usd=parse_days(self.judge_budget_days_usd),
         )
 
     @property

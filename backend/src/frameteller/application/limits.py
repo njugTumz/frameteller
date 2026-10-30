@@ -1,16 +1,21 @@
 """Public-demo allowances (CLAUDE.md section 6, cost guardrails), on top of the spend budgets.
 
-Per visitor (a hash of IP and browser id, never stored raw): new projects per day. Per project: shots, panel
-renders and edits, and exports. Per live session: minutes of narration. Each refusal says what happened and
-what to do next.
+Per visitor (a hash of IP and browser id, never stored raw): new projects per day, more on the dates the
+calendar names. Per judge pass: new projects per day (ADR 0016). Per project: shots, panel renders and edits, and
+exports. Per live session: minutes of narration. Each refusal says what happened and what to do next. Days are
+the budget calendar's (UTC+4).
 """
 
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+import dataclasses
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from datetime import datetime
 
 from frameteller.application.errors import LimitReachedError
+from frameteller.application.judge import JudgeDesk, current_pass, pass_key
 from frameteller.application.lanes import is_judge
 from frameteller.application.ports import Clock, ProjectRepository, VisitorQuota
 from frameteller.domain import Project
@@ -32,6 +37,20 @@ class DemoLimits:
     episodes_per_script: int = 3
     script_characters: int = 4000
     speech_characters_per_visitor_per_day: int = 12_000  # Azure Text-to-Speech, "Read it to me"
+    projects_per_visitor_days: Mapping[str, int] = field(default_factory=dict)  # "2026-11-05" -> 5
+    stories_per_judge_pass_per_day: int = 15
+
+    def on(self, day: str) -> DemoLimits:
+        """The limits of `day`: the per-visitor story limit follows the calendar."""
+        today = self.projects_per_visitor_days.get(day, self.projects_per_visitor_per_day)
+        return dataclasses.replace(self, projects_per_visitor_per_day=today)
+
+    @property
+    def judge_pass_full(self) -> str:
+        return (
+            f"This judge pass has started {self.stories_per_judge_pass_per_day} stories today, the most per pass. "
+            "Every story is saved: keep working on any of them. New ones open again at midnight (UTC+4)."
+        )
 
     def messages(self) -> dict[str, str]:
         return {
@@ -80,20 +99,43 @@ class ProjectAllowance:
 class VisitorAllowance:
     """Per-visitor daily allowances. One replica (ADR 0009), so a lock makes check-then-add atomic.
 
-    Judges have none: their reserved budget is their limit."""
+    Judges are counted per pass instead, with their own limit (any number of judges can share one link)."""
 
-    def __init__(self, quota: VisitorQuota, clock: Clock, limits: DemoLimits) -> None:
-        self._quota, self._clock, self._limits = quota, clock, limits
+    def __init__(
+        self,
+        quota: VisitorQuota,
+        clock: Clock,
+        limits: DemoLimits,
+        *,
+        day: Callable[[datetime], str] | None = None,
+        desk: JudgeDesk | None = None,
+    ) -> None:
+        self._quota, self._clock, self._limits, self._desk = quota, clock, limits, desk
+        self._day = day or (lambda now: now.date().isoformat())
         self._lock = asyncio.Lock()
 
     async def take(self, visitor: str, kind: str = PROJECTS) -> None:
+        now = self._clock.now()
+        day = self._day(now)
         if is_judge():
+            await self._take_for_pass(day, now)
             return
-        day = self._clock.now().date().isoformat()
+        limits = self._limits.on(day)
         async with self._lock:
-            if await self._quota.used(visitor, day, kind) >= self._limits.projects_per_visitor_per_day:
-                raise LimitReachedError(self._limits.messages()[kind])
+            if await self._quota.used(visitor, day, kind) >= limits.projects_per_visitor_per_day:
+                raise LimitReachedError(limits.messages()[kind])
             await self._quota.add(visitor, day, kind)
+
+    async def _take_for_pass(self, day: str, now: datetime) -> None:
+        pass_id = current_pass()
+        if pass_id is None:
+            return  # an old pass without an id: its reserved budget is its limit
+        async with self._lock:
+            if await self._quota.used(pass_key(pass_id), day, PROJECTS) >= self._limits.stories_per_judge_pass_per_day:
+                raise LimitReachedError(self._limits.judge_pass_full)
+            await self._quota.add(pass_key(pass_id), day, PROJECTS)
+        if self._desk is not None:
+            await self._desk.seen(pass_id, day, now.isoformat(timespec="seconds"))
 
 
 class SpeechAllowance:

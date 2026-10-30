@@ -1,7 +1,8 @@
 """Budget policy: per-project and per-day spend limits (CLAUDE.md section 6, cost guardrails).
 
 The daily cap follows a calendar in the team's time zone (UTC+4): higher on launch and judging days. Judges
-spend from their own reserved pool, which the public cap can never consume (ADR 0016).
+spend from their own reserved pool, which the public cap can never consume, also by date; the admin can lower it
+from the admin page without a redeploy. Each judge pass's spending is recorded apart too, for the overview (ADR 0016).
 """
 
 from __future__ import annotations
@@ -12,13 +13,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from frameteller.application.errors import BudgetExceededError, StudioFullError
+from frameteller.application.judge import JudgeDesk, current_pass, pass_key, pass_pool
 from frameteller.application.lanes import Lane, current_lane
 from frameteller.application.ports import Clock, SpendLedger
 
 
 @dataclass(frozen=True, slots=True)
 class BudgetCalendar:
-    """The daily caps: `per_day_usd` on most days, `days_usd` on the dates it names, `judge_per_day_usd` for judges.
+    """The daily caps: `per_day_usd` on most days, `days_usd` on the dates it names; for judges, `judge_per_day_usd`
+    and `judge_days_usd`.
 
     A day is a date at `utc_offset_hours` (4: the team's midnight), so a cap never changes mid-evening.
     """
@@ -27,13 +30,14 @@ class BudgetCalendar:
     judge_per_day_usd: float = 0.0
     days_usd: Mapping[str, float] = field(default_factory=dict)
     utc_offset_hours: float = 0.0
+    judge_days_usd: Mapping[str, float] = field(default_factory=dict)
 
     def day(self, now: datetime) -> str:
         return now.astimezone(timezone(timedelta(hours=self.utc_offset_hours))).date().isoformat()
 
     def cap(self, day: str, lane: Lane = Lane.PUBLIC) -> float:
         if lane is Lane.JUDGE:
-            return self.judge_per_day_usd
+            return self.judge_days_usd.get(day, self.judge_per_day_usd) if self.judge_per_day_usd else 0.0
         return self.days_usd.get(day, self.per_day_usd)
 
     @staticmethod
@@ -64,10 +68,11 @@ class LimitBudgetGuard:
         per_project_usd: float,
         per_day_usd: float | None = None,
         calendar: BudgetCalendar | None = None,
+        desk: JudgeDesk | None = None,
     ) -> None:
         if (per_day_usd is None) == (calendar is None):
             raise ValueError("give per_day_usd or a calendar")
-        self._ledger, self._clock = ledger, clock
+        self._ledger, self._clock, self._desk = ledger, clock, desk
         self._per_project = per_project_usd
         self._calendar = calendar or BudgetCalendar(per_day_usd or 0.0)
         self._lock = asyncio.Lock()
@@ -77,7 +82,8 @@ class LimitBudgetGuard:
             raise ValueError("cost must not be negative")
         lane = current_lane()
         day = self._calendar.day(self._clock.now())
-        pool, cap = self._calendar.pool(day, lane), self._calendar.cap(day, lane)
+        pool, cap = self._calendar.pool(day, lane), await judge_aware_cap(self._calendar, self._desk, day, lane)
+        pass_id = current_pass() if lane is Lane.JUDGE else None
         async with self._lock:
             project_total = await self._ledger.spent_by_project(project_id) + cost_usd
             day_total = await self._ledger.spent_on_day(pool) + cost_usd
@@ -89,3 +95,15 @@ class LimitBudgetGuard:
             if day_total > cap:
                 raise StudioFullError(f"{what}: today ({pool}) would reach ${day_total:.2f} (limit ${cap:.2f})")
             await self._ledger.record(project_id, pool, cost_usd, what)
+            if pass_id is not None:  # beside the pool, under the pass's own keys: never counted twice
+                await self._ledger.record(pass_key(pass_id), pass_pool(day, pass_id), cost_usd, what)
+
+
+async def judge_aware_cap(calendar: BudgetCalendar, desk: JudgeDesk | None, day: str, lane: Lane) -> float:
+    """Today's cap for the lane; for judges, lowered by the admin's override if one is set (never raised)."""
+    cap = calendar.cap(day, lane)
+    if lane is Lane.JUDGE and desk is not None:
+        override = await desk.reserve_override()
+        if override is not None:
+            cap = min(cap, override)
+    return cap

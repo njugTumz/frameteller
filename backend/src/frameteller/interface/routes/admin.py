@@ -10,7 +10,7 @@ import hmac
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from frameteller.application.lanes import Lane
 from frameteller.application.use_cases.gallery import ModerateGallery
@@ -56,6 +56,23 @@ class GateOut(BaseModel):
     max_waiting: int
 
 
+class JudgePassOut(BaseModel):
+    pass_id: str
+    first_seen: str
+    stories_today: int
+    spent_today_usd: float
+
+
+class JudgeReserveOut(BaseModel):
+    calendar_usd: float = Field(description="Today's reserve from the calendar (JUDGE_BUDGET_*).")
+    override_usd: float | None = Field(description="The lower reserve set here; null: the calendar's applies.")
+    stories_per_pass_per_day: int
+
+
+class JudgeReserveIn(BaseModel):
+    usd: float | None = Field(ge=0, description="A lower daily reserve for all judges; null clears it.")
+
+
 class OverviewOut(BaseModel):
     paused: bool
     budgets: list[BudgetOut]
@@ -64,6 +81,8 @@ class OverviewOut(BaseModel):
     read_it_to_me: bool
     judge_pass: bool
     glimmer_warm_until: str | None
+    judge_reserve: JudgeReserveOut
+    judge_passes: list[JudgePassOut]
 
 
 @router.get("/overview")
@@ -84,6 +103,11 @@ async def overview(c: Admin) -> OverviewOut:
     gates = [GateOut.model_validate(g, from_attributes=True) for g in states]
     warm = await c.glimmer_lease.warm_until() if c.glimmer_lease is not None else None
     return OverviewOut(
+        judge_reserve=await _reserve(c),
+        judge_passes=[
+            JudgePassOut.model_validate(p, from_attributes=True)
+            for p in (await c.judge_passes.execute() if c.judge_passes else [])
+        ],
         paused=c.settings.demo_paused,
         budgets=budgets,
         gates=gates,
@@ -92,6 +116,26 @@ async def overview(c: Admin) -> OverviewOut:
         judge_pass=c.settings.judge_token is not None,
         glimmer_warm_until=warm.isoformat(timespec="seconds") if warm else None,
     )
+
+
+async def _reserve(c: Container) -> JudgeReserveOut:
+    calendar = c.settings.budget_calendar
+    day = (await c.studio_status.execute(Lane.JUDGE)).day
+    override = await c.judge_desk.reserve_override() if c.judge_desk else None
+    return JudgeReserveOut(
+        calendar_usd=calendar.cap(day, Lane.JUDGE),
+        override_usd=override,
+        stories_per_pass_per_day=c.settings.judge_stories_per_pass_per_day,
+    )
+
+
+@router.put("/judge/reserve")
+async def set_judge_reserve(body: JudgeReserveIn, c: Admin) -> JudgeReserveOut:
+    """Lower the judges' daily reserve now, without a redeploy (e.g. if the judge link leaks). It never raises it."""
+    if c.judge_desk is None:
+        raise HTTPException(404)
+    await c.judge_desk.set_reserve(body.usd)
+    return await _reserve(c)
 
 
 # ---- the gallery (ADR 0017) ----

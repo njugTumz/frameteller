@@ -12,6 +12,7 @@ from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.capacity import Capacity, GatedImages, GatedSegmentation
 from frameteller.application.events import JobUpdated
+from frameteller.application.judge import JudgeDesk, JudgePassesToday
 from frameteller.application.limits import ProjectAllowance, SpeechAllowance, VisitorAllowance
 from frameteller.application.ports import (
     Clock,
@@ -183,6 +184,9 @@ class Container:
     heart_gallery: HeartGalleryEntry | None = None
     report_gallery: ReportGalleryEntry | None = None
     moderate_gallery: ModerateGallery | None = None
+    # The judge pass (ADR 0016): passes seen, the admin's reserve override, and today's activity per pass.
+    judge_desk: JudgeDesk | None = None
+    judge_passes: JudgePassesToday | None = None
 
 
 def wire(
@@ -218,7 +222,10 @@ def wire(
     limits = settings.demo_limits
     allowance = ProjectAllowance(repo, limits)
     calendar = settings.budget_calendar
-    budget = LimitBudgetGuard(ledger, clock, per_project_usd=settings.budget_per_project_usd, calendar=calendar)
+    desk = JudgeDesk(storage)
+    budget = LimitBudgetGuard(
+        ledger, clock, per_project_usd=settings.budget_per_project_usd, calendar=calendar, desk=desk
+    )
     # ADR 0016: model calls in flight are limited globally; past a limit, work waits in line.
     capacity = Capacity(settings.capacity_limits)
     images = GatedImages(images, capacity.images)
@@ -341,7 +348,9 @@ def wire(
         storage=storage,
         jobs=queue,
         hub=hub,
-        create_project=CreateProject(repo, ids, VisitorAllowance(quota, clock, limits) if quota else None),
+        create_project=CreateProject(
+            repo, ids, VisitorAllowance(quota, clock, limits, day=calendar.day, desk=desk) if quota else None
+        ),
         get_project=GetProject(repo),
         find_shot=FindShot(repo),
         approve_cast=ApproveCast(repo, queue, ids),
@@ -374,7 +383,9 @@ def wire(
         correct_transcript=correct_transcript,
         transcribe_instruction=TranscribeInstruction(repo, speech),
         delete_narration=DeleteNarration(repo, storage),
-        studio_status=GetStudioStatus(ledger, clock, calendar=calendar, paused=settings.demo_paused, limits=limits),
+        studio_status=GetStudioStatus(
+            ledger, clock, calendar=calendar, paused=settings.demo_paused, limits=limits, desk=desk
+        ),
         capacity=capacity,
         apply_fix=ApplySuggestedFix(repo, queue, request_cast),
         accept_review=AcceptReview(repo),
@@ -391,6 +402,8 @@ def wire(
         heart_gallery=heart,
         report_gallery=report,
         moderate_gallery=moderate,
+        judge_desk=desk,
+        judge_passes=JudgePassesToday(desk, quota, ledger, clock, calendar.day),
     )
 
 
