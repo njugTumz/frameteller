@@ -42,12 +42,16 @@ def rest(api: str, method: str, path: str, body: dict[str, Any] | None = None) -
         return json.loads(r.read() or b"null")
 
 
-async def drafts(api: str, project: str, timeout_s: float = 600) -> dict[str, Any]:
+async def drafts(api: str, project: str, timeout_s: float = 600, *, sheets_only: bool = False) -> dict[str, Any]:
     """Approve the cast once its sheets and outfit sheets are in, draw a draft per shot, wait for every panel."""
     asked: set[int] = set()
     deadline = time.perf_counter() + timeout_s
     while time.perf_counter() < deadline:
         p = rest(api, "GET", f"/projects/{project}")
+        cast = p["cast"]["characters"]
+        sheets = [c for c in cast] + [look for c in cast for look in c.get("looks", [])]
+        if sheets_only and cast and all(x["reference_url"] or x["sheet_error"] for x in sheets):
+            return dict(p)  # every sheet drawn or refused: no panels
         if (
             p["cast"]["status"] != "approved"
             and p["cast"]["characters"]
@@ -67,7 +71,9 @@ async def drafts(api: str, project: str, timeout_s: float = 600) -> dict[str, An
     raise TimeoutError("the drafts did not finish")
 
 
-async def read(api: str, project: str, script: str, voice: str, language: str) -> list[tuple[float, dict[str, Any]]]:
+async def read(
+    api: str, project: str, script: str, voice: str, language: str, *, sheets_only: bool = False
+) -> list[tuple[float, dict[str, Any]]]:
     events: list[tuple[float, dict[str, Any]]] = []
     url = api.replace("https://", "wss://").replace("http://", "ws://") + f"/ws/projects/{project}/session"
     async with websockets.connect(url, max_size=None) as ws:
@@ -84,12 +90,14 @@ async def read(api: str, project: str, script: str, voice: str, language: str) -
             elif e["type"] in ("script.paused", "script.resumed", "error", "session.started"):
                 print(f"[{now():6.1f}s] {e}", flush=True)
             if e["type"] == "cast.proposed" and drawing is None:
-                drawing = asyncio.create_task(drafts(api, project))  # as the studio does while the voice reads
+                drawing = asyncio.create_task(
+                    drafts(api, project, sheets_only=sheets_only)
+                )  # as the studio does while the voice reads
             if e["type"] == "session.ended":
                 print(f"[{now():6.1f}s] ended: {e}", flush=True)
                 break
         if drawing is None:
-            drawing = asyncio.create_task(drafts(api, project))
+            drawing = asyncio.create_task(drafts(api, project, sheets_only=sheets_only))
         await drawing
     return events
 
@@ -102,15 +110,17 @@ async def main() -> None:
     parser.add_argument("--language", default="en-US")
     parser.add_argument("--title", default="Read it to me check")
     parser.add_argument("--export", action="store_true")
+    parser.add_argument("--style", default="pencil", choices=["pencil", "paper_cutout"])
+    parser.add_argument("--sheets-only", action="store_true", help="draw the cast's sheets, no panels")
     args = parser.parse_args()
     api = args.api.rstrip("/")
     voices = rest(api, "GET", "/voices")
     print("voices:", [(v["display_name"], [x["code"] for x in v["languages"]]) for v in voices["voices"]])
     if not voices["available"]:
         raise SystemExit("Read it to me is not available on this backend (no AZURE_SPEECH_KEY).")
-    project = rest(api, "POST", "/projects", {"title": args.title, "style": "pencil"})["id"]
+    project = rest(api, "POST", "/projects", {"title": args.title, "style": args.style})["id"]
     print("project", project)
-    events = await read(api, project, args.script.read_text(), args.voice, args.language)
+    events = await read(api, project, args.script.read_text(), args.voice, args.language, sheets_only=args.sheets_only)
     voiced = [e for _, e in events if e["type"] == "script.voiced"]
     first = next(t for t, e in events if e["type"] == "script.voiced")
     total = sum(v["duration_ms"] for v in voiced) / 1000
