@@ -161,8 +161,21 @@ A share link is read-only, unguessable and revocable. It never contains or revea
 | `POST /projects/{id}/share` | Body `{public?: bool}` (default false). Returns `{token, public, url, page_url}`. Post `url` (`{api}/s/{token}`): it previews on X and redirects browsers to `page_url` (`{studio}/s/{token}`). Calling it again returns the same link and sets `public`. |
 | `DELETE /projects/{id}/share` | 204. The link stops working within a minute (share responses are cached for 60 s). |
 | `GET /s/{token}` | HTML with `og:` and `twitter:` tags (title, description, a 1200x630 `og.png`) and a no-script redirect to the share page. A revoked link redirects too, with status 404, so the page can explain. |
-| `GET /shares/{token}` | `{title, style, shots: [{number, framing, action, dialogue, duration_ms, image_url}], animatic: {url, duration_ms} \| null, public}`. Media URLs are under `/shares/{token}/`. |
+| `GET /shares/{token}` | `{title, style, shots: [{number, framing, action, dialogue, duration_ms, image_url}], animatic: {url, duration_ms} \| null, public, narrated_by, creator}`. `creator` is `{name, country}` when the storyboard is published in the gallery (empty strings: an anonymous storyteller), else `null`. Media URLs are under `/shares/{token}/`. |
 | `GET /shares/{token}/panels/{n}`, `/animatic`, `/og.png` | The panel as shown, the animatic (with `Range` support) and the preview image. |
 
 **Unlisted by default.** Until the owner ticks "Make public", every share response carries `X-Robots-Tag: noindex, nofollow`, the stub has a robots meta tag and the studio's share page adds one, so search engines leave it out. Link previews on X still work: noindex keeps a page out of search results, not out of preview crawlers. A public link drops all three. On staging the whole studio is noindex (`STUDIO_NOINDEX=1`), public or not.
 
+## Gallery
+
+[ADR 0017](adr/0017-gallery.md). The creator's own entry is under the project; the public side is under `/gallery`.
+
+| Endpoint | Returns |
+|---|---|
+| `POST /projects/{id}/gallery` `{consent, audio, name?, country?}` | 202, the creator's entry `{id, status, note, audio, hearts, featured, submitted_at, creator: {name, country}}`. `status` starts as `checking`; follow `job.updated` with `kind: gallery_submission`, or poll `GET`. `name` is an optional display name or nickname (at most 40 characters after trimming); `country` an optional ISO 3166-1 alpha-2 code. Send `country` only when the creator chose or confirmed it. 422 for a longer name, control characters or an unknown code. |
+| `PATCH /projects/{id}/gallery` `{name?, country?}` | The entry, re-signed. Empty or null removes a field. Removing, or changing only the country, shows at once. A new name on a published entry sets `status: checking` until the moderation review has run again (no new render); a name with contact details goes to `pending` for a person. 422 while the first check is still running. |
+| `DELETE /projects/{id}/gallery` | 204. Withdraws the entry: it, its video, name and country are deleted. |
+| `GET /gallery?view=featured\|newest&style=&country=` | `{entries: [{id, title, style, episodes, shots, duration_ms, cover_url, video_url, share_url, hearts, hearted, featured, published_at, creator}], countries: [{code, entries}]}`. `country` filters by creator country (upper-case code). `countries` covers the whole gallery, most entries first: the "Stories from N countries" counter and the filter. |
+| `GET /gallery/countries` | `{codes, suggested}`: every code a creator may choose, and one guessed from the request's `Accept-Language` region (`en-KE` is `KE`), or `null`. Offer it; never publish it unconfirmed. |
+
+**Display.** Cards and share pages say "by <name> · <flag> <country>", "by <name>", "by a storyteller from <flag> <country>", or "by an anonymous storyteller" when both are empty. Flags and names come from the code in the browser.

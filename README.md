@@ -59,9 +59,10 @@ Each shot's words are split into short lines of at most ten words, and each line
 https://app.frameteller.com/gallery ([ADR 0017](docs/adr/0017-gallery.md)):
 
 - **Submitting:** "Submit to gallery" sits next to Share. You agree to show your story and choose its audio: your voice, the Ava voice instead, or none.
+- **Signing it (optional):** add a display name or nickname (up to 40 characters) and a country from a list with flags. The studio may offer a country guessed from your browser, but only uses it if you choose it. Cards and share pages say "by Ama · 🇰🇪 Kenya", or "by an anonymous storyteller". You can change or remove both later; a new name is checked again first.
 - **The gallery's copy:** the gallery keeps its own copy of the animatic, with burned-in captions, so later edits never change it. You can withdraw it at any time, which deletes it.
-- **Moderation:** before anyone sees it, the continuity supervisor checks it against [`agents/gallery.md`](agents/gallery.md): no real people, no franchise characters, nothing sexual, hateful or violent, no personal details. A confident clean pass publishes it; anything doubtful waits for a person.
-- **Browsing:** the gallery shows Featured or Newest, by style. You play the animatic in place, give one heart per browser, and can report a card. Each card links to its share page, and published share pages are in the sitemap for search engines.
+- **Moderation:** before anyone sees it, the continuity supervisor checks it against [`agents/gallery.md`](agents/gallery.md): no real people, no franchise characters, nothing sexual, hateful or violent, no personal details, and a creator name with no slurs, no impersonation of a public figure and no contact details (a name with an email, phone number, handle or link always waits for a person). A confident clean pass publishes it; anything doubtful waits for a person.
+- **Browsing:** the gallery says how many countries its stories come from, and shows Featured or Newest, by style or by country. You play the animatic in place, give one heart per browser, and can report a card. Each card links to its share page, and published share pages are in the sitemap for search engines.
 
 ## Built for a crowd
 
