@@ -47,7 +47,7 @@ character cannot show a costume change. The fix has to change the sheet, not onl
 - Panels already drawn in the old clothes are marked outdated, not redrawn on their own.
 - Look sheets are not reviewed by the supervisor's sheet check yet. The panels drawn from them are.
 
-## Amendment (Oct 31): only looks a shot shows
+## Amendment (Oct 30): only looks a shot shows
 
 On staging the director recorded "Farmer costume" and then "Cowgirl farmer costume" from the same shot. The later
 change wins, so no shot showed the first one, but it was drawn ($0.01) and listed in the cast tray.

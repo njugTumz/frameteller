@@ -1,7 +1,7 @@
 # ADR 0020: Judges wake Muse Glimmer
 
 - **Status:** Accepted
-- **Date:** 2026-10-31
+- **Date:** 2026-10-30
 - **Deciders:** Isaac Tumuti
 - **Builds on:** [ADR 0013](0013-glimmer-on-modal.md) (Glimmer on Modal, the warm lease), [ADR 0016](0016-capacity-and-fairness.md) (the judge pass)
 
