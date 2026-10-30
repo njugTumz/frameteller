@@ -57,7 +57,8 @@ async def revoke_share(project_id: ProjectId, c: Deps) -> None:
 async def get_share(token: Token, response: Response, c: Deps) -> SharedProjectOut:
     project = await c.open_share.execute(token)
     robots(response, project)
-    return SharedProjectOut.of(project, token)
+    creator = await c.browse_gallery.creator_of(project.id) if c.browse_gallery is not None else None
+    return SharedProjectOut.of(project, token, creator)
 
 
 @router.get("/shares/{token}/panels/{n}", response_class=Response, responses=NOT_FOUND)

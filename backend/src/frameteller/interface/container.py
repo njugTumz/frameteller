@@ -87,6 +87,7 @@ from frameteller.application.use_cases.gallery import (
     ModerateGallery,
     ProcessGallerySubmission,
     ReportGalleryEntry,
+    SignGalleryEntry,
     SubmitToGallery,
     WithdrawFromGallery,
 )
@@ -180,6 +181,7 @@ class Container:
     submit_to_gallery: SubmitToGallery | None = None
     gallery_entry: GalleryEntryOfProject | None = None
     withdraw_from_gallery: WithdrawFromGallery | None = None
+    sign_gallery: SignGalleryEntry | None = None
     browse_gallery: BrowseGallery | None = None
     heart_gallery: HeartGalleryEntry | None = None
     report_gallery: ReportGalleryEntry | None = None
@@ -317,7 +319,7 @@ def wire(
 
     share_project = ShareProject(repo, shares, ids)
     share_sheet = PillowSharePreview()
-    submit = entry = withdraw = browse = heart = report = moderate = None
+    submit = entry = withdraw = sign = browse = heart = report = moderate = None
     if gallery is not None:
         process = ProcessGallerySubmission(
             repo, gallery, storage, export_animatic, share_sheet, reviewer, rubrics, budget, share_project, clock
@@ -328,6 +330,7 @@ def wire(
             repo, gallery, share_project, queue, storage, clock, ids, voice_available=voice, allowance=allowance
         )
         entry, withdraw = GalleryEntryOfProject(gallery), WithdrawFromGallery(gallery, storage)
+        sign = SignGalleryEntry(gallery, queue)
         browse, heart, report = BrowseGallery(gallery), HeartGalleryEntry(gallery), ReportGalleryEntry(gallery, clock)
         moderate = ModerateGallery(gallery, storage, share_project, clock)
 
@@ -398,6 +401,7 @@ def wire(
         submit_to_gallery=submit,
         gallery_entry=entry,
         withdraw_from_gallery=withdraw,
+        sign_gallery=sign,
         browse_gallery=browse,
         heart_gallery=heart,
         report_gallery=report,

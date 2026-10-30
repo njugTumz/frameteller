@@ -45,6 +45,7 @@ from frameteller.domain import (
     Box,
     CanvasTransform,
     Character,
+    Creator,
     EntryStatus,
     GalleryAudio,
     GalleryEntry,
@@ -61,7 +62,7 @@ from frameteller.domain import (
     TranscriptTurn,
     Verdict,
 )
-from frameteller.domain.gallery import MAX_REPORT_CHARS
+from frameteller.domain.gallery import MAX_NAME_CHARS, MAX_REPORT_CHARS
 
 Id = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -586,9 +587,12 @@ class SharedProjectOut(BaseModel):
     narrated_by: str | None = Field(
         default=None, description='The synthesized voice that narrated it ("Brandon"); null: the author\'s own voice.'
     )
+    creator: CreatorOut | None = Field(
+        default=None, description="How its gallery entry is signed; null when it is not in the gallery."
+    )
 
     @classmethod
-    def of(cls, p: Project, token: str) -> SharedProjectOut:
+    def of(cls, p: Project, token: str, creator: Creator | None = None) -> SharedProjectOut:
         base = f"/shares/{token}"
         shots = []
         for s in p.shots:
@@ -613,6 +617,7 @@ class SharedProjectOut(BaseModel):
             animatic=animatic,
             public=p.share_public,
             narrated_by=voice_name(voices[-1]) if voices else None,
+            creator=CreatorOut.of(creator) if creator is not None else None,
         )
 
 
@@ -826,7 +831,27 @@ def error_message(message: str, *, fatal: bool = False) -> dict[str, Any]:
 # ---- the gallery (ADR 0017) ----
 
 
-class GallerySubmitRequest(BaseModel):
+class CreatorOut(BaseModel):
+    """How the creator signed their entry. Empty strings: left out (both empty: an anonymous storyteller)."""
+
+    name: str = Field(description="A display name or nickname, at most 40 characters; not necessarily a real name.")
+    country: str = Field(description="ISO 3166-1 alpha-2 code, or empty.")
+
+    @classmethod
+    def of(cls, c: Creator) -> CreatorOut:
+        return cls(name=c.name, country=c.country)
+
+
+class GallerySignRequest(BaseModel):
+    """The creator's optional signature. Empty or null leaves a field out (or removes it, on an edit)."""
+
+    name: str | None = Field(default=None, max_length=MAX_NAME_CHARS * 2, description="At most 40 characters.")
+    country: str | None = Field(
+        default=None, max_length=2, description="ISO 3166-1 alpha-2, only when the creator chose or confirmed it."
+    )
+
+
+class GallerySubmitRequest(GallerySignRequest):
     consent: bool = Field(description="The creator agreed to show this storyboard publicly in the gallery.")
     audio: GalleryAudio = Field(
         default="mine", description='"mine": the kept narration; "voice": the Ava voice instead; "none": silent.'
@@ -843,6 +868,7 @@ class MyGalleryEntryOut(BaseModel):
     hearts: int
     featured: bool
     submitted_at: datetime
+    creator: CreatorOut
 
     @classmethod
     def of(cls, e: GalleryEntry) -> MyGalleryEntryOut:
@@ -857,6 +883,7 @@ class MyGalleryEntryOut(BaseModel):
             hearts=len(e.hearts),
             featured=e.featured,
             submitted_at=e.submitted_at,
+            creator=CreatorOut.of(e.creator),
         )
 
 
@@ -874,6 +901,7 @@ class GalleryCardOut(BaseModel):
     hearted: bool = Field(description="This browser already gave it a heart.")
     featured: bool
     published_at: datetime | None
+    creator: CreatorOut
 
     @classmethod
     def of(cls, e: GalleryEntry, app_url: str, browser: str) -> GalleryCardOut:
@@ -891,11 +919,28 @@ class GalleryCardOut(BaseModel):
             hearted=browser in e.hearts,
             featured=e.featured,
             published_at=e.published_at,
+            creator=CreatorOut.of(e.creator),
         )
+
+
+class GalleryCountryOut(BaseModel):
+    code: str = Field(description="ISO 3166-1 alpha-2.")
+    entries: int
 
 
 class GalleryPageOut(BaseModel):
     entries: list[GalleryCardOut]
+    countries: list[GalleryCountryOut] = Field(
+        default_factory=list,
+        description="Creator countries across the whole gallery, most entries first: the counter and the filter.",
+    )
+
+
+class CountriesOut(BaseModel):
+    codes: list[str] = Field(description="Every ISO 3166-1 alpha-2 code a creator may choose.")
+    suggested: str | None = Field(
+        description="A guess from the request (its language region), to offer only: never publish it unconfirmed."
+    )
 
 
 class HeartOut(BaseModel):
@@ -928,6 +973,7 @@ class AdminGalleryEntryOut(BaseModel):
     published_at: datetime | None
     share_token: str
     has_video: bool
+    creator: CreatorOut
 
     @classmethod
     def of(cls, e: GalleryEntry) -> AdminGalleryEntryOut:
@@ -947,6 +993,7 @@ class AdminGalleryEntryOut(BaseModel):
             published_at=e.published_at,
             share_token=e.share_token,
             has_video=e.video is not None,
+            creator=CreatorOut.of(e.creator),
         )
 
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from frameteller.domain import EntryStatus, Gallery, GalleryEntry, MediaRef, Report
+from frameteller.domain import Creator, EntryStatus, Gallery, GalleryEntry, MediaRef, Report
 
 
 def _ref(r: MediaRef | None) -> str | None:
@@ -43,6 +43,8 @@ def gallery_to_dict(g: Gallery) -> dict[str, Any]:
                 "published_at": e.published_at.isoformat() if e.published_at else None,
                 "hearts": sorted(e.hearts),
                 "reports": [{"visitor": r.visitor, "reason": r.reason, "at": r.at.isoformat()} for r in e.reports],
+                "creator": {"name": e.creator.name, "country": e.creator.country},
+                "checks": e.checks,
             }
             for e in g.entries.values()
         ]
@@ -72,6 +74,8 @@ def gallery_from_dict(d: dict[str, Any]) -> Gallery:
             datetime.fromisoformat(e["published_at"]) if e.get("published_at") else None,
             set(e.get("hearts", [])),
             [Report(r["visitor"], r["reason"], datetime.fromisoformat(r["at"])) for r in e.get("reports", [])],
+            Creator(**e.get("creator", {})),  # entries from before v1.1.2 are unsigned
+            e.get("checks", 0),
         )
     return Gallery(entries)
 

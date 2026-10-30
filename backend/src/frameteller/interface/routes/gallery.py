@@ -1,5 +1,5 @@
-"""The gallery (ADR 0017): the creator's submit, status and withdraw; the public listing, media, hearts, reports
-and sitemap. The admin's side is in routes/admin.py."""
+"""The gallery (ADR 0017): the creator's submit, signature, status and withdraw; the public listing, countries,
+media, hearts, reports and sitemap. The admin's side is in routes/admin.py."""
 
 from __future__ import annotations
 
@@ -8,13 +8,17 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, Response, status
 
-from frameteller.domain import GalleryEntry, PanelStyle
+from frameteller.domain import Creator, GalleryEntry, PanelStyle
+from frameteller.domain.countries import COUNTRIES
 from frameteller.interface.container import Container
 from frameteller.interface.dto import (
+    CountriesOut,
     ErrorOut,
     GalleryCardOut,
+    GalleryCountryOut,
     GalleryPageOut,
     GalleryReportRequest,
+    GallerySignRequest,
     GallerySubmitRequest,
     HeartOut,
     MyGalleryEntryOut,
@@ -28,6 +32,16 @@ router = APIRouter(tags=["gallery"])
 EntryId = Annotated[str, Path(pattern=PROJECT_ID)]
 NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"model": ErrorOut}}
 PUBLIC_MEDIA = "public, max-age=300"  # a hidden or withdrawn entry stops loading within minutes
+
+
+def suggest_country(accept_language: str) -> str | None:
+    """The first region in the browser's languages ("en-KE,en;q=0.9" is KE): an approximate location to offer."""
+    for tag in accept_language.split(","):
+        parts = tag.split(";")[0].strip().replace("_", "-").split("-")
+        region = next((x.upper() for x in parts[1:] if len(x) == 2 and x.isalpha()), None)
+        if region in COUNTRIES:
+            return region
+    return None
 
 
 def _on[T](case: T | None) -> T:
@@ -45,13 +59,22 @@ def _on[T](case: T | None) -> T:
 async def submit_to_gallery(project_id: ProjectId, body: GallerySubmitRequest, c: Deps) -> MyGalleryEntryOut:
     """Submit with consent. The gallery's copy renders and is checked in the background (job.updated
     gallery_submission); clean ones are published, doubtful ones wait for a person."""
-    entry = await _on(c.submit_to_gallery).execute(project_id, consent=body.consent, audio=body.audio)
+    creator = Creator.of(body.name, body.country)
+    entry = await _on(c.submit_to_gallery).execute(project_id, consent=body.consent, audio=body.audio, creator=creator)
     return MyGalleryEntryOut.of(entry)
 
 
 @router.get("/projects/{project_id}/gallery", responses=NOT_FOUND)
 async def my_gallery_entry(project_id: ProjectId, c: Deps) -> MyGalleryEntryOut:
     return MyGalleryEntryOut.of(await _on(c.gallery_entry).execute(project_id))
+
+
+@router.patch("/projects/{project_id}/gallery", responses={**NOT_FOUND, 422: {"model": ErrorOut}})
+async def sign_gallery_entry(project_id: ProjectId, body: GallerySignRequest, c: Deps) -> MyGalleryEntryOut:
+    """Change or remove the name and country on the entry (empty or null removes one). A new name on a published
+    entry is checked again first: the entry is `checking` until it is back (job.updated gallery_submission)."""
+    creator = Creator.of(body.name, body.country)
+    return MyGalleryEntryOut.of(await _on(c.sign_gallery).execute(project_id, creator))
 
 
 @router.delete("/projects/{project_id}/gallery", status_code=status.HTTP_204_NO_CONTENT, responses=NOT_FOUND)
@@ -67,11 +90,23 @@ async def gallery(
     c: Deps,
     view: Annotated[Literal["featured", "newest"], Query()] = "newest",
     style: Annotated[PanelStyle | None, Query()] = None,
+    country: Annotated[str | None, Query(pattern=r"^[A-Z]{2}$", description="Only creators from this country.")] = None,
 ) -> GalleryPageOut:
-    entries = await _on(c.browse_gallery).execute(featured=view == "featured", style=style.value if style else None)
+    browse = _on(c.browse_gallery)
+    entries = await browse.execute(featured=view == "featured", style=style.value if style else None, country=country)
     browser = browser_key(request)
     response.headers["Cache-Control"] = "private, no-cache"  # `hearted` is per browser
-    return GalleryPageOut(entries=[GalleryCardOut.of(e, c.settings.app_url, browser) for e in entries])
+    return GalleryPageOut(
+        entries=[GalleryCardOut.of(e, c.settings.app_url, browser) for e in entries],
+        countries=[GalleryCountryOut(code=k, entries=n) for k, n in (await browse.countries()).items()],
+    )
+
+
+@router.get("/gallery/countries")
+async def gallery_countries(request: Request) -> CountriesOut:
+    """The countries a creator may sign with, and one to suggest from the request. Only ever a suggestion."""
+    suggested = suggest_country(request.headers.get("accept-language", ""))
+    return CountriesOut(codes=sorted(COUNTRIES), suggested=suggested)
 
 
 async def _public(c: Container, entry_id: str) -> GalleryEntry:
