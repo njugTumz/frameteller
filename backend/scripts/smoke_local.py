@@ -45,7 +45,12 @@ def stamp() -> str:
     return f"{time.perf_counter() - T0:7.2f}s"
 
 
-def rest(base: str, method: str, path: str, body: dict[str, Any] | None = None) -> tuple[int, Any]:
+async def rest(base: str, method: str, path: str, body: dict[str, Any] | None = None) -> tuple[int, Any]:
+    """In a thread, so a slow call never stops this client answering the server's keepalive pings."""
+    return await asyncio.to_thread(_rest, base, method, path, body)
+
+
+def _rest(base: str, method: str, path: str, body: dict[str, Any] | None = None) -> tuple[int, Any]:
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Content-Type": "application/json"} | ({"X-Visitor-Id": VISITOR["id"]} if VISITOR["id"] else {})
     req = urllib.request.Request(base + path, data=data, method=method, headers=headers)
@@ -125,9 +130,9 @@ async def main(base: str, data_dir: Path | None, beats: bool, export: bool = Fal
         pcm = w.readframes(w.getnframes())
     print(f"narration {len(pcm) / 48_000:.1f} s; backend {base}; beats {'at ' + str(BEATS_MS) if beats else 'off'}")
 
-    status, health = rest(base, "GET", "/readyz")
+    status, health = await rest(base, "GET", "/readyz")
     print(f"{stamp()}  readyz {status} {health}")
-    status, project = rest(base, "POST", "/projects", {"title": "Smoke: the lantern cat"})
+    status, project = await rest(base, "POST", "/projects", {"title": "Smoke: the lantern cat"})
     assert status == 201, project
     pid = project["id"]
     print(f"{stamp()}  project {pid}")
@@ -159,7 +164,7 @@ async def main(base: str, data_dir: Path | None, beats: bool, export: bool = Fal
         timings["narration end -> cast sheets drawn"] = time.perf_counter() - sent_at
 
         t = time.perf_counter()
-        status, review = rest(base, "POST", f"/projects/{pid}/cast/approve", {})
+        status, review = await rest(base, "POST", f"/projects/{pid}/cast/approve", {})
         print(f"{stamp()}  approve {status} {review}")
         if not (status == 200 and review["approved"]):
             print("cast not approved; stopping")
@@ -167,7 +172,7 @@ async def main(base: str, data_dir: Path | None, beats: bool, export: bool = Fal
 
         tickets = []
         for n in (1, 2):
-            status, ticket = rest(base, "POST", f"/projects/{pid}/shots/{n}/panel", {"quality": "draft"})
+            status, ticket = await rest(base, "POST", f"/projects/{pid}/shots/{n}/panel", {"quality": "draft"})
             print(f"{stamp()}  render shot {n}: {status} {ticket}")
             if status == 202:
                 tickets.append(ticket)
@@ -183,7 +188,7 @@ async def main(base: str, data_dir: Path | None, beats: bool, export: bool = Fal
         await session.wait_for(jobs_done("pre_segment_panel", pre_keys), 120)
         timings["pre-segment panel 1 (after its render)"] = time.perf_counter() - t
 
-        _, project = rest(base, "GET", f"/projects/{pid}")
+        _, project = await rest(base, "GET", f"/projects/{pid}")
         panel = project["shots"][0]["panel"]
         width, height = panel["width"], panel["height"]
         if panel["masks"]:
@@ -196,7 +201,7 @@ async def main(base: str, data_dir: Path | None, beats: bool, export: bool = Fal
             x, y = width // 4, height // 4
         t = time.perf_counter()
         click = {"x": x, "y": y, "preview_width": width // 2, "preview_height": height // 2}
-        status, selection = rest(base, "POST", f"/projects/{pid}/shots/1/panel/select", click)
+        status, selection = await rest(base, "POST", f"/projects/{pid}/shots/1/panel/select", click)
         timings["click-select on panel 1"] = time.perf_counter() - t
         if status == 200:
             m = selection["mask"]
@@ -205,18 +210,18 @@ async def main(base: str, data_dir: Path | None, beats: bool, export: bool = Fal
             print(f"{stamp()}  select {click} -> {status} {selection}")
 
         if export:
-            _, project = rest(base, "GET", f"/projects/{pid}")
+            _, project = await rest(base, "GET", f"/projects/{pid}")
             missing = [sh["number"] for sh in project["shots"] if not (sh.get("panel") or {}).get("image_url")]
             keys = set()
             for n in missing:  # every shot needs a panel before the export
-                status, ticket = rest(base, "POST", f"/projects/{pid}/shots/{n}/panel", {"quality": "draft"})
+                status, ticket = await rest(base, "POST", f"/projects/{pid}/shots/{n}/panel", {"quality": "draft"})
                 if status == 202:
                     keys.add(ticket["key"])
             t = time.perf_counter()
             await session.wait_for(jobs_done("generate_panel", keys), 600)
             timings[f"draft panels for the other {len(keys)} shots"] = time.perf_counter() - t
             t = time.perf_counter()
-            status, ticket = rest(base, "POST", f"/projects/{pid}/exports/animatic", {"subtitles": True})
+            status, ticket = await rest(base, "POST", f"/projects/{pid}/exports/animatic", {"subtitles": True})
             print(f"{stamp()}  export: {status} {ticket}")
             if status == 202:
                 await session.wait_for(jobs_done("export_animatic", {ticket["key"]}), 600)
