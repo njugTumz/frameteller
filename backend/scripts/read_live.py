@@ -43,7 +43,7 @@ def rest(api: str, method: str, path: str, body: dict[str, Any] | None = None) -
 
 
 async def drafts(api: str, project: str, timeout_s: float = 600) -> dict[str, Any]:
-    """Approve the cast once its sheets are in, draw a draft per shot, and wait until every panel is done."""
+    """Approve the cast once its sheets and outfit sheets are in, draw a draft per shot, wait for every panel."""
     asked: set[int] = set()
     deadline = time.perf_counter() + timeout_s
     while time.perf_counter() < deadline:
@@ -52,6 +52,7 @@ async def drafts(api: str, project: str, timeout_s: float = 600) -> dict[str, An
             p["cast"]["status"] != "approved"
             and p["cast"]["characters"]
             and all(c["reference_url"] for c in p["cast"]["characters"])
+            and all(look["reference_url"] for c in p["cast"]["characters"] for look in c.get("looks", []))
         ):
             rest(api, "POST", f"/projects/{project}/cast/approve", {})
             continue
