@@ -183,7 +183,16 @@ test('the guided tour runs the sample story with Ava, step by step, through to N
   await page.getByTestId('panel-editor').getByRole('button', { name: 'Close', exact: true }).click()
   await expectStep(page, 'export', '10 of 12')
   await expect(card(page)).toContainText('Export an animatic, with captions')
-  await card(page).getByRole('button', { name: 'Next' }).click()
+  // Just out of the editor dialog, with the export panel below the fold (as when the player appears after an
+  // export): the card stays on screen, so Next stays reachable.
+  await page.setViewportSize({ width: 1280, height: 420 })
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await expect.poll(async () => {
+    const b = await card(page).boundingBox()
+    return !!b && b.y >= 0 && b.y + b.height <= 420
+  }).toBe(true)
+  await card(page).getByRole('button', { name: 'Next' }).click({ timeout: 5000 })
+  await page.setViewportSize({ width: 1280, height: 720 })
 
   await expectStep(page, 'share', '11 of 12')
   await card(page).getByRole('button', { name: 'Next' }).click()
