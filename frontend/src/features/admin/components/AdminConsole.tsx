@@ -1,27 +1,36 @@
 import { useState } from 'react'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
-import type { AdminAction, AdminEntry, Overview } from '../api'
+import { cx } from '../../../shared/ui/cx'
+import type { AdminAction, AdminEntry, Errors, Overview } from '../api'
+import { ErrorsTab } from './ErrorsTab'
 import { JudgePasses } from './JudgePasses'
 
 const usd = (n: number) => `$${n.toFixed(2)}`
 
-/** Today's budgets and queues, then every gallery entry with the actions it allows. */
+type Tab = 'overview' | 'errors'
+
+/** Overview: today's budgets and queues, then every gallery entry with the actions it allows. Errors: what went wrong. */
 export function AdminConsole({
   overview,
   entries,
+  errors,
   error,
   onAct,
   onWatch,
   onReserve,
+  onRetry,
 }: {
   overview: Overview | null
   entries: AdminEntry[] | null
+  errors: Errors | null
   error: string | null
   onAct: (id: string, action: AdminAction | 'remove') => void
   onWatch: (id: string) => Promise<string>
   onReserve: (usd: number | null) => void
+  onRetry: (key: string) => void
 }) {
+  const [tab, setTab] = useState<Tab>('overview')
   const [videos, setVideos] = useState<Record<string, string>>({})
   const pending = entries?.filter((e) => e.status === 'pending' || e.reports.length > 0) ?? []
   const rest = entries?.filter((e) => !pending.includes(e)) ?? []
@@ -80,7 +89,22 @@ export function AdminConsole({
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6">
       <h1 className="m-0 text-2xl font-bold">Admin</h1>
       {error && <Notice tone="error" title={error} />}
-      {overview && (
+      <div role="tablist" aria-label="Admin" className="flex gap-2 border-b-[1.5px] border-rule">
+        {(['overview', 'errors'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={cx('-mb-[1.5px] border-b-[3px] px-3 py-2 text-sm font-bold', tab === t ? 'border-ink' : 'border-transparent text-muted')}
+          >
+            {t === 'overview' ? 'Overview' : `Errors${errors ? ` (${errors.recent.length})` : ''}`}
+          </button>
+        ))}
+      </div>
+      {tab === 'errors' && (errors ? <ErrorsTab errors={errors} onRetry={onRetry} /> : <p className="m-0 text-sm">Loading…</p>)}
+      {tab === 'overview' && overview && (
         <section aria-label="Today" className="flex flex-col gap-2">
           <h2 className="m-0 text-sm font-bold uppercase tracking-wider text-muted">Today</h2>
           <ul className="m-0 flex list-none flex-wrap gap-3 p-0">
@@ -120,8 +144,8 @@ export function AdminConsole({
           </table>
         </section>
       )}
-      {overview?.judge_pass && <JudgePasses reserve={overview.judge_reserve} passes={overview.judge_passes} onReserve={onReserve} />}
-      {entries && (
+      {tab === 'overview' && overview?.judge_pass && <JudgePasses reserve={overview.judge_reserve} passes={overview.judge_passes} onReserve={onReserve} />}
+      {tab === 'overview' && entries && (
         <section aria-label="Gallery" className="flex flex-col gap-3">
           <h2 className="m-0 text-sm font-bold uppercase tracking-wider text-muted">Needs a look ({pending.length})</h2>
           <ul className="m-0 flex list-none flex-col gap-3 p-0">{pending.map(row)}</ul>

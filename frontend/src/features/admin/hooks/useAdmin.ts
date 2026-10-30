@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../../../shared/api/client'
-import { type AdminAction, type AdminEntry, type Overview, actOn, entryVideo, getEntries, getOverview, removeEntry, setJudgeReserve } from '../api'
+import {
+  type AdminAction,
+  type AdminEntry,
+  type Errors,
+  type Overview,
+  actOn,
+  entryVideo,
+  getEntries,
+  getErrors,
+  getOverview,
+  removeEntry,
+  retryJob,
+  setJudgeReserve,
+} from '../api'
 
 const KEY = 'frameteller.admin'
 const REFRESH_MS = 15_000
@@ -20,14 +33,16 @@ export function useAdmin() {
   const [token] = useState(takeToken)
   const [overview, setOverview] = useState<Overview | null>(null)
   const [entries, setEntries] = useState<AdminEntry[] | null>(null)
+  const [errors, setErrors] = useState<Errors | null>(null)
   const [error, setError] = useState<string | null>(token ? null : 'Open the full admin link.')
 
   const refresh = useCallback(async () => {
     if (!token) return
     try {
-      const [o, e] = await Promise.all([getOverview(token), getEntries(token)])
+      const [o, e, x] = await Promise.all([getOverview(token), getEntries(token), getErrors(token)])
       setOverview(o)
       setEntries(e)
+      setErrors(x)
       setError(null)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'The studio did not answer.')
@@ -71,5 +86,17 @@ export function useAdmin() {
     [token, refresh],
   )
 
-  return { overview, entries, error, act, watch, lowerReserve }
+  const retry = useCallback(
+    async (key: string) => {
+      try {
+        await retryJob(token, key)
+        await refresh()
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'That did not work.')
+      }
+    },
+    [token, refresh],
+  )
+
+  return { overview, entries, errors, error, act, watch, lowerReserve, retry }
 }

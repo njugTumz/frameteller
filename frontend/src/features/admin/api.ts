@@ -66,6 +66,51 @@ export interface AdminEntry {
 
 export type AdminAction = 'publish' | 'hide' | 'feature' | 'unfeature'
 
+/** One recorded error: our own words, never keys, tokens, audio or IP addresses. */
+export interface Incident {
+  at: string
+  component: string
+  code: string
+  message: string
+  project_id: string | null
+  visitor: string | null
+}
+
+export interface ModelHealth {
+  model: string
+  calls: number
+  failures: number
+  retries: number
+  p95_ms: number | null
+}
+
+export interface FailedJob {
+  key: string
+  kind: string
+  component: string
+  code: string
+  message: string
+  at: string
+  project_id: string | null
+  retries: number
+}
+
+export interface ProblemReport {
+  id: string
+  at: string
+  project_id: string
+  text: string
+  visitor: string | null
+}
+
+export interface Errors {
+  recent: Incident[]
+  counts_24h: Record<string, number>
+  health: ModelHealth[]
+  failed_jobs: FailedJob[]
+  reports: ProblemReport[]
+}
+
 async function request(token: string, method: string, path: string, body?: unknown): Promise<Response> {
   let response: Response
   try {
@@ -78,7 +123,10 @@ async function request(token: string, method: string, path: string, body?: unkno
     throw new ApiError(0, 'unreachable', 'The studio is not answering.')
   }
   if (response.status === 401 || response.status === 404) throw new ApiError(response.status, 'denied', 'This admin link is not valid.')
-  if (!response.ok) throw new ApiError(response.status, 'error', `The studio answered ${response.status}.`)
+  if (!response.ok) {
+    const error = ((await response.json().catch(() => null)) as { error?: { code: string; message: string } } | null)?.error
+    throw new ApiError(response.status, error?.code ?? 'error', error?.message ?? `The studio answered ${response.status}.`)
+  }
   return response
 }
 
@@ -90,6 +138,9 @@ export const removeEntry = (token: string, id: string) => request(token, 'DELETE
 /** Lower the judges' daily reserve now (null: back to the calendar's). */
 export const setJudgeReserve = (token: string, usd: number | null) =>
   request(token, 'PUT', '/admin/judge/reserve', { usd }).then((r) => r.json() as Promise<JudgeReserve>)
+export const getErrors = (token: string) => request(token, 'GET', '/admin/errors').then((r) => r.json() as Promise<Errors>)
+/** Run a job that gave up again (refused while the studio is paused or full). */
+export const retryJob = (token: string, key: string) => request(token, 'POST', '/admin/jobs/retry', { key }).then((r) => r.json() as Promise<FailedJob>)
 /** A pending entry's video, fetched with the token, as an object URL for a <video>. */
 export const entryVideo = (token: string, id: string) =>
   request(token, 'GET', `/admin/gallery/${encodeURIComponent(id)}/video.mp4`).then(async (r) => URL.createObjectURL(await r.blob()))
