@@ -45,7 +45,23 @@ The continuity supervisor's open-weight reviewer, Muse Glimmer, runs on one H100
 
 **Cost: USD 3.95 per hour while it is kept warm**, plus about USD 0.35 for the start and the 5-minute scale-down. A 2-hour launch night costs about USD 8.25.
 
-Production runs `REVIEWER=screen` (the GitHub `production` variable), but **visitors never wake the GPU**. Reviews go to Glimmer only while the warm-up script holds a lease on the backend. Without a lease, Spark reviews alone, and the badge says "Checked by Muse Spark". Any request to the Modal endpoint, even `/health`, would start a container, so the backend never asks it whether it is up.
+Production runs `REVIEWER=screen` (the GitHub `production` variable), but **visitors never wake the GPU**. **Judges do** (below). Reviews go to Glimmer only while the warm-up script holds a lease on the backend. Without a lease, Spark reviews alone, and the badge says "Checked by Muse Spark". Any request to the Modal endpoint, even `/health`, would start a container, so the backend never asks it whether it is up.
+
+**Judges wake Glimmer automatically** ([ADR 0020](adr/0020-judges-wake-glimmer.md)):
+- Any request with a judge pass starts a wake-up in the background if Glimmer is cold. Spark reviews until Glimmer answers (about 3.5 minutes), then reviews switch to screen mode.
+- The backend keeps the lease until **5 minutes after the last judge activity**, pinging Glimmer every 4 minutes. Modal scales to zero 5 minutes after that.
+- Caps per day (UTC+4): **10 wake-ups** (`JUDGE_GLIMMER_WAKES_PER_DAY`) and **USD 5** of estimated Modal time for them (`JUDGE_GLIMMER_USD_PER_DAY`). Past either, judges get Spark only.
+- The admin overview shows "Judge wake-ups today: n of 10 · Glimmer warm/waking/cold · last cold start · Modal today ≈ $".
+- To check it without a judge cookie, act as a judge with the endpoint token (same policy and caps):
+  ```bash
+  curl -s -X POST https://api.frameteller.com/internal/glimmer/judge-wake -H "Authorization: Bearer $(cat ~/.config/frameteller/glimmer.token)"
+  ```
+
+**Warm it by hand for the Nov 2 launch hour and for recording the demo video.** Judges' wake-ups do not cover visitors, and a video should not wait for a cold start:
+```bash
+python3 deploy/modal/warm.py --keep 75                          # launch: start at 20:45 UTC+4, covers 21:00-22:00
+python3 deploy/modal/warm.py --keep 45 --api production        # recording the demo video on production
+```
 
 1. **Keep it warm** for the session, starting 10 minutes before. The script wakes Glimmer and checks it answers. Then, every 4 minutes, it sends one tiny request and renews a 10-minute lease on each backend:
    ```bash
