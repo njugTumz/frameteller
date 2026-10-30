@@ -2,7 +2,8 @@ from dataclasses import replace
 
 import pytest
 
-from frameteller.application.prompts import STYLES, by_role, edit_prompt, panel_prompt, reference_prompt, soften_ages
+from frameteller.application.image_safety import appearance_only, sanitize
+from frameteller.application.prompts import STYLES, edit_prompt, panel_prompt, reference_prompt
 from frameteller.domain import Character, MediaRef, PanelStyle
 from tests.builders import CAT, MIRA, shot
 
@@ -40,7 +41,7 @@ def test_edit_prompt_needs_change_and_target(change: str, target: str) -> None:
 def test_panel_prompt_includes_cast_and_framing() -> None:
     prompt = panel_prompt(shot(1, "mira", "cat"), [MIRA, CAT])
     assert "medium framing" in prompt
-    assert soften_ages(MIRA.canonical_description) in prompt
+    assert sanitize(MIRA.canonical_description) in prompt
     assert CAT.canonical_description in prompt
     assert "8-year-old" not in prompt
 
@@ -112,7 +113,7 @@ def test_clean_plate_prompt_removes_only_the_object() -> None:
     ],
 )
 def test_image_prompts_never_carry_exact_ages(description: str, softened: str) -> None:
-    assert soften_ages(description) == softened
+    assert sanitize(description) == softened
 
 
 def test_a_young_character_is_drawn_fully_clothed_not_full_body() -> None:
@@ -130,7 +131,7 @@ def test_the_retry_wording_is_look_and_role_only() -> None:
     amara = Character(
         "amara", "Amara", "human 12-year-old girl, small build, round face, wearing a bright orange headscarf"
     )
-    assert by_role(amara.canonical_description) == "small build, round face, wearing a bright orange headscarf"
+    assert appearance_only(amara.canonical_description) == "round face, wearing a bright orange headscarf"
     prompt = reference_prompt(amara, safer=True)
     assert "friendly cartoon character for an all-ages family story" in prompt
     assert "girl" not in prompt

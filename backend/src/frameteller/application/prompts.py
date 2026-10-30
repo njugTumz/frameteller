@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 
+from frameteller.application.image_safety import appearance_only, is_person, is_young, sanitize, suggest_description
 from frameteller.domain import Character, Look, PanelStyle, Shot
 
 STYLES = {
@@ -21,56 +21,25 @@ ONLY_AS_DESCRIBED = (
 )
 
 
-_NUMBERS = [
-    "one",
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-    "seven",
-    "eight",
-    "nine",
-    "ten",
-    "eleven",
-    "twelve",
-    "thirteen",
-    "fourteen",
-    "fifteen",
-    "sixteen",
-    "seventeen",
-]
-_AGE = re.compile(
-    r"\b(?P<n>\d{1,3}|" + "|".join(_NUMBERS) + r")[- ](?:years?|yrs?)[- ]old\b(?P<noun>[- ](?:girl|boy|child|kid))?",
-    re.I,
-)
-_CHILD = re.compile(r"\b(girl|boy|child|kid|toddler|baby|teen(?:ager|age)?|schoolgirl|schoolboy|young)\b", re.I)
+def _who(description: str, *, safer: bool) -> str:
+    """How a character is named in a sheet prompt (ADR 0019). A young character is a cheerful storybook character;
+    `safer`, the one retry after a refusal, is by look only, with no age, gender or family words."""
+    look = appearance_only(description)
+    if safer:
+        lead = "a friendly cartoon character for an all-ages family story"
+        return f"{lead}, with {look}" if look else lead
+    if is_young(description):
+        lead = "a storybook illustration of a cheerful young character"
+        return f"{lead}, with {look}" if look else lead
+    return sanitize(description)
 
 
-def _age(match: re.Match[str]) -> str:
-    raw = match["n"].lower()
-    years = int(raw) if raw.isdigit() else _NUMBERS.index(raw) + 1
-    noun = (match["noun"] or "").strip(" -")
-    word = "young" if years < 13 else "teenage" if years < 18 else "adult"
-    return f"{word} {noun}" if noun else word
-
-
-def soften_ages(description: str) -> str:
-    """Exact ages out of image prompts: "human 12-year-old girl" -> "human young girl". Muse Image's content filter
-    refuses prompts that put a child's exact age next to a body (production, Oct 29); the look is what we draw."""
-    softened = re.sub(r"\b([Aa]) (adult)\b", r"\1n \2", _AGE.sub(_age, description))
-    return re.sub(r"\s{2,}", " ", softened).strip()
-
-
-def is_young(c: Character) -> bool:
-    return bool(_AGE.search(c.canonical_description) or _CHILD.search(c.canonical_description))
-
-
-def by_role(description: str) -> str:
-    """The retry wording after a refusal: appearance and role only, no age or gender words at all."""
-    words = _CHILD.sub("", _AGE.sub("", description))
-    words = re.sub(r"\b(human|aged|years?|old)\b", "", words, flags=re.I)
-    return re.sub(r"\s+([,.;])", r"\1", re.sub(r"\s{2,}", " ", words)).strip(" ,;")
+def _pose(description: str, *, safer: bool) -> str:
+    """People are drawn fully clothed in a friendly pose: Muse Image refused "full body" next to a person (Oct 29
+    with a child, Oct 30 with adults). An animal is not dressed up."""
+    if safer or is_young(description) or is_person(description):
+        return "fully clothed, friendly standing pose"
+    return "full body, neutral standing pose"
 
 
 def reference_prompt(
@@ -78,13 +47,9 @@ def reference_prompt(
 ) -> str:
     """A neutral two-view sheet in the project's style. Panels copy their references' look, so the sheet sets it.
 
-    A young character is drawn fully clothed in a friendly pose rather than "full body": with a child, Muse Image's
-    filter refuses the latter. `safer` is the one retry after a refusal: the character by look and role only."""
-    if safer:
-        who = f"a friendly cartoon character for an all-ages family story, with {by_role(c.canonical_description)}"
-    else:
-        who = soften_ages(c.canonical_description)
-    pose = "fully clothed, friendly standing pose" if safer or is_young(c) else "full body, neutral standing pose"
+    `safer` is the one retry after a refusal (ADR 0019); `SafeImages` cleans both on the way out."""
+    who = _who(c.canonical_description, safer=safer)
+    pose = _pose(c.canonical_description, safer=safer)
     return (
         f"Character reference sheet for an original character named {c.name}: {who}. "
         f"Show the same character twice side by side: a front view and a three-quarter view, {pose}, "
@@ -100,14 +65,14 @@ def look_reference_prompt(
 ) -> str:
     """A sheet for another outfit of the same character (ADR 0018), drawn from their everyday sheet when it is
     attached: the same person, only the clothes change."""
-    who = by_role(c.canonical_description) if safer else soften_ages(c.canonical_description)
-    pose = "fully clothed, friendly standing pose" if safer or is_young(c) else "full body, neutral standing pose"
+    who = _who(c.canonical_description, safer=safer)
+    pose = _pose(c.canonical_description, safer=safer)
     clothes = look.clothes.strip().rstrip(".")
     return (
         f"Character reference sheet for an original character named {c.name}, in a new outfit: the "
         f"{look.label.strip().lower()}. The same character as in the attached reference sheet, with the same face, "
-        "hair, skin, build, proportions and drawing style; only the clothes change. "
-        f"Who they are: {who}. Ignore any clothes in that description: now they wear {clothes}. "
+        "hair, colouring, proportions and drawing style; only the clothes change. "
+        f"Who they are: {who}. Ignore any clothes in that description: now they wear {sanitize(clothes)}. "
         f"Show the same character twice side by side: a front view and a three-quarter view, {pose}, "
         "identical in both views. Plain light grey background, no text, no scenery. "
         f"Style: {STYLES[style]}. {NOT_PHOTOREAL}"
@@ -115,12 +80,16 @@ def look_reference_prompt(
     )
 
 
-def panel_prompt(shot: Shot, cast: Sequence[Character], style: PanelStyle = PanelStyle.PENCIL) -> str:
-    """`cast` is the shot's characters; those with sheets are attached as references in the same order."""
-    who = "; ".join(f"{c.name}: {soften_ages(c.canonical_description)}" for c in cast)
+def panel_prompt(
+    shot: Shot, cast: Sequence[Character], style: PanelStyle = PanelStyle.PENCIL, *, safer: bool = False
+) -> str:
+    """`cast` is the shot's characters; those with sheets are attached as references in the same order.
+    `safer`, the retry after a refusal, describes each character by look only (ADR 0019)."""
+    describe = suggest_description if safer else sanitize
+    who = "; ".join(f"{c.name}: {describe(c.canonical_description)}" for c in cast)
     lines = [
         f"Storyboard panel, {shot.framing.value.replace('_', ' ')} framing. Keep key action in the central 16:9 band.",
-        f"Setting: {shot.setting}. Action: {shot.action}.",
+        f"Setting: {sanitize(shot.setting)}. Action: {sanitize(shot.action)}.",
     ]
     if who:
         lines.append(f"Characters: {who}.")

@@ -12,6 +12,7 @@ from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.capacity import Capacity, GatedImages, GatedSegmentation
 from frameteller.application.events import JobUpdated
+from frameteller.application.image_safety import SafeImages
 from frameteller.application.incidents import IncidentDesk, RecordingEvents, ReportProblem, RetryFailedJob
 from frameteller.application.judge import JudgeDesk, JudgePassesToday
 from frameteller.application.lanes import Lane
@@ -244,7 +245,7 @@ def wire(
     )
     # ADR 0016: model calls in flight are limited globally; past a limit, work waits in line.
     capacity = Capacity(settings.capacity_limits)
-    images = GatedImages(images, capacity.images)
+    images = SafeImages(GatedImages(images, capacity.images))  # every prompt cleaned, one plainer retry (ADR 0019)
     segmentation = GatedSegmentation(segmentation, capacity.sam)
 
     async def on_status(job: Job, status: JobStatus, message: str | None) -> None:

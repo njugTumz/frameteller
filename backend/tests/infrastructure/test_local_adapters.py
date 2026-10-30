@@ -15,6 +15,7 @@ from frameteller.domain import (
     ObjectMask,
     PanelStyle,
     Project,
+    SheetRefusal,
     Size,
 )
 from frameteller.infrastructure.local import (
@@ -65,12 +66,14 @@ async def test_repository_keeps_looks_outfits_and_voice_offsets(tmp_path: Path) 
     p = costume_project()
     p.change_outfit("wren", None, "s6")
     p.shots[2] = replace(p.shots[2], voice_from_ms=1200)
+    p.sheet_refusals["wren"] = SheetRefusal("the description refused", "friendly storybook character")
     repo = JsonFileProjectRepository(tmp_path)
     await repo.save(p)
     loaded = await repo.get("p1")
     assert loaded.bible.get("wren").looks == p.bible.get("wren").looks
     assert loaded.outfits == p.outfits
     assert loaded.shots[2].voice_from_ms == 1200
+    assert loaded.sheet_refusals == p.sheet_refusals
     assert loaded.bible.is_approved is p.bible.is_approved
 
 

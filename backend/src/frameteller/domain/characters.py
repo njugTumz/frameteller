@@ -169,3 +169,12 @@ def sheet_target(character_id: str, look_id: str | None = None) -> str:
 def split_target(target: str) -> tuple[str, str | None]:
     character_id, _, look_id = target.partition("/")
     return character_id, (look_id or None)
+
+
+@dataclass(frozen=True, slots=True)
+class SheetRefusal:
+    """Muse Image refused a sheet twice (ADR 0019). `text` is the description (or an outfit's clothes) it refused;
+    `suggestion` is a plainer one to offer. Trying the same text again is pointless until it changes."""
+
+    text: str
+    suggestion: str

@@ -66,6 +66,7 @@ async def test_the_cast_shows_each_look_and_the_shots_say_who_wears_it(api: Api)
             "reference_url": "/media/refs/wren-farmer.webp",
             "from_shots": [2, 3, 4, 5, 6],
             "sheet_error": None,
+            "suggested_clothes": None,
         }
     ]
     assert [s["looks"] for s in body["shots"]] == [{}, *[{"wren": "farmer_costume"}] * 5]
@@ -84,3 +85,28 @@ async def test_try_again_on_a_look_redraws_its_sheet(api: Api) -> None:
     )
     r = await api.client.post("/projects/p1/cast/wren/looks/witch/regenerate")
     assert (r.status_code, r.json()["error"]["code"]) == (404, "character_not_found")
+
+
+async def test_a_refused_sheet_offers_a_description_and_try_again_asks_for_an_edit_first(api: Api) -> None:
+    """ADR 0019: after two refusals the cast shows a suggestion; the same Try again answers 409 edit_first."""
+    from frameteller.domain import SheetRefusal
+
+    p = costume_project()
+    wren = p.bible.get("wren")
+    p.bible.characters["wren"] = replace(wren, reference=None)
+    p.sheet_failures["wren"] = "Muse Image's safety filter turned it down twice."
+    p.sheet_refusals["wren"] = SheetRefusal(wren.canonical_description, "cheerful young storybook character")
+    await api.fakes.repo.save(p)
+
+    body = (await api.client.get("/projects/p1")).json()
+    cast = {c["id"]: c for c in body["cast"]["characters"]}
+    assert cast["wren"]["suggested_description"] == "cheerful young storybook character"
+    assert cast["dad"]["suggested_description"] is None
+    r = await api.client.post("/projects/p1/cast/wren/regenerate")
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "edit_first")
+
+    r = await api.client.post(
+        "/projects/p1/cast/approve", json={"descriptions": {"wren": "cheerful young storybook character"}}
+    )
+    assert r.status_code == 200
+    assert (await api.client.post("/projects/p1/cast/wren/regenerate")).status_code == 202

@@ -97,6 +97,7 @@ class ImageRequest:
     quality: Quality
     aspect: Aspect
     references: tuple[MediaRef, ...] = ()
+    fallback_prompt: str | None = None  # the plainer wording for one retry if the content filter refuses (ADR 0019)
 
 
 @dataclass(frozen=True, slots=True)

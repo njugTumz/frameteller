@@ -27,9 +27,11 @@ Each turn has an id, start_ms, end_ms and text.
 Return:
 - new_characters: characters that appear in the turns but are not in the bible yet, including animals.
   id is a short lowercase slug (e.g. "mira"). canonical_description is ONE stable visual description used
-  to draw the character in every panel: species, age, build, face, hair or fur, and distinctive features.
-  Describe clothing and accessories only when the transcript mentions them; animals wear nothing unless the
-  transcript says so. Be concrete. Never mention framing or actions. Never contradict the transcript.
+  to draw the character in every panel: species, age group (child, teenager, adult or older adult; never an
+  exact age, never a family relationship such as "my daughter"), height, face, hair or fur, and distinctive
+  features; never body shape. A child the narrator calls "my daughter" or "my son" is "a young girl" or
+  "a young boy". Describe clothing and accessories only when the transcript mentions them; animals wear
+  nothing unless the transcript says so. Be concrete. Never mention framing or actions. Never contradict the transcript.
 - shots: one or more shots per turn, in story order.
   framing is one of wide, medium, close_up, over_shoulder, insert. Honour explicit cues such as "wide shot"
   or "close on". A turn from a written script may start with a scene heading ("Scene: EXT. ROOFTOP - NIGHT."):
@@ -62,7 +64,8 @@ Never add real people, brands or copyrighted characters yourself."""
 CHARACTERS_PROMPT = """You maintain the character bible for a storyboard.
 List every character in the transcript, including animals, that is not already in the bible.
 id is a short lowercase slug. canonical_description is one concrete, stable visual description:
-species, age, build, face, hair or fur, and distinctive features. Describe clothing and accessories only
+species, age group (child, teenager, adult or older adult; never an exact age or a family relationship), height,
+face, hair or fur, and distinctive features; never body shape. Describe clothing and accessories only
 when the transcript mentions them; animals wear nothing unless the transcript says so."""
 
 

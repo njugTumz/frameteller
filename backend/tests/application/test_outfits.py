@@ -96,7 +96,7 @@ async def test_every_panel_after_the_costume_is_drawn_from_the_costume_sheet() -
     [sheet] = images.generated
     assert sheet.references == (MediaRef("refs/wren.webp"),)  # the same girl, from her everyday sheet
     assert "now they wear blue denim overalls over a white shirt" in sheet.prompt
-    assert "same face, hair, skin, build" in sheet.prompt
+    assert "same face, hair, colouring, proportions" in sheet.prompt
     await ApproveCast(repo, jobs, SequentialIds("j")).execute("p1")
 
     draw = GeneratePanel(repo, images, budget, jobs)

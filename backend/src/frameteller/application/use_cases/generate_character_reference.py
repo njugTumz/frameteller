@@ -4,6 +4,7 @@ import logging
 
 from frameteller.application import costs
 from frameteller.application.errors import ApplicationError, ModelContentFilteredError
+from frameteller.application.image_safety import suggest_clothes, suggest_description
 from frameteller.application.jobs import sheet_review_job
 from frameteller.application.ports import (
     BudgetGuard,
@@ -13,7 +14,7 @@ from frameteller.application.ports import (
     ProjectRepository,
 )
 from frameteller.application.prompts import look_reference_prompt, reference_prompt
-from frameteller.domain import Character, Look, Project, sheet_target
+from frameteller.domain import Character, Look, Project, SheetRefusal, sheet_target
 
 log = logging.getLogger("frameteller.cast")
 
@@ -56,25 +57,28 @@ class GenerateCharacterReference:
             return reference_prompt(drawn, snapshot.style, correction, safer=safer)
 
         try:
-            try:
-                stored = await self._images.generate(
-                    ImageRequest(prompt(False), "high", "square", references), store_as=store_as
-                )
-            except ModelContentFilteredError:
-                # Refused prompts are not billed (Muse Image charges per image drawn), so one charge covers this.
-                log.warning("sheet refused by the content filter; retrying by look and role", extra={"sheet": target})
-                stored = await self._images.generate(
-                    ImageRequest(prompt(True), "high", "square", references), store_as=store_as
-                )
-        except ApplicationError as e:
-            reason = (
-                "Muse Image's safety filter turned it down. Describe them by look and role (no ages), then try again."
-                if isinstance(e, ModelContentFilteredError)
-                else e.user_message
+            # SafeImages cleans the prompt and, if the content filter refuses it, tries the safer wording once
+            # (ADR 0019). Refused prompts are not billed, so the one charge covers both.
+            stored = await self._images.generate(
+                ImageRequest(prompt(False), "high", "square", references, fallback_prompt=prompt(True)),
+                store_as=store_as,
             )
-            await self._repo.update(project_id, lambda p: p.sheet_failures.__setitem__(target, reason))
-            name = f"{drawn.name} ({look.label})" if look else drawn.name
-            raise SheetFailedError(name, reason) from e
+        except ModelContentFilteredError as e:
+            text = look.clothes if look else drawn.canonical_description
+            suggestion = suggest_clothes(text) if look else suggest_description(text)
+            reason = "Muse Image's safety filter turned it down twice. Use the suggested description, or edit it."
+
+            def refused(p: Project) -> None:
+                p.sheet_failures[target] = reason
+                p.sheet_refusals[target] = SheetRefusal(text, suggestion)
+
+            await self._repo.update(project_id, refused)
+            log.warning("sheet refused twice by the content filter", extra={"sheet": target})
+            raise SheetFailedError(f"{drawn.name} ({look.label})" if look else drawn.name, reason) from e
+        except ApplicationError as e:
+            message = e.user_message
+            await self._repo.update(project_id, lambda p: p.sheet_failures.__setitem__(target, message))
+            raise SheetFailedError(f"{drawn.name} ({look.label})" if look else drawn.name, message) from e
 
         def apply(project: Project) -> Character:
             current = project.bible.get(character_id)
@@ -83,9 +87,11 @@ class GenerateCharacterReference:
                 if current.has_look(look.id) and _same_outfit(current.look(look.id), look):
                     project.bible.set_look_reference(character_id, look.id, stored.ref)
                     project.sheet_failures.pop(target, None)
+                    project.sheet_refusals.pop(target, None)
             elif current.canonical_description == drawn.canonical_description:
                 project.bible.set_reference(character_id, stored.ref)
                 project.sheet_failures.pop(character_id, None)
+                project.sheet_refusals.pop(character_id, None)
             return project.bible.get(character_id)
 
         character = await self._repo.update(project_id, apply)

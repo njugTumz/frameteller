@@ -1,6 +1,7 @@
 import pytest
 
 from frameteller.application import costs
+from frameteller.application.image_safety import SafeImages
 from frameteller.application.jobs import PRE_SEGMENT_PANEL, SUPERVISE_PANEL
 from frameteller.application.use_cases import EditPanelAppearance, GenerateCharacterReference, GeneratePanel
 from frameteller.domain import (
@@ -118,7 +119,8 @@ async def test_a_sheet_refused_by_the_content_filter_is_retried_once_by_look_and
     from frameteller.application.errors import ModelContentFilteredError
 
     world.images.refuse = [ModelContentFilteredError("muse-image-1.0", "HTTP 400 content filter")]
-    cat = await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
+    images = SafeImages(world.images)  # as wired: the retry happens on the way to the model (ADR 0019)
+    cat = await GenerateCharacterReference(world.repo, images, world.budget).execute("p1", "cat")
     assert cat.reference is not None
     assert len(world.images.generated) == 2
     assert "all-ages family story" in world.images.generated[1].prompt
@@ -131,10 +133,11 @@ async def test_a_sheet_that_still_fails_names_the_character_and_says_why(world: 
     from frameteller.application.use_cases.generate_character_reference import SheetFailedError
 
     world.images.refuse = [ModelContentFilteredError("muse-image-1.0", "filter")] * 2
+    images = SafeImages(world.images)
     with pytest.raises(SheetFailedError) as e:
-        await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")
+        await GenerateCharacterReference(world.repo, images, world.budget).execute("p1", "cat")
     assert e.value.user_message.startswith("Grey Cat's sheet couldn't be drawn. Muse Image's safety filter")
     assert "safety filter" in world.project().sheet_failures["cat"]
 
-    await GenerateCharacterReference(world.repo, world.images, world.budget).execute("p1", "cat")  # Try again
+    await GenerateCharacterReference(world.repo, images, world.budget).execute("p1", "cat")  # a later redraw
     assert world.project().sheet_failures == {}

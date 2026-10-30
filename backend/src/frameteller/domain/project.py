@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 
-from frameteller.domain.characters import EVERYDAY, Character, CharacterBible, Look
+from frameteller.domain.characters import EVERYDAY, Character, CharacterBible, Look, SheetRefusal
 from frameteller.domain.errors import (
     CastNotApprovedError,
     InvalidValueError,
@@ -42,6 +42,7 @@ class Project:
     sheet_reviews: dict[str, SheetReview] = field(default_factory=dict)  # by character id
     # Why a character's sheet could not be drawn, in plain words, until a sheet is drawn for it.
     sheet_failures: dict[str, str] = field(default_factory=dict)
+    sheet_refusals: dict[str, SheetRefusal] = field(default_factory=dict)  # by sheet target (ADR 0019)
     supervisor_log: list[SupervisorEntry] = field(default_factory=list)  # oldest first, the last 100
     outfits: list[OutfitChange] = field(default_factory=list)  # who wears which look from which shot (ADR 0018)
 

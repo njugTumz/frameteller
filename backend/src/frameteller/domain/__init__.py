@@ -8,6 +8,7 @@ from frameteller.domain.characters import (
     Character,
     CharacterBible,
     Look,
+    SheetRefusal,
     sheet_target,
     split_target,
 )
@@ -120,6 +121,7 @@ __all__ = [
     "ScriptBeat",
     "ScriptFormat",
     "Severity",
+    "SheetRefusal",
     "SheetReview",
     "Shot",
     "ShotOrderError",

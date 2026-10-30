@@ -35,6 +35,12 @@ class ScriptError(ApplicationError):
         self.user_message = message
 
 
+class RefusedUnchangedError(ApplicationError):
+    """Try again on a sheet Muse Image refused, with the same description: it would be refused again (ADR 0019)."""
+
+    user_message = "Muse Image turned this description down. Use the suggested description or edit it first."
+
+
 class NothingToSegmentError(ApplicationError):
     """SAM found no object at the clicked point."""
 

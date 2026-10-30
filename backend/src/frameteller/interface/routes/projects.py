@@ -72,13 +72,13 @@ async def approve_cast(project_id: ProjectId, body: CastApproval, c: Deps) -> Ca
 
 @router.post("/{project_id}/cast/{character_id}/regenerate", status_code=status.HTTP_202_ACCEPTED)
 async def regenerate_reference(project_id: ProjectId, character_id: CharacterId, c: Deps) -> TicketOut:
-    return TicketOut.of(await c.request_cast.execute(project_id, [character_id]))
+    return TicketOut.of(await c.request_cast.execute(project_id, [character_id], again=True))
 
 
 @router.post("/{project_id}/cast/{character_id}/looks/{look_id}/regenerate", status_code=status.HTTP_202_ACCEPTED)
 async def regenerate_look(project_id: ProjectId, character_id: CharacterId, look_id: LookId, c: Deps) -> TicketOut:
     """Draw the sheet of one of a character's outfits again (its "Try again")."""
-    return TicketOut.of(await c.request_cast.execute(project_id, [f"{character_id}/{look_id}"]))
+    return TicketOut.of(await c.request_cast.execute(project_id, [f"{character_id}/{look_id}"], again=True))
 
 
 @router.delete("/{project_id}/turns/{turn_id}", responses={422: {"model": ErrorOut}})

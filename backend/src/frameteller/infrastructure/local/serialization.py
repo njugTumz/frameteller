@@ -31,6 +31,7 @@ from frameteller.domain import (
     PanelStyle,
     Project,
     Severity,
+    SheetRefusal,
     SheetReview,
     Shot,
     Size,
@@ -174,6 +175,7 @@ def project_to_dict(p: Project) -> dict[str, Any]:
         "usage": dict(p.usage),
         "continuity_checks": p.continuity_checks,
         "sheet_failures": dict(p.sheet_failures),
+        "sheet_refusals": {t: {"text": r.text, "suggestion": r.suggestion} for t, r in p.sheet_refusals.items()},
         "sheet_reviews": {
             cid: {
                 "reference": r.reference.key,
@@ -346,6 +348,7 @@ def project_from_dict(d: dict[str, Any]) -> Project:
         usage={str(k): int(v) for k, v in d.get("usage", {}).items()},
         continuity_checks=bool(d.get("continuity_checks", True)),
         sheet_failures=dict(d.get("sheet_failures", {})),
+        sheet_refusals={t: SheetRefusal(r["text"], r["suggestion"]) for t, r in d.get("sheet_refusals", {}).items()},
         sheet_reviews={
             cid: SheetReview(MediaRef(r["reference"]), Outcome(r["outcome"]), _unverdict(r["verdict"]), r["summary"])
             for cid, r in d.get("sheet_reviews", {}).items()

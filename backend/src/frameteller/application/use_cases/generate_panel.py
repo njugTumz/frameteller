@@ -43,7 +43,13 @@ class GeneratePanel:
         await self._budget.charge(project_id, costs.IMAGE, f"panel {shot_id} r{revision}")
         try:
             stored = await self._images.generate(
-                ImageRequest(panel_prompt(shot, cast, snapshot.style), quality, "panel", references),
+                ImageRequest(
+                    panel_prompt(shot, cast, snapshot.style),
+                    quality,
+                    "panel",
+                    references,
+                    fallback_prompt=panel_prompt(shot, cast, snapshot.style, safer=True),
+                ),
                 store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}/image",
             )
         except Exception:

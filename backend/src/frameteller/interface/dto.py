@@ -398,6 +398,11 @@ class LookOut(BaseModel):
     reference_url: str | None
     from_shots: list[int] = Field(description="The shots that show this look, in order.")
     sheet_error: str | None = Field(default=None, description="Why its sheet could not be drawn; offer Try again.")
+    suggested_clothes: str | None = Field(
+        default=None,
+        description="Muse Image refused these clothes twice: offer this instead (Use this description); Try again "
+        "with the same clothes answers 409 edit_first.",
+    )
 
 
 class CharacterOut(BaseModel):
@@ -411,6 +416,11 @@ class CharacterOut(BaseModel):
     )
     looks: list[LookOut] = Field(
         default_factory=list, description="Outfits besides the everyday one, each with its sheet."
+    )
+    suggested_description: str | None = Field(
+        default=None,
+        description="Muse Image refused this description twice: offer this instead (Use this description); Try "
+        "again with the same description answers 409 edit_first.",
     )
 
     @classmethod
@@ -434,6 +444,9 @@ class CharacterOut(BaseModel):
                     reference_url=media_url(look.reference),
                     from_shots=worn,
                     sheet_error=failure if look.reference is None else None,
+                    suggested_clothes=_suggestion(project, sheet_target(c.id, look.id), look.clothes)
+                    if look.reference is None
+                    else None,
                 )
             )
         return cls(
@@ -444,7 +457,14 @@ class CharacterOut(BaseModel):
             review=ReviewOut.of(current.outcome, current.summary, current.verdict) if current else None,
             sheet_error=sheet_error if c.reference is None else None,
             looks=looks,
+            suggested_description=_suggestion(project, c.id, c.canonical_description) if c.reference is None else None,
         )
+
+
+def _suggestion(project: Project | None, target: str, text: str) -> str | None:
+    """The suggestion for a refused sheet, while its text is still the one refused."""
+    refusal = project.sheet_refusals.get(target) if project else None
+    return refusal.suggestion if refusal and refusal.text == text else None
 
 
 def _wears(project: Project, shot: Shot, character_id: str, look_id: str) -> bool:
