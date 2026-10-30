@@ -3,21 +3,71 @@
 An entry starts as `checking` while its video renders and the moderation review runs. A clean review publishes
 it; a doubtful one leaves it `pending` for the admin. Visitors heart an entry once per browser and can report it;
 enough reports hide it until the admin looks. The creator can withdraw it at any time, which deletes it.
+
+A creator may sign an entry with a display name and a country, both optional and editable later. A new name on a
+published entry is checked again before it shows; one with contact details never publishes by itself.
 """
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
+from frameteller.domain.countries import COUNTRIES
 from frameteller.domain.errors import InvalidValueError
 from frameteller.domain.media import MediaRef
 
 GalleryAudio = Literal["mine", "voice", "none"]  # the creator's voice, the Ava voice instead, or silent
 REPORTS_TO_HIDE = 3  # distinct visitors reporting a published entry hide it until the admin decides
 MAX_REPORT_CHARS = 300
+MAX_NAME_CHARS = 40
+
+# Contact details in a display name: an email, a link or domain, a social handle, or a phone number.
+_EMAIL = re.compile(r"\S+@\S+\.\S+")
+_LINK = re.compile(r"https?://|www\.|\b[\w-]+\.(com|net|org|io|co|me|tv|gg|app|dev|ly|info|biz|xyz)\b", re.I)
+_HANDLE = re.compile(r"(^|\s)@\w{2,}")
+_PHONE = re.compile(r"\d[\d\s().+-]{5,}\d")
+
+
+@dataclass(frozen=True, slots=True)
+class Creator:
+    """Who made an entry, as they chose to sign it: a display name (any nickname) and a country, both optional."""
+
+    name: str = ""
+    country: str = ""  # ISO 3166-1 alpha-2, or empty
+
+    @classmethod
+    def of(cls, name: str | None, country: str | None) -> Creator:
+        """Validated: the name trimmed to one line of at most 40 characters, the country a known code."""
+        clean = " ".join((name or "").split())
+        if any(unicodedata.category(ch) in ("Cc", "Cf") for ch in clean):
+            raise InvalidValueError("Your name can't contain control characters.")
+        if len(clean) > MAX_NAME_CHARS:
+            raise InvalidValueError(f"Your name can be at most {MAX_NAME_CHARS} characters.")
+        code = (country or "").strip().upper()
+        if code and code not in COUNTRIES:
+            raise InvalidValueError("Choose a country from the list, or leave it empty.")
+        return cls(clean, code)
+
+    @property
+    def anonymous(self) -> bool:
+        return not self.name and not self.country
+
+    def contact_details(self) -> str | None:
+        """Why the name can't publish without a person looking: it carries contact details. None when clean."""
+        if _EMAIL.search(self.name):
+            return "The name has an email address."
+        if _LINK.search(self.name):
+            return "The name has a link."
+        if _HANDLE.search(self.name):
+            return "The name has a social handle."
+        if _PHONE.search(self.name):
+            return "The name has a phone number."
+        return None
 
 
 class EntryStatus(StrEnum):
@@ -56,6 +106,24 @@ class GalleryEntry:
     published_at: datetime | None = None
     hearts: set[str] = field(default_factory=set)  # visitor hashes
     reports: list[Report] = field(default_factory=list)
+    creator: Creator = field(default_factory=Creator)
+    checks: int = 0  # moderation reviews run again after the creator renamed it
+
+    def sign(self, creator: Creator) -> bool:
+        """The creator changes or removes their name or country. True when the entry must be checked again.
+
+        Removing details, or changing only the country (from a fixed list), shows at once. A new name on a
+        published entry takes it out of the gallery until the check passes; a pending, hidden or failed entry
+        keeps its status. While the first check runs, nothing can change, so the check sees the final name.
+        """
+        if self.status is EntryStatus.CHECKING:
+            raise InvalidValueError("Your entry is being checked. You can edit it in a minute.")
+        renamed = bool(creator.name) and creator.name != self.creator.name
+        self.creator = creator
+        if not renamed or self.status is not EntryStatus.PUBLISHED:
+            return False
+        self.status, self.checks = EntryStatus.CHECKING, self.checks + 1
+        return True
 
     @property
     def public(self) -> bool:
@@ -128,9 +196,23 @@ class Gallery:
     def remove(self, entry_id: str) -> GalleryEntry | None:
         return self.entries.pop(entry_id, None)
 
-    def published(self, *, style: str | None = None, featured: bool = False) -> list[GalleryEntry]:
-        """Public entries: featured first then newest, or newest only."""
-        shown = [e for e in self.entries.values() if e.public and (style is None or e.style == style)]
+    def published(
+        self, *, style: str | None = None, featured: bool = False, country: str | None = None
+    ) -> list[GalleryEntry]:
+        """Public entries, newest first: all, the featured ones, one style or one creator country."""
+        shown = [
+            e
+            for e in self.entries.values()
+            if e.public and (style is None or e.style == style) and (country is None or e.creator.country == country)
+        ]
         if featured:
             shown = [e for e in shown if e.featured]
         return sorted(shown, key=lambda e: e.published_at or e.submitted_at, reverse=True)
+
+    def countries(self) -> dict[str, int]:
+        """The creator countries of public entries, with how many entries each, most first."""
+        counts: dict[str, int] = {}
+        for e in self.entries.values():
+            if e.public and e.creator.country:
+                counts[e.creator.country] = counts.get(e.creator.country, 0) + 1
+        return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))

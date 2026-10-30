@@ -18,7 +18,9 @@ from frameteller.domain.errors import (
 )
 from frameteller.domain.exports import AnimaticExport
 from frameteller.domain.gallery import (
+    MAX_NAME_CHARS,
     REPORTS_TO_HIDE,
+    Creator,
     EntryStatus,
     Gallery,
     GalleryAudio,
@@ -59,6 +61,7 @@ from frameteller.domain.transcript import TranscriptTurn
 
 __all__ = [
     "END_MS",
+    "MAX_NAME_CHARS",
     "MIN_SHOT_MS",
     "REPORTS_TO_HIDE",
     "TITLE_MS",
@@ -74,6 +77,7 @@ __all__ = [
     "CharacterBible",
     "CleanPlate",
     "Composite",
+    "Creator",
     "Cue",
     "Decision",
     "DomainError",
