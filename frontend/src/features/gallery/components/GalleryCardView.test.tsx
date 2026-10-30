@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { emojiFlags } from '../../../test/flags'
 import type { GalleryCard } from '../../../shared/api/types'
 import { GalleryCardView } from './GalleryCardView'
 
@@ -48,5 +49,11 @@ describe('GalleryCardView', () => {
   it('signs an unsigned card as an anonymous storyteller', () => {
     render(<GalleryCardView card={{ ...card, creator: { name: '', country: '' } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
     expect(screen.getByTestId('gallery-byline').textContent).toBe('by an anonymous storyteller')
+  })
+
+  it('names the country without a flag or code where flags would show as letters', () => {
+    emojiFlags(false)
+    render(<GalleryCardView card={{ ...card, creator: { name: 'Ama', country: 'AE' } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
+    expect(screen.getByTestId('gallery-byline').textContent).toBe('by Ama · United Arab Emirates')
   })
 })

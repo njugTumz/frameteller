@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { emojiFlags } from '../../../test/flags'
 import type { SharedProject } from '../../../shared/api/types'
 import { SharedStoryboard } from './SharedStoryboard'
 
@@ -30,5 +31,11 @@ describe('SharedStoryboard', () => {
     expect(screen.getByTestId('shared-byline').textContent).toBe('by an anonymous storyteller')
     rerender(<SharedStoryboard project={{ ...PROJECT, creator: null }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
     expect(screen.queryByTestId('shared-byline')).toBeNull()
+  })
+
+  it('reads "by <name> · <country>" where flags would show as letters', () => {
+    emojiFlags(false)
+    render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'AE' } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.getByTestId('shared-byline').textContent).toBe('by Ama · United Arab Emirates')
   })
 })

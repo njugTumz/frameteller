@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { emojiFlags } from '../../../test/flags'
 import { GalleryGrid } from './GalleryGrid'
 
 const base = { view: 'newest' as const, style: null, cards: [], error: null, reported: new Set<string>(), onView: vi.fn(), onStyle: vi.fn(), onHeart: vi.fn(), onReport: vi.fn() }
@@ -26,5 +27,11 @@ describe('GalleryGrid countries', () => {
     rerender(<GalleryGrid {...base} country={null} countries={[]} onCountry={vi.fn()} />)
     expect(screen.queryByTestId('country-count')).toBeNull()
     expect(screen.queryByLabelText('Country')).toBeNull()
+  })
+
+  it('filters by country name alone where flags would show as letters', () => {
+    emojiFlags(false)
+    render(<GalleryGrid {...base} country={null} countries={[{ code: 'AE', entries: 1 }]} onCountry={vi.fn()} />)
+    expect([...screen.getByLabelText<HTMLSelectElement>('Country').options].map((o) => o.textContent)).toEqual(['Every country', 'United Arab Emirates (1)'])
   })
 })

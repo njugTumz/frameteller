@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { byName, byline, country, countryName, flag } from './creator'
+import { describe, expect, it, vi } from 'vitest'
+import { emojiFlags } from '../test/flags'
+import { byName, byline, country, countryName, detectFlagEmoji, flag, resetFlagSupport } from './creator'
 
 describe('creator byline', () => {
   it('shows the name and the country with its flag', () => {
@@ -35,5 +36,43 @@ describe('countries', () => {
     const list = byName(['ZA', 'AE', 'KE'])
     expect(list.map((c) => c.code)).toEqual(['KE', 'ZA', 'AE'])
     expect(list[0]?.label).toBe('🇰🇪 Kenya (KE)')
+  })
+})
+
+describe('where flag emoji draw as letters (Windows)', () => {
+  it('detects colour flags, and letters or no canvas as no flags', () => {
+    emojiFlags(true)
+    expect(detectFlagEmoji()).toBe(true)
+    emojiFlags(false)
+    expect(detectFlagEmoji()).toBe(false)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    expect(detectFlagEmoji()).toBe(false)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    expect(detectFlagEmoji()).toBe(false)
+  })
+
+  it('shows only the country name, without the two-letter code', () => {
+    emojiFlags(false)
+    expect(byline({ name: 'Ama', country: 'AE' })).toBe('by Ama · United Arab Emirates')
+    expect(byline({ name: '', country: 'KE' })).toBe('by a storyteller from Kenya')
+    expect(country('JP')).toBe('Japan')
+  })
+
+  it('keeps the ISO code in the dropdown, without a flag', () => {
+    emojiFlags(false)
+    expect(byName(['KE', 'AE']).map((c) => c.label)).toEqual(['Kenya (KE)', 'United Arab Emirates (AE)'])
+  })
+
+  it('checks the canvas once, until reset', () => {
+    emojiFlags(false)
+    const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+    country('KE')
+    country('AE')
+    expect(spy).toHaveBeenCalledTimes(1)
+    resetFlagSupport()
+    country('KE')
+    expect(spy).toHaveBeenCalledTimes(2)
   })
 })

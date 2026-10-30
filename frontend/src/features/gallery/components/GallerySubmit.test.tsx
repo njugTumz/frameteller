@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { emojiFlags } from '../../../test/flags'
 import type { MyGalleryEntry } from '../../../shared/api/types'
 import { CONSENT, GallerySubmit } from './GallerySubmit'
 
@@ -93,5 +94,16 @@ describe('GallerySubmit', () => {
     rerender(<GallerySubmit {...base} entry={entry('published')} onSubmit={vi.fn()} onSign={onSign} />)
     expect(screen.getByTestId('my-byline').textContent).toMatch('Shown by an anonymous storyteller')
     expect(screen.getByRole('button', { name: 'Withdraw from the gallery' })).toBeTruthy() // still possible
+  })
+
+  it('offers and lists countries by name where flags would show as letters', async () => {
+    emojiFlags(false)
+    const onSubmit = vi.fn()
+    render(<GallerySubmit {...base} entry={null} onSubmit={onSubmit} />)
+    expect(screen.getByTestId('country-suggestion').textContent).toMatch(/A guess from your browser: Kenya\./)
+    const options = [...screen.getByLabelText<HTMLSelectElement>('Country').options].map((o) => o.textContent)
+    expect(options).toEqual(['No country', 'Japan (JP)', 'Kenya (KE)', 'United Arab Emirates (AE)'])
+    await userEvent.click(screen.getByRole('button', { name: 'Use Kenya' }))
+    expect(screen.getByLabelText<HTMLSelectElement>('Country').value).toBe('KE')
   })
 })
