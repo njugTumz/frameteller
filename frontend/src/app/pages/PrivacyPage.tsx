@@ -44,6 +44,27 @@ export function PrivacyPage() {
         can edit it, so keep that link to yourself and share the read-only share link instead.
       </p>
 
+      <h2>The gallery, only if you submit</h2>
+      <p>
+        Nothing goes in the public gallery unless you submit it and agree. What anyone can then see: the title, the
+        animatic with captions and the audio you chose, its first panel, and its share page.
+      </p>
+      <ul>
+        <li>
+          <strong>Your name and country are optional.</strong> The name can be any nickname, and is shown as "by
+          &lt;name&gt;". Leave both empty and it says "by an anonymous storyteller". The country may be suggested
+          from your browser's language settings, but it is only shown if you choose it.
+        </li>
+        <li>
+          <strong>You can change or remove them</strong> at any time from the studio. A new name is checked before it
+          shows; a name with contact details (an email, phone number, handle or link) waits for a person.
+        </li>
+        <li>
+          <strong>Withdraw</strong> takes your storyboard out of the gallery and deletes the gallery's copy, its
+          video, name and country.
+        </li>
+      </ul>
+
       <h2>Deleted after 30 days</h2>
       <p>
         Stories, recordings, panels, exports and share links are deleted automatically 30 days after they were last
