@@ -4,6 +4,8 @@ import { storyboardPdfUrl, shareUrl } from '../../features/export/api'
 import { ExportPanel } from '../../features/export/components/ExportPanel'
 import { SharePanel } from '../../features/export/components/SharePanel'
 import { useExport } from '../../features/export/hooks/useExport'
+import { ReportProblem } from '../../features/feedback/components/ReportProblem'
+import { useReportProblem } from '../../features/feedback/hooks/useReportProblem'
 import { GallerySubmit } from '../../features/gallery/components/GallerySubmit'
 import { useCountries } from '../../features/gallery/hooks/useCountries'
 import { useGallerySubmission } from '../../features/gallery/hooks/useGallerySubmission'
@@ -58,6 +60,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
   const r = useRecordingStore()
   const board = useStoryboardStore()
   const progress = boardProgress(board.shots, board.jobs, board.awaitingReview)
+  const problem = useReportProblem(projectId)
   const cast = useCastStore()
   const castNames = useMemo(() => cast.characters.map((c) => c.name), [cast.characters])
   const sync = useProjectSync(projectId, r.connected, projectLoaded)
@@ -158,6 +161,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
           />
         )}
         <TranscriptRail turns={r.turns} partial={r.partial} listening={r.telling === 'live'} correcting={r.correcting} onCorrect={(id, text) => narration.correct(id, text)} />
+        <ReportProblem state={problem.state} error={problem.error} onSend={(text) => void problem.send(text)} onReset={problem.reset} />
       </aside>
       <div className="flex min-w-0 flex-col gap-6">
         {sync.status === 'loading' && <p className="m-0 text-muted">Opening the storyboard…</p>}
