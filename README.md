@@ -70,7 +70,7 @@ The studio is sized for the launch and judging days ([ADR 0016](docs/adr/0016-ca
 - **Global limits** on live voice sessions (24), Muse Image calls in flight (8), SAM calls (4) and exports (2). Past a limit you join a waiting room with your place in line and an estimate, never an error.
 - **Exports in their own lane,** at low CPU priority, so they never slow live sessions.
 - **Meta's 429s** back off and wait in line, and never trip the circuit breaker.
-- **A judge pass:** a private link gives judges their own lane, ahead of every line and outside the per-visitor caps, with a reserved daily budget the public can't use.
+- **A judge pass:** one private link for any number of judges. Each browser gets its own pass, with its own lane ahead of every line, outside the per-visitor caps, and 15 new stories a day. Judges spend from a reserve the public can't use (USD 25 a day on Nov 5-8, 15 otherwise), which the admin page can lower without a redeploy.
 - **A daily cap by date:** USD 25 on launch and judging days, USD 10 on other days.
 
 **Load test:** [`backend/scripts/load_test.py`](backend/scripts/load_test.py) runs the real app with fake Meta models, at real latencies, against 50 visitors who narrate, approve, draw and export. Every one of the 50 visits finished, REST calls stayed under 20 ms at p95, and a burst of 50 arrivals in 5 s seated 26 of them from the waiting room within 45 s. The server peaked at 1.97 cores and 0.93 GiB, so production runs on 2 vCPU / 4 GiB ([results](docs/load-test.md)).
@@ -313,6 +313,7 @@ Everything in this repository was built during the event. The commit history is 
 - [x] Captions on the animatic: burned in, a soft subtitle track and an `.srt`, optionally translated by Muse Spark
 - [x] The public gallery with consent, automatic moderation by rubric, hearts, reports, withdraw and an admin page ([ADR 0017](docs/adr/0017-gallery.md))
 - [x] "Try a sample story" for visitors without a microphone, a first-visit guide, storyboard progress, and `demo_check.py`
+- [x] A guided tour over the real sample story, driven by the session's own events, which shows each Meta model at work; Ava as the default voice; judge passes per browser with a daily story limit and dated reserves
 - [x] Cast sheets that Muse Image's content filter refused for young characters now pass: ages are softened and the pose is clothed, with one safer retry, and a failed sheet names the character with Try again and Edit description
 
 ## License
