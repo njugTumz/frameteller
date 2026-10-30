@@ -5,7 +5,10 @@ import { panelSvg, sheetSvg } from './fixtures'
 // country is only used when chosen, the card and the share page show the byline, and it can be edited and removed.
 const API = 'http://localhost:8000'
 type Json = Record<string, unknown>
-type Signed = { name: string; country: string }
+interface Signed {
+  name: string
+  country: string
+}
 
 const review = { outcome: 'checked', summary: 'Checked', issues: [], fix_instruction: '', model: 'muse-spark-1.3', confidence: 0.9, fixes: 0, rubrics: {} }
 const LINA = { id: 'lina', name: 'Lina', description: 'a girl in a yellow raincoat', reference_url: '/media/projects/p1/characters/lina/reference', review }
