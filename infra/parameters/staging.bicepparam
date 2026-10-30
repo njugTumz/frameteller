@@ -21,3 +21,9 @@ param azureSpeechKey = readEnvironmentVariable('AZURE_SPEECH_KEY', '')
 // The judge pass and the admin page (ADR 0016, 0017): our own random tokens, GitHub environment secrets.
 param judgeToken = readEnvironmentVariable('JUDGE_TOKEN', '')
 param adminToken = readEnvironmentVariable('ADMIN_TOKEN', '')
+
+// 0.5 vCPU / 1 GiB fits one ffmpeg export (about 0.5 GiB for 6 shots) beside the app, not two: staging renders
+// one at a time and the rest wait in line (docs/load-test.md). Production (2 vCPU / 4 GiB) keeps two.
+param guardrailEnv = [
+  { name: 'CAPACITY_EXPORTS', value: '1' }
+]
