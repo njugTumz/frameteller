@@ -150,6 +150,10 @@ key in the Azure portal (Keys and Endpoint), store it as above and redeploy, or 
 the Meta key (`az containerapp secret set ... --secrets "azure-speech-key=$KEY"`). Check it with
 `curl -s https://api.frameteller.com/voices | jq .available`.
 
+**The default voice is Ava** (`en-US-AvaMultilingualNeural`) since v1.1.0: for "Read it to me", "Try a sample story"
+and a gallery copy "with the Ava voice instead". Projects read before keep the voice they were read in (Brandon),
+and their share pages still name it. `curl -s https://api.frameteller.com/voices | jq .default` shows it.
+
 ## Spend and errors
 
 | What | Where |

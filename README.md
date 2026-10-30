@@ -58,7 +58,7 @@ Each shot's words are split into short lines of at most ten words, and each line
 
 https://app.frameteller.com/gallery ([ADR 0017](docs/adr/0017-gallery.md)):
 
-- **Submitting:** "Submit to gallery" sits next to Share. You agree to show your story and choose its audio: your voice, the Brandon voice instead, or none.
+- **Submitting:** "Submit to gallery" sits next to Share. You agree to show your story and choose its audio: your voice, the Ava voice instead, or none.
 - **The gallery's copy:** the gallery keeps its own copy of the animatic, with burned-in captions, so later edits never change it. You can withdraw it at any time, which deletes it.
 - **Moderation:** before anyone sees it, the continuity supervisor checks it against [`agents/gallery.md`](agents/gallery.md): no real people, no franchise characters, nothing sexual, hateful or violent, no personal details. A confident clean pass publishes it; anything doubtful waits for a person.
 - **Browsing:** the gallery shows Featured or Newest, by style. You play the animatic in place, give one heart per browser, and can report a card. Each card links to its share page, and published share pages are in the sitemap for search engines.

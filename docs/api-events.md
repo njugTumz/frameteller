@@ -92,13 +92,13 @@ The teleprompter and "Read it to me" ([ADR 0015](adr/0015-script-mode.md)) start
 
 ```json
 {"mode": "teleprompter", "script": "Wide shot. Lena feeds the pigeons.\n\nA kite drifts down.", "script_format": "text", "keep_audio": true}
-{"mode": "read", "script": "...", "script_format": "fountain", "voice": "en-US-BrandonMultilingualNeural", "language": "fr-FR"}
+{"mode": "read", "script": "...", "script_format": "fountain", "voice": "en-US-AvaMultilingualNeural", "language": "fr-FR"}
 ```
 
 - `script_format` is `text` (default), `markdown` or `fountain`. Each paragraph is one beat. Framing cues ("Wide shot.") go to the director only. A line `Episode N`, `EPISODE N` or `Ep. N` starts an episode. Shots carry `episode`; turns carry `episode` and `direction`.
 - A script that is too long (over 4,000 characters), has too many episodes (over 3) or too many paragraphs in one episode (over 12), or is empty, gets a fatal `error` that says what to change, then close code 4400.
 - **teleprompter:** send audio as for `narrate`. Each paragraph is cut when the transcript has covered its end (fuzzy, tolerant of misheard words) and the reader pauses or reads on. `{"type": "beat"}` still cuts by hand; a beat within 2.5 s of an automatic cut, before any new words, only confirms it. Turn text is the script's words.
-- **read:** send no audio. `voice` and `language` (a locale from `GET /voices`; default Brandon in English) must be offered, or the start is refused with 4400. `{"type": "pause"}` holds the reading before the next paragraph; `{"type": "continue"}` goes on, also at an episode break before its drafts are done. `{"type": "end"}` stops reading. The reading is kept as the project's narration with its `voice` and `language`, and turn text is what the voice said.
+- **read:** send no audio. `voice` and `language` (a locale from `GET /voices`; default Ava in English) must be offered, or the start is refused with 4400. `{"type": "pause"}` holds the reading before the next paragraph; `{"type": "continue"}` goes on, also at an episode break before its drafts are done. `{"type": "end"}` stops reading. The reading is kept as the project's narration with its `voice` and `language`, and turn text is what the voice said.
 - `GET /voices` returns `{available, default, voices: [{name, display_name, gender, accent, languages: [{code, locale, name}], preview_url}]}`; `available: false` means "Read it to me" is not set up. `GET /voices/{name}/preview?language=fr-FR` returns a short WAV sample.
 
 ## Corrections

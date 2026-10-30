@@ -28,7 +28,7 @@ On the marketing site we would have to rebuild all of that, or loosen its CSP. `
 "Submit to gallery" sits beside Share. The creator ticks a consent statement (original story, no real people or franchise characters, shown publicly, can be withdrawn) and chooses the audio:
 
 - **my voice**: the kept narration;
-- **the Brandon voice instead**: Azure Text-to-Speech reads each shot's caption, cut to the shot;
+- **the Ava voice instead** (Brandon before v1.1.0): Azure Text-to-Speech reads each shot's caption, cut to the shot;
 - **no audio**.
 
 The backend refuses without consent, before every shot has a panel, or with "my voice" when the recording was not kept.
@@ -60,5 +60,5 @@ The gallery is one JSON document (`gallery/index.json` in the projects container
 ## Consequences
 
 - Nothing reaches the public gallery without passing the rubric or a person's look. A missed case can still be reported, and three reports hide it.
-- The Brandon voice is trimmed to each shot's length. Text read faster than it was spoken fits, but a long caption over a short shot is cut off. Narrated stories usually fit, because the caption is what was said in that time.
+- The Ava voice is trimmed to each shot's length. Text read faster than it was spoken fits, but a long caption over a short shot is cut off. Narrated stories usually fit, because the caption is what was said in that time.
 - One document for the whole gallery keeps reads cheap and writes simple. With thousands of entries it would need an index per entry and paging.
