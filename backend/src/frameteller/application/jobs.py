@@ -102,10 +102,12 @@ def cast_job(project_id: str, character_ids: Sequence[str], nonce: str, correcti
     )
 
 
-def gallery_job(project_id: str, entry_id: str) -> Job:
-    """Render the gallery copy and run the moderation review. One per submission."""
+def gallery_job(project_id: str, entry_id: str, check: int = 0) -> Job:
+    """Render the gallery copy and run the moderation review. One per submission, and one per later check of a
+    new creator name (`check`), which reviews again without rendering again."""
+    suffix = f":{check}" if check else ""
     return Job(
         kind=GALLERY_SUBMISSION,
-        idempotency_key=f"{GALLERY_SUBMISSION}:{project_id}:{entry_id}",
+        idempotency_key=f"{GALLERY_SUBMISSION}:{project_id}:{entry_id}{suffix}",
         payload={"project_id": project_id, "entry_id": entry_id},
     )

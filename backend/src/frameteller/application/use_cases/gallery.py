@@ -3,8 +3,9 @@
 A submission renders the gallery's own copy of the animatic (burned-in captions, the audio the creator chose)
 and a cover, so later edits to the project never change what the gallery shows. The moderation review runs
 the `gallery` rubric through the continuity supervisor's reviewer (Spark, or Glimmer screening when warm): a
-clean, confident pass publishes the entry; anything else waits for the admin. Withdrawing deletes the entry
-and its media.
+clean, confident pass publishes the entry; anything else waits for the admin. A creator name with contact
+details waits for the admin without a review. Renaming a published entry runs the review again (no new render).
+Withdrawing deletes the entry and its media.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ from frameteller.application.use_cases.export_animatic import AnimaticOptions, E
 from frameteller.application.use_cases.share import ShareProject
 from frameteller.domain import (
     Animatic,
+    Creator,
     Decision,
     DomainError,
     EntryStatus,
@@ -77,11 +79,13 @@ async def _discard(storage: MediaStoragePort, entry: GalleryEntry) -> None:
             log.warning("could not delete gallery media", extra={"key": ref.key}, exc_info=True)
 
 
-def story_text(project: Project) -> str:
-    """What the moderation review reads: the title, the cast and the story as told."""
+def story_text(project: Project, creator: Creator | None = None) -> str:
+    """What the moderation review reads: the creator's display name, the title, the cast and the story as told."""
     cast = "; ".join(f"{c.name}: {c.canonical_description}" for c in project.bible.characters.values())
     told = " ".join(t.text for t in project.turns)
-    return f"Title: {project.title or 'Untitled'}\nCharacters: {cast or 'none'}\nStory: {told}"[:MAX_STORY_CHARS]
+    signed = creator.name if creator and creator.name else "none"
+    text = f"Creator's display name, shown as the author: {signed}\nTitle: {project.title or 'Untitled'}\n"
+    return f"{text}Characters: {cast or 'none'}\nStory: {told}"[:MAX_STORY_CHARS]
 
 
 class SubmitToGallery:
@@ -102,7 +106,9 @@ class SubmitToGallery:
         self._storage, self._clock, self._ids = storage, clock, ids
         self._voice, self._allowance = voice_available, allowance
 
-    async def execute(self, project_id: str, *, consent: bool, audio: GalleryAudio) -> GalleryEntry:
+    async def execute(
+        self, project_id: str, *, consent: bool, audio: GalleryAudio, creator: Creator | None = None
+    ) -> GalleryEntry:
         if not consent:
             raise GallerySubmissionError("Tick the box to agree before you submit.")
         project = await self._repo.get(project_id)
@@ -127,6 +133,7 @@ class SubmitToGallery:
             len(project.shots),
             audio,
             self._clock.now(),
+            creator=creator or Creator(),
         )
         previous = await self._gallery.update(lambda g: g.submit(entry))
         if previous is not None:
@@ -169,19 +176,22 @@ class ProcessGallerySubmission:
             return None  # withdrawn, or already done
         project = await self._repo.get(project_id)
         base = f"gallery/{entry_id}"
-        try:
-            options = AnimaticOptions(subtitles=True, audio=entry.audio)
-            export = await self._export.render(project, options, f"{base}/animatic")
-            cover = await self._storage.put(f"{base}/cover.webp", await self._first_panel(project), "image/webp")
-        except (ApplicationError, DomainError) as e:
-            message = e.user_message if isinstance(e, ApplicationError) else str(e)
-            await self._gallery.update(lambda g: _apply(g, entry_id, lambda en: en.fail(message)))
-            return EntryStatus.FAILED
-        verdict = await self._moderate(project, base)
+        rendered = entry.video is not None and entry.cover is not None  # a new name to check: no new render
+        if not rendered:
+            try:
+                options = AnimaticOptions(subtitles=True, audio=entry.audio)
+                export = await self._export.render(project, options, f"{base}/animatic")
+                cover = await self._storage.put(f"{base}/cover.webp", await self._first_panel(project), "image/webp")
+            except (ApplicationError, DomainError) as e:
+                message = e.user_message if isinstance(e, ApplicationError) else str(e)
+                await self._gallery.update(lambda g: _apply(g, entry_id, lambda en: en.fail(message)))
+                return EntryStatus.FAILED
+        verdict = await self._moderate(project, base, entry.creator)
         now = self._clock.now()
 
         def decide(en: GalleryEntry) -> None:
-            en.ready(cover, export.video, export.duration_ms)
+            if not rendered:
+                en.ready(cover, export.video, export.duration_ms)
             if verdict.publish:
                 en.publish(now, verdict.model)
             else:
@@ -200,7 +210,10 @@ class ProcessGallerySubmission:
         assert panel.shown_image is not None  # rendered: Animatic.from_project checked every panel
         return await self._storage.get(panel.shown_image)
 
-    async def _moderate(self, project: Project, base: str) -> Moderation:
+    async def _moderate(self, project: Project, base: str, creator: Creator) -> Moderation:
+        contact = creator.contact_details()
+        if contact:  # a person decides; no review is needed to know that
+            return Moderation(False, f"GAL-08: {contact}", "")
         sheet_ref = MediaRef(f"{base}/review.png")
         try:
             rubric = RubricSet((self._rubrics.get(RUBRIC),))
@@ -212,7 +225,7 @@ class ProcessGallerySubmission:
             sheet = await self._preview.contact_sheet(project.title, panels)
             await self._storage.put(sheet_ref.key, sheet, "image/png")
             await self._budget.charge(project.id, costs.REVIEW, "gallery moderation")
-            request = ReviewRequest((sheet_ref,), rubric, project.style, subject=story_text(project))
+            request = ReviewRequest((sheet_ref,), rubric, project.style, subject=story_text(project, creator))
             verdict = await self._reviewer.review(request)
         except (ApplicationError, RubricError):
             log.warning("gallery moderation could not run", extra={"project_id": project.id}, exc_info=True)
@@ -262,14 +275,44 @@ class WithdrawFromGallery:
         await _discard(self._storage, removed)
 
 
+class SignGalleryEntry:
+    """The creator adds, changes or removes the name and country on their entry. A new name is checked again."""
+
+    def __init__(self, gallery: GalleryRepository, jobs: JobQueuePort) -> None:
+        self._gallery, self._jobs = gallery, jobs
+
+    async def execute(self, project_id: str, creator: Creator) -> GalleryEntry:
+        def sign(g: Gallery) -> tuple[GalleryEntry, bool]:
+            entry = g.of_project(project_id)
+            if entry is None:
+                raise GalleryEntryNotFoundError(project_id)
+            return entry, entry.sign(creator)
+
+        entry, check = await self._gallery.update(sign)
+        if check:
+            await self._jobs.enqueue(gallery_job(project_id, entry.id, entry.checks))
+        return entry
+
+
 class BrowseGallery:
-    """What visitors see: published entries, featured first or newest, optionally one style."""
+    """What visitors see: published entries, featured or newest, optionally one style or one creator country."""
 
     def __init__(self, gallery: GalleryRepository) -> None:
         self._gallery = gallery
 
-    async def execute(self, *, featured: bool = False, style: str | None = None) -> list[GalleryEntry]:
-        return (await self._gallery.get()).published(style=style, featured=featured)
+    async def execute(
+        self, *, featured: bool = False, style: str | None = None, country: str | None = None
+    ) -> list[GalleryEntry]:
+        return (await self._gallery.get()).published(style=style, featured=featured, country=country)
+
+    async def countries(self) -> dict[str, int]:
+        """Creator countries across the whole gallery, for the counter and the filter."""
+        return (await self._gallery.get()).countries()
+
+    async def creator_of(self, project_id: str) -> Creator | None:
+        """How a project's public entry is signed, for its share page; None when it isn't in the gallery."""
+        entry = (await self._gallery.get()).of_project(project_id)
+        return entry.creator if entry is not None and entry.public else None
 
     async def entry(self, entry_id: str) -> GalleryEntry:
         entry = (await self._gallery.get()).find(entry_id)
