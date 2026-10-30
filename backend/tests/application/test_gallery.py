@@ -15,7 +15,7 @@ from frameteller.application.use_cases.gallery import (
     SubmitToGallery,
     WithdrawFromGallery,
 )
-from frameteller.domain import Decision, EntryStatus, GalleryAudio, Issue, MediaRef, Narration, Severity
+from frameteller.domain import Decision, EntryStatus, GalleryAudio, GalleryEntry, Issue, MediaRef, Narration, Severity
 from tests.application.conftest import World
 from tests.fakes import (
     FakeReviewer,
@@ -59,7 +59,7 @@ class Gallery:
         assert self.w.jobs.jobs[-1].kind == GALLERY_SUBMISSION
         return await self.process.execute("p1", entry.id)
 
-    async def entry(self):  # type: ignore[no-untyped-def]
+    async def entry(self) -> GalleryEntry | None:
         return (await self.repo.get()).of_project("p1")
 
 

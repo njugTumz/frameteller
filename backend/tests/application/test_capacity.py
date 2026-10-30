@@ -26,7 +26,7 @@ async def hold(gate: Gate, release: asyncio.Event, order: list[str], name: str, 
 
 
 async def test_past_the_limit_work_waits_and_learns_its_place() -> None:
-    gate, release, order, rec = Gate("images", 2, typical_s=10), asyncio.Event(), [], Recorder()
+    gate, release, order, rec = Gate("images", 2, typical_s=10), asyncio.Event(), list[str](), Recorder()
     tasks = [asyncio.create_task(hold(gate, release, order, n, rec)) for n in "abcd"]
     await asyncio.sleep(0.01)
     assert order == ["a", "b"]
@@ -45,7 +45,7 @@ async def test_past_the_limit_work_waits_and_learns_its_place() -> None:
 
 
 async def test_judges_go_ahead_of_the_public_line() -> None:
-    gate, release, order = Gate("images", 1, typical_s=1), asyncio.Event(), []
+    gate, release, order = Gate("images", 1, typical_s=1), asyncio.Event(), list[str]()
     first = asyncio.create_task(hold(gate, release, order, "first"))
     await asyncio.sleep(0)
     public = [asyncio.create_task(hold(gate, release, order, f"public{i}")) for i in range(2)]
@@ -60,7 +60,7 @@ async def test_judges_go_ahead_of_the_public_line() -> None:
 
 
 async def test_leaving_the_line_moves_everyone_up() -> None:
-    gate, release, order, rec = Gate("sessions", 1, typical_s=5), asyncio.Event(), [], Recorder()
+    gate, release, order, rec = Gate("sessions", 1, typical_s=5), asyncio.Event(), list[str](), Recorder()
     first = asyncio.create_task(hold(gate, release, order, "a", rec))
     await asyncio.sleep(0)
     b = asyncio.create_task(hold(gate, release, order, "b", rec))
@@ -78,7 +78,7 @@ async def test_leaving_the_line_moves_everyone_up() -> None:
 
 
 async def test_bypass_takes_a_slot_past_the_limit() -> None:
-    gate, release, order = Gate("sessions", 1, typical_s=5), asyncio.Event(), []
+    gate, release, order = Gate("sessions", 1, typical_s=5), asyncio.Event(), list[str]()
     a = asyncio.create_task(hold(gate, release, order, "a"))
     await asyncio.sleep(0)
 
@@ -93,7 +93,7 @@ async def test_bypass_takes_a_slot_past_the_limit() -> None:
 
 
 async def test_a_gate_reports_through_the_context_of_the_work() -> None:
-    gate, release, order, rec = Gate("images", 1, typical_s=5), asyncio.Event(), [], Recorder()
+    gate, release, order, rec = Gate("images", 1, typical_s=5), asyncio.Event(), list[str](), Recorder()
     a = asyncio.create_task(hold(gate, release, order, "a"))
     await asyncio.sleep(0)
 

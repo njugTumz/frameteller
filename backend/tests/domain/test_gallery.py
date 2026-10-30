@@ -32,7 +32,8 @@ def test_enough_reports_from_different_visitors_hide_a_published_entry() -> None
     assert not e.report("v0", "again", T0)  # one report per visitor
     assert e.status is EntryStatus.PUBLISHED
     assert e.report("v-last", "x" * 500, T0)
-    assert e.status is EntryStatus.HIDDEN
+    assert e.status.value == "hidden"
+
     assert len(e.reports[-1].reason) == 300
     assert not e.public
 

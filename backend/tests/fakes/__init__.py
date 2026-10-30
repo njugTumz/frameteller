@@ -266,7 +266,7 @@ class RecordingPublisher:
 
 class FakeVideoRenderer:
     def __init__(self) -> None:
-        self.rendered: list[tuple[Animatic, dict[str, bytes], dict[str, bytes], bool]] = []
+        self.rendered: list[tuple[Animatic, dict[str, bytes], dict[str, bytes], CaptionTrack | None]] = []
 
     async def render(
         self,
