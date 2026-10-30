@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-29T13:40:00Z",
+  "updated_at": "2026-10-30T11:30:00Z",
   "items": [
+    {
+      "date": "2026-10-30",
+      "status": "shipped",
+      "title": "Open the gallery",
+      "body": "Share your storyboard in the public gallery, captioned and checked before it goes up, and watch what others have made."
+    },
     {
       "date": "2026-10-29",
       "status": "shipped",
