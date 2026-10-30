@@ -1,12 +1,19 @@
 import { api, call } from '../../shared/api/client'
-import type { GalleryAudio, GalleryCard, MyGalleryEntry, PanelStyle } from '../../shared/api/types'
+import type { Countries, GalleryAudio, GalleryPage, MyGalleryEntry, PanelStyle } from '../../shared/api/types'
+import type { Signature } from '../../shared/creator'
 
 export type GalleryView = 'featured' | 'newest'
 
-export async function listGallery(view: GalleryView, style: PanelStyle | null): Promise<GalleryCard[]> {
-  const page = await call(() => api.GET('/gallery', { params: { query: { view, style: style ?? undefined } } }))
-  return page.entries
+/** One view of the gallery, plus the creator countries across all of it (the counter and the filter). */
+export function listGallery(view: GalleryView, style: PanelStyle | null, country: string | null): Promise<GalleryPage> {
+  return call(() => api.GET('/gallery', { params: { query: { view, style: style ?? undefined, country: country ?? undefined } } }))
 }
+
+/** Every country a creator may choose, and one guessed from the browser to offer (never to publish unasked). */
+export function listCountries(): Promise<Countries> {
+  return call(() => api.GET('/gallery/countries'))
+}
+
 
 /** One heart per browser: a second one changes nothing. */
 export function heartEntry(entryId: string) {
@@ -20,8 +27,13 @@ export async function reportEntry(entryId: string, reason: string): Promise<void
   })
 }
 
-export function submitToGallery(projectId: string, audio: GalleryAudio): Promise<MyGalleryEntry> {
-  return call(() => api.POST('/projects/{project_id}/gallery', { params: { path: { project_id: projectId } }, body: { consent: true, audio } }))
+export function submitToGallery(projectId: string, audio: GalleryAudio, signature: Signature): Promise<MyGalleryEntry> {
+  return call(() => api.POST('/projects/{project_id}/gallery', { params: { path: { project_id: projectId } }, body: { consent: true, audio, ...signature } }))
+}
+
+/** Change or remove the name and country. A new name is checked again before it shows. */
+export function signEntry(projectId: string, signature: Signature): Promise<MyGalleryEntry> {
+  return call(() => api.PATCH('/projects/{project_id}/gallery', { params: { path: { project_id: projectId } }, body: signature }))
 }
 
 /** The project's entry, or null when it was never submitted (or was withdrawn). */

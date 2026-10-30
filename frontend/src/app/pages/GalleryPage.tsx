@@ -23,11 +23,14 @@ export function GalleryPage() {
       <GalleryGrid
         view={g.view}
         style={g.style}
+        country={g.country}
+        countries={g.countries}
         cards={g.cards}
         error={g.error}
         reported={g.reported}
         onView={g.setView}
         onStyle={g.setStyle}
+        onCountry={g.setCountry}
         onHeart={(id) => void g.heart(id)}
         onReport={(id, reason) => void g.report(id, reason)}
       />

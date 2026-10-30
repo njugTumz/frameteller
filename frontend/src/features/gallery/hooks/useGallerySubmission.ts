@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../../../shared/api/client'
 import type { GalleryAudio, MyGalleryEntry } from '../../../shared/api/types'
-import { myEntry, submitToGallery, withdrawEntry } from '../api'
+import type { Signature } from '../../../shared/creator'
+import { myEntry, signEntry, submitToGallery, withdrawEntry } from '../api'
 
 const CHECK_EVERY_MS = 4000
 const message = (e: unknown) => (e instanceof ApiError ? e.message : 'The studio did not answer. Try again.')
 
-/** This project's gallery entry: submit, follow the check while it runs, withdraw. */
+/** This project's gallery entry: submit, sign or re-sign it, follow the check while it runs, withdraw. */
 export function useGallerySubmission(projectId: string) {
   const [entry, setEntry] = useState<MyGalleryEntry | null>(null)
   const [busy, setBusy] = useState(false)
@@ -33,20 +34,21 @@ export function useGallerySubmission(projectId: string) {
     return () => clearInterval(timer)
   }, [projectId, checking])
 
-  const submit = useCallback(
-    async (audio: GalleryAudio) => {
-      setBusy(true)
-      setError(null)
-      try {
-        setEntry(await submitToGallery(projectId, audio))
-      } catch (e) {
-        setError(message(e))
-      } finally {
-        setBusy(false)
-      }
-    },
-    [projectId],
-  )
+  const run = useCallback(async (action: () => Promise<MyGalleryEntry>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      setEntry(await action())
+      return true
+    } catch (e) {
+      setError(message(e))
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+  const submit = useCallback((audio: GalleryAudio, signature: Signature) => run(() => submitToGallery(projectId, audio, signature)), [projectId, run])
+  const sign = useCallback((signature: Signature) => run(() => signEntry(projectId, signature)), [projectId, run])
 
   const withdraw = useCallback(async () => {
     setBusy(true)
@@ -61,5 +63,5 @@ export function useGallerySubmission(projectId: string) {
     }
   }, [projectId])
 
-  return { entry, busy, error, submit, withdraw }
+  return { entry, busy, error, submit, sign, withdraw }
 }

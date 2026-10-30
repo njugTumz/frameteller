@@ -1,6 +1,7 @@
 import type { SharedProject } from '../../../shared/api/types'
 import { framingLabel, seconds, shotLabel } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
+import { byline } from '../../../shared/creator'
 
 /** What a share link shows: the animatic if there is one, then every shot. Nothing can be changed here. */
 export function SharedStoryboard({
@@ -19,6 +20,11 @@ export function SharedStoryboard({
         <div>
           <p className="m-0 text-sm font-bold uppercase tracking-wider text-muted">A storyboard told out loud</p>
           <h1 className="m-0 text-4xl font-black widest">{project.title || 'Untitled story'}</h1>
+          {project.creator && (
+            <p className="m-0 mt-1 text-base" data-testid="shared-byline">
+              {byline(project.creator)}
+            </p>
+          )}
         </div>
         <Button variant="marker" size="lg" onClick={onMakeYourOwn} className="font-extrabold">
           Make your own

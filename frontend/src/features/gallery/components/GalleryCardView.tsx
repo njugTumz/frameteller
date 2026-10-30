@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import type { GalleryCard } from '../../../shared/api/types'
 import { seconds } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
+import { byline } from '../../../shared/creator'
 import { styleName } from '../styles'
 
 /** One storyboard (its media URLs already absolute, see useGallery): its first panel until played, its animatic, a heart, its share page, and Report. */
@@ -42,6 +43,9 @@ export function GalleryCardView({
             {card.title}
           </a>
         </h3>
+        <p className="m-0 text-sm" data-testid="gallery-byline">
+          {byline(card.creator)}
+        </p>
         <p className="m-0 text-sm text-muted">
           {styleName(card.style)}
           {episodes} · {card.shots} shots · {seconds(card.duration_ms)}

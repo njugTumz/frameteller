@@ -18,12 +18,14 @@ const card: GalleryCard = {
   hearted: false,
   featured: true,
   published_at: '2026-11-02T17:00:00Z',
+  creator: { name: 'Ama', country: 'KE' },
 }
 
 describe('GalleryCardView', () => {
   it('plays the animatic in place of the cover, and links to the share page', async () => {
     render(<GalleryCardView card={card} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
     expect(screen.getByText(/Paper cutout · 2 episodes · 8 shots/)).toBeTruthy()
+    expect(screen.getByTestId('gallery-byline').textContent).toBe('by Ama · 🇰🇪 Kenya')
     expect(screen.getByRole('link', { name: 'The Kite Maker' }).getAttribute('href')).toBe(card.share_url)
     await userEvent.click(screen.getByRole('button', { name: 'Play The Kite Maker' }))
     expect(screen.getByLabelText('The Kite Maker, the animatic').getAttribute('src')).toBe(card.video_url)
@@ -41,5 +43,10 @@ describe('GalleryCardView', () => {
     await userEvent.type(screen.getByLabelText('What’s wrong with it?'), 'a real person')
     await userEvent.click(screen.getByRole('button', { name: 'Send report' }))
     expect(onReport).toHaveBeenCalledWith('a real person')
+  })
+
+  it('signs an unsigned card as an anonymous storyteller', () => {
+    render(<GalleryCardView card={{ ...card, creator: { name: '', country: '' } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
+    expect(screen.getByTestId('gallery-byline').textContent).toBe('by an anonymous storyteller')
   })
 })

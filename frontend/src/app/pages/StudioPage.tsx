@@ -5,6 +5,7 @@ import { ExportPanel } from '../../features/export/components/ExportPanel'
 import { SharePanel } from '../../features/export/components/SharePanel'
 import { useExport } from '../../features/export/hooks/useExport'
 import { GallerySubmit } from '../../features/gallery/components/GallerySubmit'
+import { useCountries } from '../../features/gallery/hooks/useCountries'
 import { useGallerySubmission } from '../../features/gallery/hooks/useGallerySubmission'
 import { Notices, ProblemNotice } from '../../features/recording/components/ProblemNotice'
 import { RecordingKept } from '../../features/recording/components/RecordingKept'
@@ -89,6 +90,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
   }, [])
   const exporting = useExport(projectId, onProject)
   const gallery = useGallerySubmission(projectId)
+  const countries = useCountries()
   const supervisor = useSupervisorActions(projectId, onProject)
   const inputs = useAudioInputs(r.silent)
   const allDrawn = board.shots.length > 0 && board.shots.every((s) => s.panel?.status === 'ready')
@@ -227,7 +229,10 @@ export function StudioPage({ projectId }: { projectId: string }) {
               busy={gallery.busy}
               error={gallery.error}
               galleryHref="/gallery"
-              onSubmit={(audio) => void gallery.submit(audio)}
+              codes={countries.codes}
+              suggested={countries.suggested}
+              onSubmit={(audio, signature) => void gallery.submit(audio, signature)}
+              onSign={gallery.sign}
               onWithdraw={() => void gallery.withdraw()}
             />
           </div>

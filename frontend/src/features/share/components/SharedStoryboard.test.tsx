@@ -22,4 +22,13 @@ describe('SharedStoryboard', () => {
     render(<SharedStoryboard project={{ ...PROJECT, narrated_by: null }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
     expect(screen.queryByText(/Narrated by/)).toBeNull()
   })
+
+  it('shows the gallery byline only for a storyboard in the gallery', () => {
+    const { rerender } = render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'KE' } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.getByTestId('shared-byline').textContent).toBe('by Ama · 🇰🇪 Kenya')
+    rerender(<SharedStoryboard project={{ ...PROJECT, creator: { name: '', country: '' } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.getByTestId('shared-byline').textContent).toBe('by an anonymous storyteller')
+    rerender(<SharedStoryboard project={{ ...PROJECT, creator: null }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.queryByTestId('shared-byline')).toBeNull()
+  })
 })

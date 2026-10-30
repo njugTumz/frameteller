@@ -2,6 +2,8 @@ import { useId, useState } from 'react'
 import type { GalleryAudio, MyGalleryEntry } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
+import { type Signature, byline } from '../../../shared/creator'
+import { CreatorFields } from './CreatorFields'
 
 export const CONSENT =
   'I made this story, it has no real people or characters from films, shows, games or brands, and I agree to show it publicly in the Frameteller gallery. I can withdraw it at any time.'
@@ -14,7 +16,10 @@ const STATUS: Record<MyGalleryEntry['status'], string> = {
   failed: 'The gallery video could not be made.',
 }
 
-/** "Submit to gallery": consent, a choice of audio, then the entry's status and a way to withdraw it. */
+const EMPTY: Signature = { name: '', country: '' }
+
+/** "Submit to gallery": consent, a choice of audio, an optional name and country, then the entry's status, a way to
+ * change how it is signed, and a way to withdraw it. */
 export function GallerySubmit({
   entry,
   ready,
@@ -22,7 +27,10 @@ export function GallerySubmit({
   busy,
   error,
   galleryHref,
+  codes,
+  suggested,
   onSubmit,
+  onSign,
   onWithdraw,
 }: {
   entry: MyGalleryEntry | null
@@ -33,12 +41,26 @@ export function GallerySubmit({
   busy: boolean
   error: string | null
   galleryHref: string
-  onSubmit: (audio: GalleryAudio) => void
+  /** The countries a creator may choose, and one guessed from the browser to offer. */
+  codes: string[]
+  suggested: string | null
+  onSubmit: (audio: GalleryAudio, signature: Signature) => void
+  /** Change or remove the name and country; resolves true when saved. */
+  onSign: (signature: Signature) => Promise<boolean>
   onWithdraw: () => void
 }) {
   const id = useId()
   const [consent, setConsent] = useState(false)
   const [audio, setAudio] = useState<GalleryAudio>(voiceKept ? 'mine' : 'voice')
+  const [signature, setSignature] = useState<Signature>(EMPTY)
+  const [editing, setEditing] = useState(false)
+  const [renamed, setRenamed] = useState(false)
+  const save = async (next: Signature) => {
+    if (await onSign(next)) {
+      setEditing(false)
+      setRenamed(!!next.name.trim() && next.name.trim() !== entry?.creator.name)
+    }
+  }
   const choices: { value: GalleryAudio; label: string; disabled?: boolean }[] = [
     { value: 'mine', label: 'Publish with my voice', disabled: !voiceKept },
     { value: 'voice', label: 'Publish with the Ava voice instead' },
@@ -53,9 +75,47 @@ export function GallerySubmit({
       {entry && !retry ? (
         <>
           <p className="m-0 text-sm font-semibold" role="status">
-            {STATUS[entry.status]}
+            {entry.status === 'checking' && renamed ? 'Checking your new name before it shows in the gallery…' : STATUS[entry.status]}
           </p>
           {entry.note && <p className="m-0 text-sm text-muted">{entry.note}</p>}
+          {editing ? (
+            <form
+              className="flex flex-col gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void save(signature)
+              }}
+            >
+              <CreatorFields value={signature} codes={codes} suggested={suggested} onChange={setSignature} />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="ink" type="submit" disabled={busy}>
+                  Save
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void save(EMPTY)} disabled={busy}>
+                  Remove name and country
+                </Button>
+                <Button size="sm" variant="quiet" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <p className="m-0 flex flex-wrap items-center gap-2 text-sm" data-testid="my-byline">
+              <span>Shown {byline(entry.creator)}</span>
+              {entry.status !== 'checking' && (
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => {
+                    setSignature({ name: entry.creator.name, country: entry.creator.country })
+                    setEditing(true)
+                  }}
+                >
+                  Edit name and country
+                </Button>
+              )}
+            </p>
+          )}
           {entry.status === 'published' && (
             <a href={galleryHref} className="text-sm font-semibold underline">
               See it in the gallery{entry.hearts ? ` (${entry.hearts} ${entry.hearts === 1 ? 'heart' : 'hearts'})` : ''}
@@ -81,12 +141,13 @@ export function GallerySubmit({
               </label>
             ))}
           </fieldset>
+          <CreatorFields value={signature} codes={codes} suggested={suggested} onChange={setSignature} />
           <label htmlFor={`${id}-consent`} className="flex items-start gap-2 text-sm">
             <input id={`${id}-consent`} type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-4 shrink-0" />
             {CONSENT}
           </label>
           <div>
-            <Button size="sm" variant="ink" onClick={() => onSubmit(audio)} disabled={!consent || !ready || busy}>
+            <Button size="sm" variant="ink" onClick={() => onSubmit(audio, { name: signature.name.trim(), country: signature.country })} disabled={!consent || !ready || busy}>
               {busy ? 'Submitting…' : retry ? 'Try again' : 'Submit to gallery'}
             </Button>
           </div>
