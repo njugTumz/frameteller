@@ -38,6 +38,12 @@ export function PrivacyPage() {
           can keep the studio running and stop abuse. They never contain your audio, and they are deleted after 30
           days.
         </li>
+        <li>
+          <strong>Errors and problem reports:</strong> when something fails, we note when, which part of the studio,
+          our own short description, the story's id and a short one-way hash of your visitor id. If you press{' '}
+          <strong>Report a problem</strong>, we keep the words you write (at most 500 characters) with the story's id.
+          Neither ever contains your audio, your IP address or keys, and both are deleted after 30 days.
+        </li>
       </ul>
       <p>
         Everything is stored privately in Microsoft Azure (East US 2). Anyone with the link to a story's studio page

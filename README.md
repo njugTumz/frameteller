@@ -316,6 +316,7 @@ Everything in this repository was built during the event. The commit history is 
 - [x] "Try a sample story" for visitors without a microphone, a first-visit guide, storyboard progress, and `demo_check.py`
 - [x] A guided tour over the real sample story, driven by the session's own events, which shows each Meta model at work; Ava as the default voice; judge passes per browser with a daily story limit and dated reserves
 - [x] Cast sheets that Muse Image's content filter refused for young characters now pass: ages are softened and the pose is clothed, with one safer retry, and a failed sheet names the character with Try again and Edit description
+- [x] An Errors tab on the admin page: recent errors, counts, model health, failed jobs with Retry, and the studio's "Report a problem", all deleted after 30 days
 
 ## License
 

@@ -231,6 +231,22 @@ reported entries first, with Watch, Publish, Feature, Hide and Remove. Rotate `A
 curl -s -H "Authorization: Bearer $(cat ~/.config/frameteller/admin-production.token)" https://api.frameteller.com/admin/overview
 ```
 
+### The Errors tab
+
+The admin page's **Errors** tab shows, from day documents under `admin/incidents/` in the media container (deleted
+after 30 days by the lifecycle rule, and pruned in code):
+
+- the last 100 errors, newest first: time, component (voice, director, image, sam, export, tts, supervisor, gallery,
+  api), our own message, code, project id and the first 12 characters of the visitor hash. Keys, bearer tokens and
+  IP addresses are redacted; transcripts never pass 80 characters. 401, 403 and 404 answers are not recorded;
+- errors by code over the last 24 hours, and today's (UTC+4) calls, failures, retries and p95 latency per model,
+  Meta models and Azure Text-to-Speech, written at most every 15 s and on shutdown;
+- jobs that gave up, with **Retry**: the same job and idempotency key, on the public budget, refused (409
+  `retry_refused`) while the studio is paused or full. A job that fails again comes back to the list;
+- the studio's **Report a problem** reports (optional words up to 500 characters, five a day per visitor).
+
+From a terminal: `GET /admin/errors` and `POST /admin/jobs/retry {"key": "..."}`, with the admin token as above.
+
 ## Rotate the judge or admin token
 
 ```bash

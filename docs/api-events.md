@@ -138,6 +138,7 @@ Before closing with a 44xx code (not 4503), the server sends a fatal `error` wit
 | `POST /projects/{id}/shots/{n}/panel/review/accept` | The project, with the panel's review `accepted`. 422 unless the panel is flagged. |
 | `POST /projects/{id}/cast/{character_id}/review/apply` | 202 job ticket (`generate_cast`): redraw the flagged sheet with the supervisor's correction. |
 | `POST /projects/{id}/cast/{character_id}/review/accept` | The project, with the sheet's review `accepted`. |
+| `POST /projects/{id}/problems` `{text?}` | 201 `{id}`. "Report a problem": optional words, at most 500 characters (422 beyond). Five a day per visitor (429 `limit_reached`); 404 for an unknown project. Reports reach the admin's Errors tab and are deleted after 30 days. |
 | `GET /projects/{id}/jobs/{key}` | `{key, status, message}`, status `queued`, `running`, `succeeded`, `failed` or `unknown`. The fallback when `job.updated` events were missed (a dropped socket, a hidden tab, a new studio revision). `unknown` means this server never saw the job: re-read the project to see whether its result landed. |
 
 ## Public-demo limits and the kill switch
