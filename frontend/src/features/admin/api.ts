@@ -21,6 +21,18 @@ export interface GateState {
   max_waiting: number
 }
 
+/** Judges wake Muse Glimmer (ADR 0020): today's wake-ups and their estimated Modal cost. */
+export interface JudgeGlimmer {
+  day: string
+  wakes: number
+  wakes_cap: number
+  estimated_usd: number
+  usd_cap: number
+  warm: boolean
+  waking: boolean
+  last_cold_start_s: number | null
+}
+
 export interface Overview {
   paused: boolean
   budgets: Budget[]
@@ -31,6 +43,7 @@ export interface Overview {
   glimmer_warm_until: string | null
   judge_reserve: JudgeReserve
   judge_passes: JudgePass[]
+  judge_glimmer?: JudgeGlimmer | null
 }
 
 export interface JudgeReserve {

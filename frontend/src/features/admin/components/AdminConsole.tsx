@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
 import { cx } from '../../../shared/ui/cx'
-import type { AdminAction, AdminEntry, Errors, Overview } from '../api'
+import type { AdminAction, AdminEntry, Errors, JudgeGlimmer, Overview } from '../api'
 import { ErrorsTab } from './ErrorsTab'
 import { JudgePasses } from './JudgePasses'
 
@@ -118,6 +118,7 @@ export function AdminConsole({
             {overview.live_sessions} live sessions · {overview.paused ? 'PAUSED · ' : ''}Read it to me {overview.read_it_to_me ? 'on' : 'off'} · judge pass{' '}
             {overview.judge_pass ? 'on' : 'off'} · Glimmer {overview.glimmer_warm_until ? `warm until ${overview.glimmer_warm_until}` : 'cold'}
           </p>
+          {overview.judge_glimmer && <JudgeGlimmerLine glimmer={overview.judge_glimmer} />}
           <table className="text-left text-sm">
             <thead>
               <tr>
@@ -154,5 +155,18 @@ export function AdminConsole({
         </section>
       )}
     </div>
+  )
+}
+
+
+/** Judges wake Glimmer (ADR 0020): today's wake-ups against the cap, its state, and the estimated Modal cost. */
+export function JudgeGlimmerLine({ glimmer: g }: { glimmer: JudgeGlimmer }) {
+  const state = g.waking ? 'waking' : g.warm ? 'warm' : 'cold'
+  return (
+    <p className="m-0 text-sm" data-testid="judge-glimmer">
+      Judge wake-ups today: {g.wakes} of {g.wakes_cap} · Glimmer {state}
+      {g.last_cold_start_s !== null ? ` · last cold start ${Math.round(g.last_cold_start_s)} s` : ''} · Modal today ≈ $
+      {g.estimated_usd.toFixed(2)} of ${g.usd_cap.toFixed(2)}
+    </p>
   )
 }
