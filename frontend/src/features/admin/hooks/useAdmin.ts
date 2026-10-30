@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../../../shared/api/client'
-import { type AdminAction, type AdminEntry, type Overview, actOn, entryVideo, getEntries, getOverview, removeEntry } from '../api'
+import { type AdminAction, type AdminEntry, type Overview, actOn, entryVideo, getEntries, getOverview, removeEntry, setJudgeReserve } from '../api'
 
 const KEY = 'frameteller.admin'
 const REFRESH_MS = 15_000
@@ -59,5 +59,17 @@ export function useAdmin() {
 
   const watch = useCallback((id: string) => entryVideo(token, id), [token])
 
-  return { overview, entries, error, act, watch }
+  const lowerReserve = useCallback(
+    async (usd: number | null) => {
+      try {
+        await setJudgeReserve(token, usd)
+        await refresh()
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'That did not work.')
+      }
+    },
+    [token, refresh],
+  )
+
+  return { overview, entries, error, act, watch, lowerReserve }
 }

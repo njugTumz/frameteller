@@ -29,6 +29,21 @@ export interface Overview {
   read_it_to_me: boolean
   judge_pass: boolean
   glimmer_warm_until: string | null
+  judge_reserve: JudgeReserve
+  judge_passes: JudgePass[]
+}
+
+export interface JudgeReserve {
+  calendar_usd: number
+  override_usd: number | null
+  stories_per_pass_per_day: number
+}
+
+export interface JudgePass {
+  pass_id: string
+  first_seen: string
+  stories_today: number
+  spent_today_usd: number
 }
 
 export interface AdminEntry {
@@ -72,6 +87,9 @@ export const getEntries = (token: string) => request(token, 'GET', '/admin/galle
 export const actOn = (token: string, id: string, action: AdminAction) =>
   request(token, 'POST', `/admin/gallery/${encodeURIComponent(id)}`, { action }).then((r) => r.json() as Promise<AdminEntry>)
 export const removeEntry = (token: string, id: string) => request(token, 'DELETE', `/admin/gallery/${encodeURIComponent(id)}`).then(() => undefined)
+/** Lower the judges' daily reserve now (null: back to the calendar's). */
+export const setJudgeReserve = (token: string, usd: number | null) =>
+  request(token, 'PUT', '/admin/judge/reserve', { usd }).then((r) => r.json() as Promise<JudgeReserve>)
 /** A pending entry's video, fetched with the token, as an object URL for a <video>. */
 export const entryVideo = (token: string, id: string) =>
   request(token, 'GET', `/admin/gallery/${encodeURIComponent(id)}/video.mp4`).then(async (r) => URL.createObjectURL(await r.blob()))

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
 import type { AdminAction, AdminEntry, Overview } from '../api'
+import { JudgePasses } from './JudgePasses'
 
 const usd = (n: number) => `$${n.toFixed(2)}`
 
@@ -12,12 +13,14 @@ export function AdminConsole({
   error,
   onAct,
   onWatch,
+  onReserve,
 }: {
   overview: Overview | null
   entries: AdminEntry[] | null
   error: string | null
   onAct: (id: string, action: AdminAction | 'remove') => void
   onWatch: (id: string) => Promise<string>
+  onReserve: (usd: number | null) => void
 }) {
   const [videos, setVideos] = useState<Record<string, string>>({})
   const pending = entries?.filter((e) => e.status === 'pending' || e.reports.length > 0) ?? []
@@ -117,6 +120,7 @@ export function AdminConsole({
           </table>
         </section>
       )}
+      {overview?.judge_pass && <JudgePasses reserve={overview.judge_reserve} passes={overview.judge_passes} onReserve={onReserve} />}
       {entries && (
         <section aria-label="Gallery" className="flex flex-col gap-3">
           <h2 className="m-0 text-sm font-bold uppercase tracking-wider text-muted">Needs a look ({pending.length})</h2>
