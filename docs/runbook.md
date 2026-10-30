@@ -224,13 +224,31 @@ there is no judge lane.
 
 `https://app.frameteller.com/admin#<ADMIN_TOKEN>` (staging: the staging studio's `/admin#…`). It shows today's budgets per lane, every queue
 (in flight, waiting, longest wait), the live sessions, whether Glimmer is warm, and the gallery: pending and
-reported entries first, with Watch, Publish, Feature, Hide and Remove. Set and rotate `ADMIN_TOKEN` exactly like
-`JUDGE_TOKEN` above (file `admin-production.token`, secret `ADMIN_TOKEN`). The token stays in the tab's
-sessionStorage only. The same token works from a terminal:
+reported entries first, with Watch, Publish, Feature, Hide and Remove. Rotate `ADMIN_TOKEN` with
+`backend/scripts/rotate_token.sh admin production` (see below). The token stays in the tab's sessionStorage only. The same token works from a terminal:
 
 ```bash
 curl -s -H "Authorization: Bearer $(cat ~/.config/frameteller/admin-production.token)" https://api.frameteller.com/admin/overview
 ```
+
+## Rotate the judge or admin token
+
+```bash
+backend/scripts/rotate_token.sh judge production   # or: admin production, judge staging, admin staging
+```
+
+The script never prints the token. It:
+
+1. moves `~/.config/frameteller/<kind>-<env>.token` to `<kind>-<env>.token.old` (the old token, in case);
+2. writes a new random token (`secrets.token_urlsafe(32)`) to the file, readable by you only;
+3. sets the `JUDGE_TOKEN` or `ADMIN_TOKEN` secret of that GitHub environment from the file (`gh secret set`, on stdin);
+4. starts the matching deploy: staging deploys `main`; production deploys the **latest release tag**, never
+   unreleased code, and waits for approval in the `production` environment.
+
+Once the deploy is live, every judge pass (or admin tab) made with the old token stops working. Build the new
+link from the file without echoing it, for example by opening the file in an editor and copying it after
+`https://app.frameteller.com/judge#`. For the judge token, update the submission's private field before the
+deadline (see "If the judge link leaks"). Run `gh auth status` first: `gh` needs access to the repo's environments.
 
 ## Gallery moderation
 
