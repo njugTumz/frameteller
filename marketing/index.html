@@ -248,7 +248,6 @@
   }
   .steps h3 { margin: 0; font-size: 1.25rem; font-weight: 750; font-variation-settings: "wdth" 110; }
   .steps p { margin: 0; color: var(--muted); max-width: 64ch; }
-  .steps .model { color: var(--ink); font-weight: 600; }
   @media (min-width: 900px) {
     .steps { grid-template-columns: repeat(4, 1fr); gap: 0 24px; }
     .steps li { grid-template-columns: 1fr; border-bottom: 1.5px solid var(--rule); }
@@ -430,12 +429,11 @@
 
     <section class="wrap" aria-labelledby="how-title">
       <h2 id="how-title">Voice to storyboard to animatic, in four steps</h2>
-      <p class="intro">Four of Meta's models each do one job in the pipeline.</p>
       <ol class="steps">
-        <li><h3>Speak</h3><p>Narrate the scene. <span class="model">Muse Voice Transcribe</span> writes it down live and tells co-directors apart.</p></li>
-        <li><h3>Direct</h3><p><span class="model">Muse Spark</span> breaks your words into shots, framing and dialogue, and keeps one description per character.</p></li>
-        <li><h3>Draw</h3><p><span class="model">Muse Image</span> draws each panel from character references, so faces and outfits stay consistent.</p></li>
-        <li><h3>Refine and export</h3><p>Click anything in a panel and <span class="model">SAM 3.1</span> selects it to move or change. Export a timed animatic.</p></li>
+        <li><h3>Speak</h3><p>Tell your story out loud, read a script, or let a narrator read it.</p></li>
+        <li><h3>Direct</h3><p>Each paragraph becomes a shot, with its framing and the right characters in it.</p></li>
+        <li><h3>Draw</h3><p>Panels are drawn from character sheets, so everyone looks the same in every frame.</p></li>
+        <li><h3>Refine and export</h3><p>Click anything in a panel to change or move it, then export a captioned animatic.</p></li>
       </ol>
     </section>
 
@@ -465,6 +463,7 @@
       </div>
       <p class="intro">We're building this in public, Oct 26 to Nov 4. New entries appear here without reloading.</p>
       <ol class="log" id="log" aria-live="polite">
+        <li data-status="shipped"><time datetime="2026-10-30">Oct 30</time><span class="status">Shipped</span><h3>Costumes stay on, and beats you can remove</h3><p>When someone changes clothes in your story, Frameteller draws a sheet for the new outfit and keeps them in it in every later panel. Said a word by mistake? Remove that beat, merge two, or delete a shot, with Undo. And every animatic has a clear Play with sound button, with a player for your own recording next to it.</p></li>
         <li data-status="shipped"><time datetime="2026-10-30">Oct 30</time><span class="status">Shipped</span><h3>Report a problem</h3><p>Something not right? Press Report a problem in the studio and tell us in a line or two. Your story's id comes with it, so we can look, and reports are deleted after 30 days.</p></li>
         <li data-status="shipped"><time datetime="2026-10-30">Oct 30</time><span class="status">Shipped</span><h3>Sign your storyboard</h3><p>Add a name or nickname and a country when you submit to the gallery, or stay an anonymous storyteller. Browse stories by country, and change or remove your name at any time.</p></li>
         <li data-status="shipped"><time datetime="2026-10-30">Oct 30</time><span class="status">Shipped</span><h3>Take the tour</h3><p>New here? A two-minute tour walks you through a real sample story, from the script to the captioned animatic, and shows which Meta model does each step. Ava now reads the sample.</p></li>

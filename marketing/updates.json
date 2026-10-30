@@ -1,6 +1,12 @@
 {
-  "updated_at": "2026-10-30T14:50:00Z",
+  "updated_at": "2026-10-30T17:15:00Z",
   "items": [
+    {
+      "date": "2026-10-30",
+      "status": "shipped",
+      "title": "Costumes stay on, and beats you can remove",
+      "body": "When someone changes clothes in your story, Frameteller draws a sheet for the new outfit and keeps them in it in every later panel. Said a word by mistake? Remove that beat, merge two, or delete a shot, with Undo. And every animatic has a clear Play with sound button, with a player for your own recording next to it."
+    },
     {
       "date": "2026-10-30",
       "status": "shipped",
