@@ -260,6 +260,57 @@
         "title": "CharacterRename",
         "type": "object"
       },
+      "CountriesOut": {
+        "properties": {
+          "codes": {
+            "description": "Every ISO 3166-1 alpha-2 code a creator may choose.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Codes",
+            "type": "array"
+          },
+          "suggested": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A guess from the request (its language region), to offer only: never publish it unconfirmed.",
+            "title": "Suggested"
+          }
+        },
+        "required": [
+          "codes",
+          "suggested"
+        ],
+        "title": "CountriesOut",
+        "type": "object"
+      },
+      "CreatorOut": {
+        "description": "How the creator signed their entry. Empty strings: left out (both empty: an anonymous storyteller).",
+        "properties": {
+          "country": {
+            "description": "ISO 3166-1 alpha-2 code, or empty.",
+            "title": "Country",
+            "type": "string"
+          },
+          "name": {
+            "description": "A display name or nickname, at most 40 characters; not necessarily a real name.",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ],
+        "title": "CreatorOut",
+        "type": "object"
+      },
       "DictationOut": {
         "description": "What was said, for the user to check before it is sent as an edit.",
         "properties": {
@@ -327,6 +378,9 @@
           "cover_url": {
             "title": "Cover Url",
             "type": "string"
+          },
+          "creator": {
+            "$ref": "#/components/schemas/CreatorOut"
           },
           "duration_ms": {
             "title": "Duration Ms",
@@ -400,13 +454,41 @@
           "hearts",
           "hearted",
           "featured",
-          "published_at"
+          "published_at",
+          "creator"
         ],
         "title": "GalleryCardOut",
         "type": "object"
       },
+      "GalleryCountryOut": {
+        "properties": {
+          "code": {
+            "description": "ISO 3166-1 alpha-2.",
+            "title": "Code",
+            "type": "string"
+          },
+          "entries": {
+            "title": "Entries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "entries"
+        ],
+        "title": "GalleryCountryOut",
+        "type": "object"
+      },
       "GalleryPageOut": {
         "properties": {
+          "countries": {
+            "description": "Creator countries across the whole gallery, most entries first: the counter and the filter.",
+            "items": {
+              "$ref": "#/components/schemas/GalleryCountryOut"
+            },
+            "title": "Countries",
+            "type": "array"
+          },
           "entries": {
             "items": {
               "$ref": "#/components/schemas/GalleryCardOut"
@@ -433,6 +515,39 @@
         "title": "GalleryReportRequest",
         "type": "object"
       },
+      "GallerySignRequest": {
+        "description": "The creator's optional signature. Empty or null leaves a field out (or removes it, on an edit).",
+        "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "maxLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 3166-1 alpha-2, only when the creator chose or confirmed it.",
+            "title": "Country"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "At most 40 characters.",
+            "title": "Name"
+          }
+        },
+        "title": "GallerySignRequest",
+        "type": "object"
+      },
       "GallerySubmitRequest": {
         "properties": {
           "audio": {
@@ -450,6 +565,32 @@
             "description": "The creator agreed to show this storyboard publicly in the gallery.",
             "title": "Consent",
             "type": "boolean"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "maxLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 3166-1 alpha-2, only when the creator chose or confirmed it.",
+            "title": "Country"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "At most 40 characters.",
+            "title": "Name"
           }
         },
         "required": [
@@ -803,6 +944,9 @@
             "title": "Audio",
             "type": "string"
           },
+          "creator": {
+            "$ref": "#/components/schemas/CreatorOut"
+          },
           "featured": {
             "title": "Featured",
             "type": "boolean"
@@ -844,7 +988,8 @@
           "audio",
           "hearts",
           "featured",
-          "submitted_at"
+          "submitted_at",
+          "creator"
         ],
         "title": "MyGalleryEntryOut",
         "type": "object"
@@ -1373,6 +1518,17 @@
                 "type": "null"
               }
             ]
+          },
+          "creator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How its gallery entry is signed; null when it is not in the gallery."
           },
           "narrated_by": {
             "anyOf": [
@@ -1910,6 +2066,25 @@
               ],
               "title": "Style"
             }
+          },
+          {
+            "description": "Only creators from this country.",
+            "in": "query",
+            "name": "country",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only creators from this country.",
+              "title": "Country"
+            }
           }
         ],
         "responses": {
@@ -1935,6 +2110,28 @@
           }
         },
         "summary": "Gallery",
+        "tags": [
+          "gallery"
+        ]
+      }
+    },
+    "/gallery/countries": {
+      "get": {
+        "description": "The countries a creator may sign with, and one to suggest from the request. Only ever a suggestion.",
+        "operationId": "gallery_countries_gallery_countries_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountriesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gallery Countries",
         "tags": [
           "gallery"
         ]
@@ -3336,6 +3533,68 @@
           }
         },
         "summary": "My Gallery Entry",
+        "tags": [
+          "gallery"
+        ]
+      },
+      "patch": {
+        "description": "Change or remove the name and country on the entry (empty or null removes one). A new name on a published\nentry is checked again first: the entry is `checking` until it is back (job.updated gallery_submission).",
+        "operationId": "sign_gallery_entry_projects__project_id__gallery_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GallerySignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyGalleryEntryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Sign Gallery Entry",
         "tags": [
           "gallery"
         ]

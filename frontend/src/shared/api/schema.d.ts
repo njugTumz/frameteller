@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gallery/countries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gallery Countries
+         * @description The countries a creator may sign with, and one to suggest from the request. Only ever a suggestion.
+         */
+        get: operations["gallery_countries_gallery_countries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gallery/{entry_id}/cover.webp": {
         parameters: {
             query?: never;
@@ -403,7 +423,12 @@ export interface paths {
         delete: operations["withdraw_from_gallery_projects__project_id__gallery_delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Sign Gallery Entry
+         * @description Change or remove the name and country on the entry (empty or null removes one). A new name on a published
+         *     entry is checked again first: the entry is `checking` until it is back (job.updated gallery_submission).
+         */
+        patch: operations["sign_gallery_entry_projects__project_id__gallery_patch"];
         trace?: never;
     };
     "/projects/{project_id}/jobs/{key}": {
@@ -875,6 +900,35 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** CountriesOut */
+        CountriesOut: {
+            /**
+             * Codes
+             * @description Every ISO 3166-1 alpha-2 code a creator may choose.
+             */
+            codes: string[];
+            /**
+             * Suggested
+             * @description A guess from the request (its language region), to offer only: never publish it unconfirmed.
+             */
+            suggested: string | null;
+        };
+        /**
+         * CreatorOut
+         * @description How the creator signed their entry. Empty strings: left out (both empty: an anonymous storyteller).
+         */
+        CreatorOut: {
+            /**
+             * Country
+             * @description ISO 3166-1 alpha-2 code, or empty.
+             */
+            country: string;
+            /**
+             * Name
+             * @description A display name or nickname, at most 40 characters; not necessarily a real name.
+             */
+            name: string;
+        };
         /**
          * DictationOut
          * @description What was said, for the user to check before it is sent as an edit.
@@ -906,6 +960,7 @@ export interface components {
         GalleryCardOut: {
             /** Cover Url */
             cover_url: string;
+            creator: components["schemas"]["CreatorOut"];
             /** Duration Ms */
             duration_ms: number;
             /** Episodes */
@@ -937,8 +992,23 @@ export interface components {
             /** Video Url */
             video_url: string;
         };
+        /** GalleryCountryOut */
+        GalleryCountryOut: {
+            /**
+             * Code
+             * @description ISO 3166-1 alpha-2.
+             */
+            code: string;
+            /** Entries */
+            entries: number;
+        };
         /** GalleryPageOut */
         GalleryPageOut: {
+            /**
+             * Countries
+             * @description Creator countries across the whole gallery, most entries first: the counter and the filter.
+             */
+            countries?: components["schemas"]["GalleryCountryOut"][];
             /** Entries */
             entries: components["schemas"]["GalleryCardOut"][];
         };
@@ -949,6 +1019,22 @@ export interface components {
              * @default
              */
             reason: string;
+        };
+        /**
+         * GallerySignRequest
+         * @description The creator's optional signature. Empty or null leaves a field out (or removes it, on an edit).
+         */
+        GallerySignRequest: {
+            /**
+             * Country
+             * @description ISO 3166-1 alpha-2, only when the creator chose or confirmed it.
+             */
+            country?: string | null;
+            /**
+             * Name
+             * @description At most 40 characters.
+             */
+            name?: string | null;
         };
         /** GallerySubmitRequest */
         GallerySubmitRequest: {
@@ -964,6 +1050,16 @@ export interface components {
              * @description The creator agreed to show this storyboard publicly in the gallery.
              */
             consent: boolean;
+            /**
+             * Country
+             * @description ISO 3166-1 alpha-2, only when the creator chose or confirmed it.
+             */
+            country?: string | null;
+            /**
+             * Name
+             * @description At most 40 characters.
+             */
+            name?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1128,6 +1224,7 @@ export interface components {
              * @enum {string}
              */
             audio: "mine" | "voice" | "none";
+            creator: components["schemas"]["CreatorOut"];
             /** Featured */
             featured: boolean;
             /** Hearts */
@@ -1394,6 +1491,8 @@ export interface components {
          */
         SharedProjectOut: {
             animatic: components["schemas"]["SharedAnimaticOut"] | null;
+            /** @description How its gallery entry is signed; null when it is not in the gallery. */
+            creator?: components["schemas"]["CreatorOut"] | null;
             /**
              * Narrated By
              * @description The synthesized voice that narrated it ("Brandon"); null: the author's own voice.
@@ -1607,6 +1706,8 @@ export interface operations {
             query?: {
                 view?: "featured" | "newest";
                 style?: components["schemas"]["PanelStyle"] | null;
+                /** @description Only creators from this country. */
+                country?: string | null;
             };
             header?: never;
             path?: never;
@@ -1630,6 +1731,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gallery_countries_gallery_countries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountriesOut"];
                 };
             };
         };
@@ -2719,6 +2840,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_gallery_entry_projects__project_id__gallery_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GallerySignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyGalleryEntryOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };
