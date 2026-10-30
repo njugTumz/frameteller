@@ -38,6 +38,7 @@ export function ShotCard({
   review,
   onOpen,
   onRetry,
+  onDelete,
 }: {
   shot: Shot
   phase: PanelPhase
@@ -50,6 +51,8 @@ export function ShotCard({
   review?: ReactNode
   onOpen: () => void
   onRetry: () => void
+  /** "Delete shot", with Undo. */
+  onDelete?: () => void
 }) {
   const busy = phase.kind === 'drawing' || phase.kind === 'queued'
   const outdated = phase.kind === 'ready' && phase.outdated
@@ -90,6 +93,11 @@ export function ShotCard({
         <p className="m-0 leading-snug">{shot.action}</p>
         {shot.dialogue && <p className="m-0 border-l-2 border-blue pl-2 text-muted italic">“{shot.dialogue}”</p>}
         {names.length > 0 && <p className="m-0 text-xs text-muted">With {names.join(', ')}</p>}
+        {onDelete && (
+          <Button variant="quiet" size="sm" className="self-start px-1 text-muted" onClick={onDelete} aria-label={`Delete shot ${shot.number}`}>
+            Delete shot
+          </Button>
+        )}
         {phase.kind === 'ready' && review}
         {phase.kind === 'waiting-cast' && (
           <p className="m-0 text-xs text-muted">Panels are drawn once you approve the cast, so every frame shows the same characters.</p>

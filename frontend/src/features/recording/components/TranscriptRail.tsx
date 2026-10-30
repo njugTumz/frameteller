@@ -1,18 +1,28 @@
 import type { Turn } from '../../../shared/api/types'
 import { TurnCard } from './TurnCard'
 
+/** Beats of the same recording and episode can be merged; live turn ids start with their session tag. */
+function mergeable(a: Turn | undefined, b: Turn | undefined): boolean {
+  return !!a && !!b && a.id.split('-')[0] === b.id.split('-')[0] && a.episode === b.episode
+}
+
 export function TranscriptRail({
   turns,
   partial,
   listening,
   correcting,
   onCorrect,
+  onRemove,
+  onMerge,
 }: {
   turns: Turn[]
   partial: string
   listening: boolean
   correcting: Record<string, 'sending' | 'failed'>
   onCorrect: (turnId: string, text: string) => void
+  /** Remove a beat; `index` is its place, for "Beat 2 removed". Not offered while listening. */
+  onRemove?: (turnId: string, index: number) => void
+  onMerge?: (turnId: string, other: 'previous' | 'next') => void
 }) {
   return (
     <section aria-labelledby="transcript-title" className="flex min-h-0 flex-col gap-3">
@@ -26,7 +36,17 @@ export function TranscriptRail({
       )}
       <ol className="m-0 flex list-none flex-col gap-2 p-0">
         {turns.map((t, i) => (
-          <TurnCard key={t.id} turn={t} index={i} status={correcting[t.id]} onCorrect={onCorrect} />
+          <TurnCard
+            key={t.id}
+            turn={t}
+            index={i}
+            status={correcting[t.id]}
+            onCorrect={onCorrect}
+            onRemove={onRemove && !listening ? () => onRemove(t.id, i) : undefined}
+            onMerge={onMerge && !listening ? (other) => onMerge(t.id, other) : undefined}
+            canMergePrevious={mergeable(turns[i - 1], t)}
+            canMergeNext={mergeable(t, turns[i + 1])}
+          />
         ))}
       </ol>
       {partial && (

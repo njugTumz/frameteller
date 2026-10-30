@@ -1,3 +1,4 @@
+import { useStoryEditsStore } from '../../features/story-edits/store'
 import { useCastStore } from '../../features/cast/store'
 import { useRecordingStore } from '../../features/recording/store'
 import { useScriptStore } from '../../features/script/store'
@@ -24,4 +25,5 @@ export function resetStudio(): void {
   useCastStore.getState().reset()
   useRecordingStore.getState().reset()
   useScriptStore.getState().reset()
+  useStoryEditsStore.getState().reset()
 }

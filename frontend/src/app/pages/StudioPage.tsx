@@ -5,6 +5,9 @@ import { ExportPanel } from '../../features/export/components/ExportPanel'
 import { SharePanel } from '../../features/export/components/SharePanel'
 import { useExport } from '../../features/export/hooks/useExport'
 import { ReportProblem } from '../../features/feedback/components/ReportProblem'
+import { UndoToast } from '../../features/story-edits/components/UndoToast'
+import { useStoryEdits } from '../../features/story-edits/hooks/useStoryEdits'
+import { useStoryEditsStore } from '../../features/story-edits/store'
 import { useReportProblem } from '../../features/feedback/hooks/useReportProblem'
 import { GallerySubmit } from '../../features/gallery/components/GallerySubmit'
 import { useCountries } from '../../features/gallery/hooks/useCountries'
@@ -27,6 +30,8 @@ import { useProjectSync } from '../../features/storyboard/hooks/useProjectSync'
 import { boardProgress } from '../../features/storyboard/progress'
 import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
 import { mediaUrl } from '../../shared/api/client'
+import { shotLabel } from '../../shared/format'
+import { Notice } from '../../shared/ui/Notice'
 import type { Project, Shot } from '../../shared/api/types'
 import { loadKeepAudio } from '../../shared/consent'
 import { loadNames } from '../../shared/keywords'
@@ -80,7 +85,15 @@ export function StudioPage({ projectId }: { projectId: string }) {
   useBeatShortcut(r.telling === 'live' && !reading, beat)
   const lines = useMemo(() => paragraphs(script.episodes), [script.episodes])
   const spoken = useMemo(() => Object.fromEntries(script.clips.map((c) => [c.paragraph, c.text])), [script.clips])
-  const episodes = useMemo(() => byEpisode(board.shots), [board.shots])
+  const hidden = useStoryEditsStore((s) => s.hidden)
+  const pendingRemoval = useStoryEditsStore((s) => s.pending)
+  const editError = useStoryEditsStore((s) => s.error)
+  // Beats and shots on their way out (Undo is still on screen) leave the view at once, with the shots a beat made.
+  const shown = useMemo(
+    () => board.shots.filter((s) => !hidden.includes(s.id) && !s.source_turn_ids.every((t) => hidden.includes(t))),
+    [board.shots, hidden],
+  )
+  const episodes = useMemo(() => byEpisode(shown), [shown])
 
   const canDraw = useCallback((shot: Shot) => castReadyFor(cast, shot), [cast])
   useAutoDraft(projectId, canDraw)
@@ -92,11 +105,12 @@ export function StudioPage({ projectId }: { projectId: string }) {
     projectLoaded(p)
   }, [])
   const exporting = useExport(projectId, onProject)
+  const edits = useStoryEdits(projectId, onProject)
   const gallery = useGallerySubmission(projectId)
   const countries = useCountries()
   const supervisor = useSupervisorActions(projectId, onProject)
   const inputs = useAudioInputs(r.silent)
-  const allDrawn = board.shots.length > 0 && board.shots.every((s) => s.panel?.status === 'ready')
+  const allDrawn = shown.length > 0 && shown.every((s) => s.panel?.status === 'ready')
   const kept = board.narrations.reduce((ms, n) => ms + n.duration_ms, 0)
 
   useEffect(() => {
@@ -160,7 +174,16 @@ export function StudioPage({ projectId }: { projectId: string }) {
             }}
           />
         )}
-        <TranscriptRail turns={r.turns} partial={r.partial} listening={r.telling === 'live'} correcting={r.correcting} onCorrect={(id, text) => narration.correct(id, text)} />
+        {editError && <Notice tone="error" title={editError} />}
+        <TranscriptRail
+          turns={r.turns.filter((t) => !hidden.includes(t.id))}
+          partial={r.partial}
+          listening={r.telling === 'live'}
+          correcting={r.correcting}
+          onCorrect={(id, text) => narration.correct(id, text)}
+          onRemove={(id, index) => edits.remove({ kind: 'beat', id, label: `Beat ${index + 1}` })}
+          onMerge={(id, other) => void edits.merge(id, other)}
+        />
         <ReportProblem state={problem.state} error={problem.error} onSend={(text) => void problem.send(text)} onReset={problem.reset} />
       </aside>
       <div className="flex min-w-0 flex-col gap-6">
@@ -171,7 +194,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
             {progress}
           </p>
         )}
-        <StoryboardGrid count={board.shots.length} telling={r.telling === 'live'}>
+        <StoryboardGrid count={shown.length} telling={r.telling === 'live'}>
           {episodes.flatMap(({ episode, shots, numbered }) => [
             ...(episodes.length > 1 ? [<EpisodeHeading key={`episode-${episode}`} episode={episode} />] : []),
             ...shots.map((shot, i) => {
@@ -200,6 +223,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
                     }
                     onOpen={() => useEditorStore.getState().open(shot.id, shot.panel?.revision ?? null)}
                     onRetry={() => void draw(shot, 'draft')}
+                    onDelete={() => edits.remove({ kind: 'shot', id: shot.id, label: `Shot ${shotLabel(display.number)}` })}
                   />
                 )
             }),
@@ -217,7 +241,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
               pdfHref={storyboardPdfUrl(projectId)}
               voiceKept={kept > 0}
               error={exporting.error}
-              onExport={(choice) => void exporting.animatic(choice)}
+              onExport={(choice) => void edits.flush().then(() => exporting.animatic(choice))}
             />
             <SharePanel
               link={board.shareToken ? shareUrl(board.shareToken) : null}
@@ -242,6 +266,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
+      <UndoToast pending={pendingRemoval} onUndo={edits.undo} />
       {editing && (
         <Suspense fallback={null}>
           <EditorZone projectId={projectId} />

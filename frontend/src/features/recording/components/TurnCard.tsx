@@ -7,19 +7,40 @@ import { replaceWord, words } from '../words'
 
 type Editing = { kind: 'word'; index: number; value: string } | { kind: 'line'; value: string }
 
-/** One completed beat. Click a word to fix it; "Fix words" edits the whole line (and works from the keyboard). */
+function BinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+    </svg>
+  )
+}
+
+/**
+ * One completed beat. Click a word to fix it; "Fix words" edits the whole line (and works from the keyboard).
+ * Remove takes the beat out (with Undo); "⋯" merges it with the beat before or after it.
+ */
 export function TurnCard({
   turn,
   index,
   status,
   onCorrect,
+  onRemove,
+  onMerge,
+  canMergePrevious = false,
+  canMergeNext = false,
 }: {
   turn: Turn
   index: number
   status: 'sending' | 'failed' | undefined
   onCorrect: (turnId: string, text: string) => void
+  onRemove?: () => void
+  onMerge?: (other: 'previous' | 'next') => void
+  canMergePrevious?: boolean
+  canMergeNext?: boolean
 }) {
   const [editing, setEditing] = useState<Editing | null>(null)
+  const [menu, setMenu] = useState(false)
+  const menuId = useId()
   const fieldId = useId()
   const list = words(turn.text)
 
@@ -96,9 +117,51 @@ export function TurnCard({
             <span className="text-xs text-muted" role="status">
               {status === 'sending' ? 'Redirecting this shot…' : status === 'failed' ? 'That fix did not apply. Try again.' : ''}
             </span>
-            <Button variant="quiet" size="sm" className="px-1" onClick={() => setEditing({ kind: 'line', value: turn.text })}>
-              Fix words
-            </Button>
+            <div className="relative flex items-center gap-1">
+              <Button variant="quiet" size="sm" className="px-1" onClick={() => setEditing({ kind: 'line', value: turn.text })}>
+                Fix words
+              </Button>
+              {onRemove && (
+                <Button variant="quiet" size="sm" className="px-1" aria-label={`Remove beat ${index + 1}`} title="Remove this beat" onClick={onRemove}>
+                  <BinIcon />
+                </Button>
+              )}
+              {onMerge && (canMergePrevious || canMergeNext) && (
+                <>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    className="px-1.5"
+                    aria-label={`More for beat ${index + 1}`}
+                    aria-haspopup="menu"
+                    aria-expanded={menu}
+                    aria-controls={menuId}
+                    onClick={() => setMenu((m) => !m)}
+                    onKeyDown={(e) => e.key === 'Escape' && setMenu(false)}
+                  >
+                    ⋯
+                  </Button>
+                  {menu && (
+                    <ul id={menuId} role="menu" className="absolute top-full right-0 z-10 m-0 mt-1 flex min-w-44 list-none flex-col rounded-md border-[1.5px] border-ink bg-paper p-1 shadow-md">
+                      {canMergePrevious && (
+                        <li role="none">
+                          <button type="button" role="menuitem" className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-wash" onClick={() => (setMenu(false), onMerge('previous'))}>
+                            Merge with previous
+                          </button>
+                        </li>
+                      )}
+                      {canMergeNext && (
+                        <li role="none">
+                          <button type="button" role="menuitem" className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-wash" onClick={() => (setMenu(false), onMerge('next'))}>
+                            Merge with next
+                          </button>
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </>
       )}
