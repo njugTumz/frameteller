@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type ReactNode } from 'react'
 import type { Character } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
+import { Suggestion } from './Suggestion'
 
 export function CharacterCard({
   character,
@@ -13,6 +14,7 @@ export function CharacterCard({
   onDescribe,
   onRegenerate,
   onRedrawWith,
+  onUseSuggestion,
   onRename,
   onRemove,
   onMerge,
@@ -32,6 +34,8 @@ export function CharacterCard({
   onRegenerate: () => void
   /** After a failed sheet: draw it with the edited description. */
   onRedrawWith?: () => void
+  /** After two refusals: draw it with the suggested description (ADR 0019). */
+  onUseSuggestion?: (text: string) => void
   onRename?: (name: string) => void
   onRemove?: () => void
   onMerge?: (into: string) => void
@@ -51,6 +55,8 @@ export function CharacterCard({
   const describe = useRef<HTMLTextAreaElement>(null)
   // The sheet could not be drawn (e.g. Muse Image's safety filter): say why, and how to go on.
   const failed = !imageSrc && !redrawing && !!character.sheet_error
+  // Refused twice: the same Try again would be refused too, so offer a plainer description instead.
+  const suggestion = failed && !changed ? character.suggested_description : null
   return (
     <li className="arrive flex w-64 shrink-0 flex-col gap-2 rounded-md border-[1.5px] border-rule bg-sheet p-3" data-testid="character-card">
       <div className="frame aspect-square">
@@ -63,10 +69,17 @@ export function CharacterCard({
           <div className="flex size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm" role="alert" data-testid="sheet-failed">
             <p className="m-0 font-bold text-danger">{character.name}’s sheet couldn’t be drawn.</p>
             <p className="m-0 text-muted">{character.sheet_error}</p>
+            {suggestion && <Suggestion text={suggestion} />}
             <div className="flex flex-wrap justify-center gap-2">
-              <Button size="sm" variant="ink" onClick={changed ? onRedrawWith : onRegenerate}>
-                {changed ? 'Draw with this description' : 'Try again'}
-              </Button>
+              {suggestion ? (
+                <Button size="sm" variant="ink" onClick={() => onUseSuggestion?.(suggestion)}>
+                  Use this description
+                </Button>
+              ) : (
+                <Button size="sm" variant="ink" onClick={changed ? onRedrawWith : onRegenerate}>
+                  {changed ? 'Draw with this description' : 'Try again'}
+                </Button>
+              )}
               <Button size="sm" onClick={() => describe.current?.focus()}>
                 Edit description
               </Button>

@@ -70,6 +70,15 @@ export function useCastReview(projectId: string) {
     [projectId, regenerate],
   )
 
+  /** Refused twice: take the suggested description and draw with it (ADR 0019). */
+  const adopt = useCallback(
+    async (characterId: string, text: string) => {
+      useCastStore.getState().edit(characterId, text)
+      await redrawWith(characterId)
+    },
+    [redrawWith],
+  )
+
   const edit = useCallback((id: string, description: string) => useCastStore.getState().edit(id, description), [])
-  return { approve, regenerate, redrawWith, edit }
+  return { approve, regenerate, redrawWith, adopt, edit }
 }

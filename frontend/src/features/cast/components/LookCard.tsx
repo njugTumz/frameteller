@@ -1,6 +1,7 @@
 import { useId, useRef } from 'react'
 import type { Look } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
+import { Suggestion } from './Suggestion'
 
 /** "Shots 2–6", "Shot 4", or nothing when no shot shows the look yet. */
 export function shotsLabel(numbers: number[]): string {
@@ -21,6 +22,7 @@ export function LookCard({
   onDescribe,
   onRegenerate,
   onRedrawWith,
+  onUseSuggestion,
 }: {
   look: Look
   /** The character's name. */
@@ -33,11 +35,14 @@ export function LookCard({
   onDescribe: (text: string) => void
   onRegenerate: () => void
   onRedrawWith: () => void
+  /** After two refusals: draw it with the suggested clothes (ADR 0019). */
+  onUseSuggestion?: (text: string) => void
 }) {
   const id = useId()
   const describe = useRef<HTMLTextAreaElement>(null)
   const changed = clothes.trim() !== look.clothes
   const failed = !imageSrc && !redrawing && !!look.sheet_error
+  const suggestion = failed && !changed ? look.suggested_clothes : null
   const shots = shotsLabel(look.from_shots)
   return (
     <div className="flex flex-col gap-2 border-t-[1.5px] border-rule pt-2" data-testid="look-card" aria-label={`${name}: ${look.label}`} role="group">
@@ -52,10 +57,17 @@ export function LookCard({
           <div className="flex size-full flex-col items-center justify-center gap-2 p-3 text-center text-sm" role="alert">
             <p className="m-0 font-bold text-danger">This look couldn’t be drawn.</p>
             <p className="m-0 text-muted">{look.sheet_error}</p>
+            {suggestion && <Suggestion text={suggestion} />}
             <div className="flex flex-wrap justify-center gap-2">
-              <Button size="sm" variant="ink" onClick={changed ? onRedrawWith : onRegenerate}>
-                {changed ? 'Draw with this description' : 'Try again'}
-              </Button>
+              {suggestion ? (
+                <Button size="sm" variant="ink" onClick={() => onUseSuggestion?.(suggestion)}>
+                  Use this description
+                </Button>
+              ) : (
+                <Button size="sm" variant="ink" onClick={changed ? onRedrawWith : onRegenerate}>
+                  {changed ? 'Draw with this description' : 'Try again'}
+                </Button>
+              )}
               <Button size="sm" onClick={() => describe.current?.focus()}>
                 Edit description
               </Button>

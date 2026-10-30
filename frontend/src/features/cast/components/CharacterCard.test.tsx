@@ -73,6 +73,17 @@ describe('CharacterCard when a sheet failed', () => {
     expect(document.activeElement).toBe(screen.getByLabelText('Description of Amara'))
   })
 
+  it('after two refusals offers a concrete description instead of the same Try again', async () => {
+    const onUseSuggestion = vi.fn()
+    const refused = { ...failed, sheet_error: 'Muse Image’s safety filter turned it down twice.', suggested_description: 'cheerful young storybook character with curly brown hair' }
+    card({ character: refused, locked: false, description: refused.description, onUseSuggestion })
+    expect(screen.getByTestId('sheet-suggestion').textContent).toBe('Try: cheerful young storybook character with curly brown hair')
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Use this description' }))
+    expect(onUseSuggestion).toHaveBeenCalledWith('cheerful young storybook character with curly brown hair')
+    expect(screen.getByRole('button', { name: 'Edit description' })).toBeTruthy()
+  })
+
   it('draws with the edited description once it changed', async () => {
     const onRedrawWith = vi.fn()
     card({ character: failed, locked: false, description: 'a kite maker’s apprentice with an orange headscarf', onRedrawWith })

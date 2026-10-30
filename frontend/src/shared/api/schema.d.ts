@@ -1010,6 +1010,11 @@ export interface components {
              * @description Why the last sheet could not be drawn, in plain words; offer Try again and Edit.
              */
             sheet_error?: string | null;
+            /**
+             * Suggested Description
+             * @description Muse Image refused this description twice: offer this instead (Use this description); Try again with the same description answers 409 edit_first.
+             */
+            suggested_description?: string | null;
         };
         /** CharacterRename */
         CharacterRename: {
@@ -1341,6 +1346,11 @@ export interface components {
              * @description Why its sheet could not be drawn; offer Try again.
              */
             sheet_error?: string | null;
+            /**
+             * Suggested Clothes
+             * @description Muse Image refused these clothes twice: offer this instead (Use this description); Try again with the same clothes answers 409 edit_first.
+             */
+            suggested_clothes?: string | null;
         };
         /** MaskOut */
         MaskOut: {

@@ -41,6 +41,15 @@ describe('LookCard', () => {
     expect(props.onRedrawWith).toHaveBeenCalled()
   })
 
+  it('after two refusals offers plain clothes to use instead of Try again', () => {
+    const onUseSuggestion = vi.fn()
+    card({ imageSrc: null, onUseSuggestion, look: { ...farmer, reference_url: null, sheet_error: 'Turned down twice.', suggested_clothes: 'blue overalls, white shirt' } })
+    expect(screen.getByTestId('sheet-suggestion').textContent).toContain('blue overalls, white shirt')
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Use this description' }))
+    expect(onUseSuggestion).toHaveBeenCalledWith('blue overalls, white shirt')
+  })
+
   it('says it is drawing, and locks once the cast is approved', () => {
     card({ imageSrc: null, locked: true })
     expect(screen.getByText('Drawing Wren’s farmer costume…')).toBeTruthy()
