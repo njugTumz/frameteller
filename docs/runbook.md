@@ -188,22 +188,37 @@ together, `SPEECH_CHARACTERS_PER_DAY=200000` (Text-to-Speech, USD 15 per million
 ## The judge pass
 
 Judges get a private link, `https://app.frameteller.com/judge#<JUDGE_TOKEN>` ([ADR 0016](adr/0016-capacity-and-fairness.md)).
-Opening it sets a signed cookie for 21 days and shows "Judge access" in the top bar. Judge sessions skip the
-per-visitor caps and the queues, and spend from their own daily budget (`JUDGE_BUDGET_PER_DAY_USD`, default
-USD 15), which the public cap never touches. The token is in the URL fragment, so it never reaches a log.
+The token is in the URL fragment, so it never reaches a log.
 
-Set or **rotate** it (every pass already given stops working at once), for each environment:
+- **One link for every judge.** The token is never used up: each browser that opens the link gets its own pass,
+  a signed cookie with its own id, valid for 21 days (`JUDGE_PASS_DAYS`). It shows "Judge access" in the top bar.
+- **Judges skip** the per-visitor caps and the queues, and spend from their own reserve, which the public cap
+  never touches: **USD 25 a day on Nov 5-8** (`JUDGE_BUDGET_DAYS_USD`) and **USD 15 on other days**
+  (`JUDGE_BUDGET_PER_DAY_USD`), days at UTC+4.
+- **Each pass may start 15 stories a day** (`JUDGE_STORIES_PER_PASS_PER_DAY`). Past that the judge is told their
+  stories are saved and new ones open at midnight UTC+4.
+- **The admin page** lists today's passes (first seen, stories, spend) and can **lower the reserve at once**
+  ("Lower the judges' reserve", no redeploy; "Back to the calendar" clears it). From a terminal:
+  `curl -X PUT -H "Authorization: Bearer $(cat ~/.config/frameteller/admin-production.token)" -H 'Content-Type: application/json' -d '{"usd": 5}' https://api.frameteller.com/admin/judge/reserve`
 
-```bash
-umask 077
-python3 -c 'import secrets; print(secrets.token_urlsafe(32), end="")' > ~/.config/frameteller/judge-production.token
-gh secret set JUDGE_TOKEN --env production < ~/.config/frameteller/judge-production.token
-# then publish a release (or run deploy-production.yml): the token reaches the app as a Container Apps secret
-```
+For comparison, the public gets 3 new stories per visitor a day, 5 on Nov 5-8 (`LIMIT_PROJECTS_PER_VISITOR_DAYS`).
 
-The link is `https://app.frameteller.com/judge#` followed by the file's contents. Send it only in the
-submission form's private fields or a direct message. Never commit or post it. Without `JUDGE_TOKEN`, `/judge`
-answers 404 and there is no judge lane.
+Set or rotate the token with `backend/scripts/rotate_token.sh judge production` (see "Rotate the judge or admin
+token" below): every pass already given stops working at once. Send the link only in the submission form's
+private fields or a direct message. Never commit or post it. Without `JUDGE_TOKEN`, `/judge` answers 404 and
+there is no judge lane.
+
+### If the judge link leaks
+
+1. **Lower the reserve first.** On the admin page, set the judges' reserve to a few dollars (or 0 to stop judge
+   spending today). It takes effect on the next model call, with no redeploy, and caps what a leaked link can
+   cost. Each pass is also held to 15 stories a day.
+2. **Look at the passes.** The admin page shows which passes are active today and what each spent. Many new passes
+   with heavy spend mean the link is out.
+3. **Rotate only before the submission deadline** (Thu Nov 5, 6:00 AM UTC+4), with
+   `backend/scripts/rotate_token.sh judge production`, then **update the submission** with the new link.
+   After the deadline the judges have the old link and the submission can't change, so keep the token and
+   hold spending with the lowered reserve instead.
 
 ## The admin page
 
@@ -233,7 +248,7 @@ Creators withdraw their own entry from the studio, which deletes it and its vide
 
 The public cap is set per day, counted in UTC+4: `BUDGET_PER_DAY_USD=10` by default, and `BUDGET_DAYS_USD`
 raises it on given dates (default `2026-11-02:25,2026-11-05:25,2026-11-06:25,2026-11-07:25,2026-11-08:25`). The
-judge budget comes on top. To change a day quickly (a new revision, no redeploy):
+judge reserve comes on top, also by date (see The judge pass). To change a day quickly (a new revision, no redeploy):
 
 ```bash
 az containerapp update -g $RG -n $APP --set-env-vars "BUDGET_DAYS_USD=2026-11-02:40,2026-11-05:25,2026-11-06:25,2026-11-07:25,2026-11-08:25"

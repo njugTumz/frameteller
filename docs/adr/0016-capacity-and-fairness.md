@@ -46,6 +46,15 @@ The gates are in memory, which is correct only with one replica (ADR 0009). We k
   - judges go to the front of every line, and the session limit does not apply to them at all;
   - spending draws from a **separate judge budget** (`JUDGE_BUDGET_PER_DAY_USD`, default USD 15), which the public cap can never consume.
 - The studio shows a "Judge access" badge in the top bar.
+- **One link, a pass per browser (v1.1.0).** The token is never used up. Each `POST /judge` issues a new pass:
+  the cookie carries a random pass id, signed with the expiry. Each pass may start 15 stories a day
+  (`JUDGE_STORIES_PER_PASS_PER_DAY`), so one leaked or over-eager browser can't take the whole reserve. Each
+  judge charge is also recorded under the pass's own ledger key, beside the judges' pool, so the admin overview
+  shows stories and spend per pass without counting anything twice.
+- **Dated reserve (v1.1.0):** USD 25 a day on Nov 5-8 (`JUDGE_BUDGET_DAYS_USD`), USD 15 otherwise. The admin page
+  can lower it at once (`PUT /admin/judge/reserve`, kept in `admin/judge.json`), never raise it, so a leaked link
+  can be contained without a redeploy. Public visitors get 5 stories a day on Nov 5-8 and 3 otherwise, and all
+  story limits now count days at UTC+4, like the budget.
 
 ### A budget calendar
 
