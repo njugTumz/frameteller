@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Request, Response, status
+from fastapi import APIRouter, HTTPException, Path, Request, Response, status
 
 from frameteller.application.use_cases import MAX_DICTATION_MS
 from frameteller.domain import InvalidValueError, Point, Size
@@ -17,6 +17,8 @@ from frameteller.interface.dto import (
     ErrorOut,
     JobStatusOut,
     LayerRequest,
+    ProblemReportedOut,
+    ProblemReportIn,
     ProjectCreate,
     ProjectOut,
     ProjectSettings,
@@ -226,3 +228,17 @@ async def job_status(project_id: ProjectId, key: Annotated[str, Path(max_length=
     if found is None:
         return JobStatusOut(key=key, status="unknown")
     return JobStatusOut(key=key, status=found.value, message=c.jobs.message(key))
+
+
+@router.post(
+    "/{project_id}/problems",
+    status_code=status.HTTP_201_CREATED,
+    responses={404: {"model": ErrorOut}, 429: {"model": ErrorOut}},
+)
+async def report_problem(project_id: ProjectId, request: Request, c: Deps, body: ProblemReportIn) -> ProblemReportedOut:
+    """ "Report a problem": optional words (at most 500 characters), with this project's id. A few a day per visitor.
+    Reports reach the admin's Errors tab and are deleted after 30 days."""
+    if c.report_problem is None:
+        raise HTTPException(404)
+    report = await c.report_problem.execute(project_id, body.text, visitor_id(request))
+    return ProblemReportedOut(id=report.id)

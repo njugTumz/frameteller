@@ -828,6 +828,17 @@ def error_message(message: str, *, fatal: bool = False) -> dict[str, Any]:
     return {"type": "error", "message": message, "fatal": fatal}
 
 
+# ---- "Report a problem" ----
+
+
+class ProblemReportIn(BaseModel):
+    text: str = Field(default="", max_length=500, description="What went wrong, in the visitor's words. Optional.")
+
+
+class ProblemReportedOut(BaseModel):
+    id: str
+
+
 # ---- the gallery (ADR 0017) ----
 
 

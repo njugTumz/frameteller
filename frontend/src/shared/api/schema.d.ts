@@ -471,6 +471,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Problem
+         * @description "Report a problem": optional words (at most 500 characters), with this project's id. A few a day per visitor.
+         *     Reports reach the admin's Errors tab and are deleted after 30 days.
+         */
+        post: operations["report_problem_projects__project_id__problems_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/share": {
         parameters: {
             query?: never;
@@ -1308,6 +1329,20 @@ export interface components {
          * @enum {string}
          */
         PanelStyle: "pencil" | "paper_cutout";
+        /** ProblemReportIn */
+        ProblemReportIn: {
+            /**
+             * Text
+             * @description What went wrong, in the visitor's words. Optional.
+             * @default
+             */
+            text: string;
+        };
+        /** ProblemReportedOut */
+        ProblemReportedOut: {
+            /** Id */
+            id: string;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /**
@@ -2983,6 +3018,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_problem_projects__project_id__problems_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProblemReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemReportedOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };

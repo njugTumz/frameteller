@@ -1156,6 +1156,32 @@
         "title": "PanelStyle",
         "type": "string"
       },
+      "ProblemReportIn": {
+        "properties": {
+          "text": {
+            "default": "",
+            "description": "What went wrong, in the visitor's words. Optional.",
+            "maxLength": 500,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "title": "ProblemReportIn",
+        "type": "object"
+      },
+      "ProblemReportedOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "ProblemReportedOut",
+        "type": "object"
+      },
       "ProjectCreate": {
         "properties": {
           "style": {
@@ -3795,6 +3821,90 @@
           }
         },
         "summary": "Delete Narration",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/problems": {
+      "post": {
+        "description": "\"Report a problem\": optional words (at most 500 characters), with this project's id. A few a day per visitor.\nReports reach the admin's Errors tab and are deleted after 30 days.",
+        "operationId": "report_problem_projects__project_id__problems_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemReportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemReportedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Report Problem",
         "tags": [
           "projects"
         ]
