@@ -253,8 +253,8 @@ class RunVoiceSession:
         paragraphs = list(script.beats) if script else []
         reading = _Reading()
 
-        async def publish_failure(message: str, *, fatal: bool = False) -> None:
-            await self._events.publish(project_id, SessionFailed(message, fatal))
+        async def publish_failure(message: str, *, fatal: bool = False, source: str = "") -> None:
+            await self._events.publish(project_id, SessionFailed(message, fatal, source))
 
         async def finish(turn: TranscriptTurn) -> None:
             counts["turns"] += 1
@@ -404,7 +404,7 @@ class RunVoiceSession:
                 await follow(final=True)
                 await close_beat(max(heard.speech_end_ms, heard.cut_ms), last=True)
         except ApplicationError as e:
-            await publish_failure(e.user_message, fatal=True)
+            await publish_failure(e.user_message, fatal=True, source="voice")
         except BaseException:
             director.cancel()
             raise
@@ -429,4 +429,4 @@ class RunVoiceSession:
             await self._repo.update(project_id, lambda p: p.keep_narration(narration))
         except Exception:
             log.warning("could not keep the narration", extra={"bytes": len(pcm)})
-            await self._events.publish(project_id, SessionFailed(KEEP_FAILED))
+            await self._events.publish(project_id, SessionFailed(KEEP_FAILED, source="voice"))

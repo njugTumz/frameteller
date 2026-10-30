@@ -66,6 +66,7 @@ class SessionFailed:
 
     message: str
     fatal: bool = False
+    source: str = ""  # the component that failed, for the admin's Errors tab; empty for refusals and limits
 
 
 @dataclass(frozen=True, slots=True)

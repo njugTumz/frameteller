@@ -144,7 +144,7 @@ class ReadScript:
         try:
             await self._read(project_id, tag, script, options, state, work, pcm, turns)
         except ApplicationError as e:
-            await self._events.publish(project_id, SessionFailed(e.user_message, fatal=True))
+            await self._events.publish(project_id, SessionFailed(e.user_message, fatal=True, source="tts"))
         except BaseException:
             director.cancel()
             raise
@@ -235,7 +235,7 @@ class ReadScript:
         try:
             return await self._translator.translate(texts, language)
         except ApplicationError:
-            await self._events.publish(project_id, SessionFailed(TRANSLATION_FAILED))
+            await self._events.publish(project_id, SessionFailed(TRANSLATION_FAILED, source="director"))
             return texts
 
     async def _voice(self, project_id: str, text: str, options: ReadingOptions) -> tuple[bytes, int]:
@@ -255,4 +255,4 @@ class ReadScript:
             narration = Narration(tag, ref, len(pcm) // 48, options.voice, options.language)
             await self._repo.update(project_id, lambda p: p.keep_narration(narration))
         except Exception:
-            await self._events.publish(project_id, SessionFailed(KEEP_FAILED))
+            await self._events.publish(project_id, SessionFailed(KEEP_FAILED, source="tts"))

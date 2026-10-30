@@ -53,6 +53,8 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         current: Container | None = getattr(app.state, "container", None)
         if current is not None:
             await current.jobs.join()  # let queued renders finish on a graceful shutdown
+            if current.incidents is not None:
+                await current.incidents.flush()  # today's model health, written at most every 15 s
 
     app = FastAPI(title="Frameteller API", version="0.1.0", description=DESCRIPTION, lifespan=lifespan)
     if container is not None:

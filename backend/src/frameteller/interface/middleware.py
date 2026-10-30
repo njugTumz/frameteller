@@ -14,8 +14,12 @@ import uuid
 from collections.abc import Awaitable, Callable, MutableMapping
 from typing import Any
 
+from starlette.requests import HTTPConnection
+
+from frameteller.application.incidents import visitor_var
 from frameteller.infrastructure.observability import log_context
 from frameteller.interface.ratelimit import TokenBucketLimiter
+from frameteller.interface.visitor import visitor_id
 
 Scope = MutableMapping[str, Any]
 Message = MutableMapping[str, Any]
@@ -61,7 +65,8 @@ async def _send_json(send: Send, status: int, body: dict[str, Any], headers: lis
 
 
 class RequestContextMiddleware:
-    """Every log line carries the request id; the response echoes it in X-Request-ID."""
+    """Every log line carries the request id; the response echoes it in X-Request-ID. Errors recorded for the
+    admin carry the first 12 characters of the visitor hash (never the IP or the browser id)."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -82,6 +87,7 @@ class RequestContextMiddleware:
                 message["headers"] = [*message["headers"], (b"x-request-id", request_id.encode())]
             await send(message)
 
+        visitor_var.set(visitor_id(HTTPConnection(scope))[:12])
         with log_context(request_id=request_id):
             try:
                 await self.app(scope, receive, send_with_id)

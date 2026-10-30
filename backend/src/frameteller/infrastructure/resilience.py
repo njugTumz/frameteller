@@ -29,6 +29,7 @@ from frameteller.application.errors import (
     ModelTimeoutError,
     ModelUnavailableError,
 )
+from frameteller.application.incidents import IncidentDesk, error_code, model_component, plain_message
 from frameteller.application.ports import SpendLedger, UsageRecord
 from frameteller.infrastructure.observability import project_id_var
 
@@ -166,7 +167,11 @@ class Usage:
 
 
 class ModelCaller:
-    """Runs one model operation with timeout, retries, circuit breaker and a usage record per attempt."""
+    """Runs one model operation with timeout, retries, circuit breaker and a usage record per attempt.
+
+    With an incident desk, every attempt counts toward the model's health today, and a call that finally fails is
+    recorded as an error for the admin's Errors tab.
+    """
 
     def __init__(
         self,
@@ -175,8 +180,10 @@ class ModelCaller:
         *,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         rand: Callable[[], float] = random.random,
+        incidents: IncidentDesk | None = None,
     ) -> None:
         self._ledger, self._breakers, self._sleep, self._rand = ledger, breakers, sleep, rand
+        self._incidents = incidents
 
     async def call(
         self,
@@ -198,8 +205,9 @@ class ModelCaller:
                 raise
             except Exception as exc:
                 mapped = classify(model, exc)
-                await self.record(model, operation, _since(started), Usage(0.0), ok=False)
+                await self.record(model, operation, _since(started), Usage(0.0), ok=False, retry=attempt > 0)
                 if mapped is None:
+                    await self._gave_up(model, operation, exc)
                     raise
                 error, retryable = mapped
                 limited = isinstance(error, ModelRateLimitedError)
@@ -212,6 +220,7 @@ class ModelCaller:
                 )
                 out_of_tries = attempt + 1 == attempts if limited else failures >= policy.attempts
                 if not retryable or out_of_tries or breaker.is_open:
+                    await self._gave_up(model, operation, error)
                     raise error from exc
                 if limited:
                     await self._sleep(policy.rate_limited_delay(attempt, retry_after(exc), self._rand))
@@ -219,14 +228,22 @@ class ModelCaller:
                     await self._sleep(policy.delay(attempt, self._rand))
                 continue
             breaker.success()
-            await self.record(model, operation, _since(started), usage, ok=True)
+            await self.record(model, operation, _since(started), usage, ok=True, retry=attempt > 0)
             return result
         raise AssertionError("unreachable")  # pragma: no cover
 
     def breaker(self, model: str) -> CircuitBreaker:
         return self._breakers.for_model(model)
 
-    async def record(self, model: str, operation: str, latency_ms: int, usage: Usage, *, ok: bool) -> None:
+    async def _gave_up(self, model: str, operation: str, error: BaseException) -> None:
+        if self._incidents is not None:
+            component = model_component(model, operation)
+            message = plain_message(error)
+            await self._incidents.error(component, error_code(error), message, project_id=project_id_var.get())
+
+    async def record(
+        self, model: str, operation: str, latency_ms: int, usage: Usage, *, ok: bool, retry: bool = False
+    ) -> None:
         """For calls that cannot go through call(), such as a live audio stream."""
         record = UsageRecord(
             model=model,
@@ -240,6 +257,8 @@ class ModelCaller:
             ok=ok,
         )
         await self._ledger.record_usage(record)
+        if self._incidents is not None:
+            await self._incidents.model_call(model, latency_ms, ok=ok, retry=retry)
         log.info(
             "model call",
             extra={

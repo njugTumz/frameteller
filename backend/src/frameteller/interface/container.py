@@ -12,7 +12,9 @@ from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.capacity import Capacity, GatedImages, GatedSegmentation
 from frameteller.application.events import JobUpdated
+from frameteller.application.incidents import IncidentDesk, RecordingEvents, ReportProblem, RetryFailedJob
 from frameteller.application.judge import JudgeDesk, JudgePassesToday
+from frameteller.application.lanes import Lane
 from frameteller.application.limits import ProjectAllowance, SpeechAllowance, VisitorAllowance
 from frameteller.application.ports import (
     Clock,
@@ -188,6 +190,9 @@ class Container:
     moderate_gallery: ModerateGallery | None = None
     # The judge pass (ADR 0016): passes seen, the admin's reserve override, and today's activity per pass.
     judge_desk: JudgeDesk | None = None
+    incidents: IncidentDesk | None = None
+    report_problem: ReportProblem | None = None
+    retry_job: RetryFailedJob | None = None
     judge_passes: JudgePassesToday | None = None
 
 
@@ -214,6 +219,7 @@ def wire(
     synthesizer: SpeechSynthesisPort | None = None,
     translator: TranslatorPort | None = None,
     gallery: GalleryRepository | None = None,
+    incidents: IncidentDesk | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
@@ -221,6 +227,8 @@ def wire(
     renderer = renderer or FfmpegVideoRenderer()
     hub = EventHub()
     clock = clock or SystemClock()
+    incidents = incidents or IncidentDesk(storage, clock, settings.budget_calendar.day)
+    events = RecordingEvents(hub, incidents)  # session failures also go to the admin's Errors tab
     limits = settings.demo_limits
     allowance = ProjectAllowance(repo, limits)
     calendar = settings.budget_calendar
@@ -266,6 +274,7 @@ def wire(
         # Exports (and the gallery's copy) never hold up drawing.
         lanes={job_kinds.EXPORT_ANIMATIC: capacity.exports, job_kinds.GALLERY_SUBMISSION: capacity.exports},
         on_waiting=on_waiting,
+        on_failure=incidents.job_failed,
     )
 
     generate_panel = GeneratePanel(repo, images, budget, queue)
@@ -342,10 +351,19 @@ def wire(
         speech_allowance = (
             SpeechAllowance(quota, clock, limits, settings.speech_characters_per_day) if quota is not None else None
         )
-        story = StoryDirector(direct_turn, correct_transcript, request_cast, hub, limits)
-        read_script = ReadScript(synthesizer, translator, story, hub, ids, repo, storage, budget, speech_allowance)
+        story = StoryDirector(direct_turn, correct_transcript, request_cast, events, limits)
+        read_script = ReadScript(synthesizer, translator, story, events, ids, repo, storage, budget, speech_allowance)
         list_voices = ListVoices(synthesizer)
         preview_voice = PreviewVoice(list_voices, synthesizer, storage, budget)
+    studio_status = GetStudioStatus(
+        ledger, clock, calendar=calendar, paused=settings.demo_paused, limits=limits, desk=desk
+    )
+
+    async def budget_open() -> bool:
+        """A retry runs on the public budget: refused while the studio is paused or today's cap is spent."""
+        status = await studio_status.execute(Lane.PUBLIC)
+        return not status.paused and not status.full
+
     return Container(
         settings=settings,
         storage=storage,
@@ -377,7 +395,7 @@ def wire(
             direct_turn,
             correct_transcript,
             request_cast,
-            hub,
+            events,
             ids,
             repo,
             storage,
@@ -386,9 +404,7 @@ def wire(
         correct_transcript=correct_transcript,
         transcribe_instruction=TranscribeInstruction(repo, speech),
         delete_narration=DeleteNarration(repo, storage),
-        studio_status=GetStudioStatus(
-            ledger, clock, calendar=calendar, paused=settings.demo_paused, limits=limits, desk=desk
-        ),
+        studio_status=studio_status,
         capacity=capacity,
         apply_fix=ApplySuggestedFix(repo, queue, request_cast),
         accept_review=AcceptReview(repo),
@@ -407,6 +423,9 @@ def wire(
         report_gallery=report,
         moderate_gallery=moderate,
         judge_desk=desk,
+        incidents=incidents,
+        report_problem=ReportProblem(incidents, repo, quota, ids, clock, calendar.day),
+        retry_job=RetryFailedJob(incidents, queue, budget_open),
         judge_passes=JudgePassesToday(desk, quota, ledger, clock, calendar.day),
     )
 
@@ -477,7 +496,8 @@ def build_container(settings: Settings) -> Container:
         shares = FileShareIndex(root)
         quota = FileVisitorQuota(root)
         gallery = FileGalleryRepository(root)
-    caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s))
+    incidents = IncidentDesk(storage, SystemClock(), settings.budget_calendar.day)
+    caller = ModelCaller(ledger, Breakers(settings.breaker_failures, settings.breaker_cooldown_s), incidents=incidents)
     client = meta_client(settings)
     lease = glimmer_lease(settings, storage)
     director = MetaSparkDirectorAdapter(client, caller, settings)
@@ -502,4 +522,5 @@ def build_container(settings: Settings) -> Container:
         shares=shares,
         quota=quota,
         gallery=gallery,
+        incidents=incidents,
     )

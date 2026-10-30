@@ -7,11 +7,13 @@ reaches a server log, and the page sends it as `Authorization: Bearer`. Without 
 from __future__ import annotations
 
 import hmac
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request, Response, status
 from pydantic import BaseModel, Field
 
+from frameteller.application.incidents import IncidentDesk
 from frameteller.application.lanes import Lane
 from frameteller.application.use_cases.gallery import ModerateGallery
 from frameteller.interface.container import Container
@@ -171,3 +173,85 @@ async def gallery_video(entry_id: EntryId, request: Request, c: Admin) -> Respon
     if entry is None or entry.video is None:
         raise HTTPException(404)
     return serve(await c.storage.get(entry.video), request, cache="private, no-store", filename="entry.mp4")
+
+
+# ---- the Errors tab ----
+
+
+class IncidentOut(BaseModel):
+    at: str
+    component: str
+    code: str
+    message: str
+    project_id: str | None
+    visitor: str | None = Field(description="The first 12 characters of the visitor hash; never an IP.")
+
+
+class ModelHealthOut(BaseModel):
+    model: str
+    calls: int
+    failures: int
+    retries: int
+    p95_ms: int | None
+
+
+class FailedJobOut(BaseModel):
+    key: str
+    kind: str
+    component: str
+    code: str
+    message: str
+    at: str
+    project_id: str | None
+    retries: int
+
+
+class ProblemReportOut(BaseModel):
+    id: str
+    at: str
+    project_id: str
+    text: str
+    visitor: str | None
+
+
+class ErrorsOut(BaseModel):
+    recent: list[IncidentOut] = Field(description="The last 100 errors, newest first.")
+    counts_24h: dict[str, int] = Field(description="Errors by code over the last 24 hours, most first.")
+    health: list[ModelHealthOut] = Field(description="Today's calls per model (UTC+4 day).")
+    failed_jobs: list[FailedJobOut] = Field(description="Jobs that gave up, newest first, for Retry.")
+    reports: list[ProblemReportOut] = Field(description="Problems visitors reported from the studio, newest first.")
+
+
+class RetryIn(BaseModel):
+    key: str = Field(min_length=1, max_length=300)
+
+
+def _incidents(c: Container) -> IncidentDesk:
+    if c.incidents is None:
+        raise HTTPException(404)
+    return c.incidents
+
+
+@router.get("/errors")
+async def errors(c: Admin) -> ErrorsOut:
+    """What went wrong lately. Kept 30 days; no keys, tokens, audio, transcripts or IP addresses."""
+    desk = _incidents(c)
+    return ErrorsOut(
+        recent=[IncidentOut(**asdict(i)) for i in await desk.recent()],
+        counts_24h=await desk.counts(),
+        health=[ModelHealthOut(**asdict(h)) for h in await desk.health()],
+        failed_jobs=[
+            FailedJobOut(**{k: v for k, v in asdict(j).items() if k != "payload"}) for j in await desk.failed_jobs()
+        ],
+        reports=[ProblemReportOut(**asdict(r)) for r in await desk.reports()],
+    )
+
+
+@router.post("/jobs/retry", status_code=status.HTTP_202_ACCEPTED)
+async def retry_job(body: RetryIn, c: Admin) -> FailedJobOut:
+    """Run a job that gave up again, on the public budget: refused (409) while paused or when today's cap is spent.
+    It then waits in the same queues as any job; if it fails again, it comes back to the list."""
+    if c.retry_job is None:
+        raise HTTPException(404)
+    job = await c.retry_job.execute(body.key)
+    return FailedJobOut(**{k: v for k, v in asdict(job).items() if k != "payload"})

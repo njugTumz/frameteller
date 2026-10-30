@@ -17,6 +17,7 @@ from enum import StrEnum
 
 from frameteller.application.capacity import Gate, waiting_var
 from frameteller.application.errors import ApplicationError
+from frameteller.application.incidents import component_var, job_component
 from frameteller.application.ports import Job
 
 log = logging.getLogger("frameteller.jobs")
@@ -34,6 +35,8 @@ class JobStatus(StrEnum):
 StatusCallback = Callable[[Job, JobStatus, str | None], Awaitable[None]]
 # (job, place in line, estimated seconds); place 0: the wait is over.
 WaitingCallback = Callable[[Job, int, float], Awaitable[None]]
+# A job that gave up, with why: the admin's Errors tab lists it with a Retry button.
+FailureCallback = Callable[[Job, Exception], Awaitable[None]]
 
 
 class InProcessJobQueue:
@@ -45,11 +48,12 @@ class InProcessJobQueue:
         on_status: StatusCallback | None = None,
         lanes: Mapping[str, Gate] | None = None,
         on_waiting: WaitingCallback | None = None,
+        on_failure: FailureCallback | None = None,
     ) -> None:
         self._handlers = handlers
         self._slots = Gate("jobs", concurrency, typical_s=20)
         self._lanes = dict(lanes or {})
-        self._on_status, self._on_waiting = on_status, on_waiting
+        self._on_status, self._on_waiting, self._on_failure = on_status, on_waiting, on_failure
         self._status: dict[str, JobStatus] = {}
         self._messages: dict[str, str] = {}
         self._tasks: set[asyncio.Task[None]] = set()
@@ -83,6 +87,7 @@ class InProcessJobQueue:
         return [self._slots, *self._lanes.values()]
 
     async def _run(self, job: Job) -> None:
+        component_var.set(job_component(job.kind))  # this task's own context: its model calls are labelled
         if self._on_waiting is not None:
             on_waiting = self._on_waiting
 
@@ -98,6 +103,11 @@ class InProcessJobQueue:
                 message = exc.user_message if isinstance(exc, ApplicationError) else "Something went wrong."
                 log.exception("job failed", extra={"job_kind": job.kind, "job_key": job.idempotency_key})
                 await self._set(job, JobStatus.FAILED, message)
+                if self._on_failure is not None:
+                    try:
+                        await self._on_failure(job, exc)
+                    except Exception:
+                        log.exception("job failure callback failed", extra={"job_key": job.idempotency_key})
                 return
             await self._set(job, JobStatus.SUCCEEDED)
 

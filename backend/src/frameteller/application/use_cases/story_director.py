@@ -62,8 +62,8 @@ class StoryDirector:
                 if directed.new_characters:
                     await self._cast.execute(project_id, [c.id for c in directed.new_characters])
             except ApplicationError as e:
-                await self._events.publish(project_id, SessionFailed(e.user_message))
+                await self._events.publish(project_id, SessionFailed(e.user_message, source="director"))
             except DomainError:
                 failed = CORRECTION_FAILED if isinstance(item, TranscriptCorrection) else DIRECTION_FAILED
-                await self._events.publish(project_id, SessionFailed(failed))
+                await self._events.publish(project_id, SessionFailed(failed, source="director"))
         return shots
