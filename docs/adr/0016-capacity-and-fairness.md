@@ -58,6 +58,8 @@ The gates are in memory, which is correct only with one replica (ADR 0009). We k
 ## Consequences
 
 - No visitor sees an error because the studio is busy: they see their place in line. A visitor who waits too long can leave the line, or watch the gallery.
-- The image gate is the throughput limit. At 8 in flight and about 18 s per draft, the studio draws about 25 panels a minute. That is enough for the expected launch traffic. The real five-story test on staging checks it against Meta's own rate limits ([docs/load-test.md](../load-test.md)). If Meta throttles us below that, lower `CAPACITY_IMAGES`, and 429s keep backing off in line meanwhile.
+- The image gate is the throughput limit. At 8 in flight and about 18 s per draft, the studio draws about 25 panels a minute. That is enough for the expected launch traffic. In the real five-story test on staging, 17 Muse Image, 40 Spark and 16 SAM calls a minute drew no 429 ([docs/load-test.md](../load-test.md)). If Meta throttles us below that, lower `CAPACITY_IMAGES`, and 429s keep backing off in line meanwhile.
+- The image work around the models (SAM masks and cut-outs, contact sheets, render preparation) runs in worker threads. On one core, doing it on the event loop blocked the health probe, and the platform restarted the app.
+- Burned captions go through one ffmpeg stream, so an export's memory does not grow with its caption lines. Staging (0.5 vCPU / 1 GiB) renders one export at a time.
 - Everything is in memory, so scaling out would need a shared queue (Redis or Service Bus) first. With one replica that is out of scope.
 - The judge link is a bearer secret. It is never committed, and rotating it is one command (runbook).

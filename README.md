@@ -75,6 +75,8 @@ The studio is sized for the launch and judging days ([ADR 0016](docs/adr/0016-ca
 
 **Load test:** [`backend/scripts/load_test.py`](backend/scripts/load_test.py) runs the real app with fake Meta models, at real latencies, against 50 visitors who narrate, approve, draw and export. Every one of the 50 visits finished, REST calls stayed under 20 ms at p95, and a burst of 50 arrivals in 5 s seated 26 of them from the waiting room within 45 s. The server peaked at 1.97 cores and 0.93 GiB, so production runs on 2 vCPU / 4 GiB ([results](docs/load-test.md)).
 
+**With the real models:** five stories at once on staging drew every panel and exported every animatic. They peaked at 40 Muse Spark, 17 Muse Image and 16 SAM calls a minute, with no 429. The first run caught two real bugs: image work blocking the event loop (the platform restarted the app) and caption overlays using too much memory. Both are fixed ([results](docs/load-test.md#staging-5-stories-at-once-with-the-real-models-oct-30)).
+
 ## Continuity supervisor
 
 Reference sheets keep characters consistent, but not every time. In our own runs, a fox's reference sheet came back in the other character's green sweater, and a panel put him in a blue vest. The continuity supervisor is an agent that checks every frame so the creator doesn't have to ([ADR 0012](docs/adr/0012-continuity-supervisor.md)).
