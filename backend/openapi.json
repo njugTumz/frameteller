@@ -437,7 +437,7 @@
         "properties": {
           "audio": {
             "default": "mine",
-            "description": "\"mine\": the kept narration; \"voice\": the Brandon voice instead; \"none\": silent.",
+            "description": "\"mine\": the kept narration; \"voice\": the Ava voice instead; \"none\": silent.",
             "enum": [
               "mine",
               "voice",

@@ -954,7 +954,7 @@ export interface components {
         GallerySubmitRequest: {
             /**
              * Audio
-             * @description "mine": the kept narration; "voice": the Brandon voice instead; "none": silent.
+             * @description "mine": the kept narration; "voice": the Ava voice instead; "none": silent.
              * @default mine
              * @enum {string}
              */
