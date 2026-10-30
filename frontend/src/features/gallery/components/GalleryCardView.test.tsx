@@ -28,7 +28,7 @@ describe('GalleryCardView', () => {
     expect(screen.getByText(/Paper cutout · 2 episodes · 8 shots/)).toBeTruthy()
     expect(screen.getByTestId('gallery-byline').textContent).toBe('by Ama · 🇰🇪 Kenya')
     expect(screen.getByRole('link', { name: 'The Kite Maker' }).getAttribute('href')).toBe(card.share_url)
-    await userEvent.click(screen.getByRole('button', { name: 'Play The Kite Maker' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Play The Kite Maker with sound' }))
     expect(screen.getByLabelText('The Kite Maker, the animatic').getAttribute('src')).toBe(card.video_url)
   })
 

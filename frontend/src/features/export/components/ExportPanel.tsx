@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import type { Animatic } from '../../../shared/api/types'
 import { seconds } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
+import { AnimaticPlayer } from '../../../shared/ui/AnimaticPlayer'
 import { Notice } from '../../../shared/ui/Notice'
 import type { ExportJob } from '../../storyboard/store'
 import { type AnimaticChoice, CAPTION_LANGUAGES } from '../captions'
@@ -87,7 +88,7 @@ export function ExportPanel({
       {error && <Notice tone="error" title={error} />}
       {animatic && videoSrc && !running && (
         <div className="flex flex-col gap-2">
-          <video src={videoSrc} controls preload="metadata" className="frame w-full" data-testid="animatic-player" aria-label="The animatic" />
+          <AnimaticPlayer key={videoSrc} src={videoSrc} label="The animatic" testId="animatic-player" voiced={animatic.voiced} />
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
             <span>
               {seconds(animatic.duration_ms)}

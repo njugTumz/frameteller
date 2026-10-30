@@ -1,5 +1,6 @@
 import type { SharedProject } from '../../../shared/api/types'
 import { framingLabel, seconds, shotLabel } from '../../../shared/format'
+import { AnimaticPlayer } from '../../../shared/ui/AnimaticPlayer'
 import { Button } from '../../../shared/ui/Button'
 import { byline } from '../../../shared/creator'
 
@@ -32,7 +33,7 @@ export function SharedStoryboard({
       </header>
       {video && (
         <section aria-label="Animatic" className="flex flex-col gap-1">
-          <video src={video} controls preload="metadata" className="frame w-full" data-testid="shared-animatic" aria-label="The animatic" />
+          <AnimaticPlayer src={video} label="The animatic" testId="shared-animatic" />
           <p className="m-0 text-sm text-muted">
             Animatic · {seconds(project.animatic?.duration_ms ?? 0)}
             {project.narrated_by && ` · Narrated by ${project.narrated_by} (AI voice)`}

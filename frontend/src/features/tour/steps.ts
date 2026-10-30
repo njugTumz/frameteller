@@ -108,7 +108,7 @@ export const TOUR_STEPS: TourStep[] = [
     anchor: '[data-testid="export-panel"]',
     blockedBy: EDITOR_OPEN,
     title: 'Export an animatic, with captions',
-    body: "Each panel lasts as long as its paragraph, with Ava's voice and captions of what is said, in the picture and as subtitles. It is ready once every panel is drawn.",
+    body: "Each panel lasts as long as its paragraph, with Ava's voice and captions of what is said, in the picture and as subtitles. It is ready once every panel is drawn. Press Play with sound to hear it, and Listen to your narration to hear what you recorded.",
   },
   {
     id: 'share',

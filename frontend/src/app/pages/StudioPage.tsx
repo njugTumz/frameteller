@@ -161,7 +161,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
             </p>
           ))}
         <Notices notices={r.notices} onDismiss={r.dismissNotice} />
-        {kept > 0 && <RecordingKept durationMs={kept} onDelete={() => void exporting.forgetRecording()} />}
+        {kept > 0 && <RecordingKept durationMs={kept} recordings={board.narrations.map((n) => mediaUrl(n.url)).filter((u): u is string => u !== null)} onDelete={() => void exporting.forgetRecording()} />}
         {(board.shots.length > 0 || board.supervisor.length > 0) && (
           <SupervisorFeed
             entries={board.supervisor}

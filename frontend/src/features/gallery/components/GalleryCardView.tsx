@@ -28,10 +28,10 @@ export function GalleryCardView({
         {playing ? (
           <video src={card.video_url} controls autoPlay playsInline className="size-full object-contain" aria-label={`${card.title}, the animatic`} />
         ) : (
-          <button type="button" onClick={() => setPlaying(true)} className="group block size-full" aria-label={`Play ${card.title}`}>
+          <button type="button" onClick={() => setPlaying(true)} className="group block size-full" aria-label={`Play ${card.title} with sound`}>
             <img src={card.cover_url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
-            <span aria-hidden="true" className="absolute inset-0 m-auto flex size-14 items-center justify-center rounded-full bg-ink/80 text-2xl text-paper group-hover:bg-ink group-focus-visible:bg-ink">
-              ▶
+            <span aria-hidden="true" className="absolute inset-0 m-auto flex h-fit w-fit items-center gap-2 rounded-full bg-ink/85 px-4 py-2 font-bold text-paper group-hover:bg-ink group-focus-visible:bg-ink">
+              ▶ Play with sound
             </span>
           </button>
         )}
