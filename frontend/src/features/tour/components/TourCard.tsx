@@ -2,10 +2,9 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEv
 import { createPortal } from 'react-dom'
 import { Button } from '../../../shared/ui/Button'
 import type { StepView } from '../machine'
+import { EDGE, placeCard } from '../place'
 import type { TourStep } from '../steps'
 
-const GAP = 12
-const EDGE = 16
 const WIDE = 640 // below this the card docks at the bottom of the screen
 
 /** One step of the tour: a non-modal card next to the element it explains, with the element outlined. */
@@ -35,13 +34,17 @@ export function TourCard({
   const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight })
 
   useEffect(() => heading.current?.focus({ preventScroll: true }), [step.id]) // managed focus: each step reads from its title
+  // Measured again whenever the card moves in or out of a dialog: the portal then mounts a new element, and the
+  // old one, detached, measures 0 x 0 (which once let the card run off the bottom of the screen).
   useEffect(() => {
     const el = card.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(() => setSize({ width: el.offsetWidth, height: el.offsetHeight }))
+    const observer = new ResizeObserver(() => {
+      if (el.isConnected && el.offsetHeight > 0) setSize({ width: el.offsetWidth, height: el.offsetHeight })
+    })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [])
+  }, [layer])
   useEffect(() => {
     const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
     window.addEventListener('resize', resize)
@@ -53,11 +56,7 @@ export function TourCard({
   if (docked) {
     style = rect || viewport.width < WIDE ? { left: EDGE, right: EDGE, bottom: EDGE } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }
   } else {
-    const below = rect.bottom + GAP
-    const above = rect.top - GAP - size.height
-    const top = below + size.height <= viewport.height - EDGE ? below : above >= EDGE ? above : viewport.height - size.height - EDGE
-    const left = Math.min(Math.max(rect.left, EDGE), viewport.width - size.width - EDGE)
-    style = { top, left }
+    style = placeCard(rect, size, viewport)
   }
 
   const keys = (e: KeyboardEvent) => {
