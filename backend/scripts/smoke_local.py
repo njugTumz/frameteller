@@ -11,6 +11,8 @@ Starts nothing itself and never reads .env: the server holds the key.
 --beats sends {"type": "beat"} at the start of each of the recording's six paragraphs (ADR 0008), at the onsets
 measured in docs/spikes/2026-10-28-findings.md, so each paragraph becomes its own stretch of shots.
 --ledger none skips the spend report (for a remote backend, read spend from its logs instead).
+--export draws the remaining shots as drafts and exports the animatic with captions.
+--visitor sets a browser id, so several runs at once count as different visitors (the load test on staging).
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ BYTES_PER_MS = 48
 # Paragraph onsets in narration.wav, 200 ms before speech resumes after each pause (findings doc, ADR 0008).
 BEATS_MS = (5500, 15800, 21800, 28400, 33600, 40500)
 T0 = time.perf_counter()
+VISITOR = {"id": ""}  # --visitor: a browser id, so parallel runs count as different visitors
 
 
 def stamp() -> str:
@@ -44,7 +47,8 @@ def stamp() -> str:
 
 def rest(base: str, method: str, path: str, body: dict[str, Any] | None = None) -> tuple[int, Any]:
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(base + path, data=data, method=method, headers={"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"} | ({"X-Visitor-Id": VISITOR["id"]} if VISITOR["id"] else {})
+    req = urllib.request.Request(base + path, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.status, json.loads(r.read() or b"null")
@@ -114,7 +118,7 @@ def jobs_done(kind: str, keys: set[str]) -> Any:
     return done
 
 
-async def main(base: str, data_dir: Path | None, beats: bool) -> int:
+async def main(base: str, data_dir: Path | None, beats: bool, export: bool = False) -> int:
     timings: dict[str, float] = {}
     with wave.open(io.BytesIO(NARRATION.read_bytes())) as w:
         assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 24_000), "need mono 16-bit 24 kHz"
@@ -129,7 +133,8 @@ async def main(base: str, data_dir: Path | None, beats: bool) -> int:
     print(f"{stamp()}  project {pid}")
 
     ws_url = base.replace("http", "ws", 1) + f"/ws/projects/{pid}/session"
-    async with websockets.connect(ws_url, max_size=None) as ws:
+    extra = {"X-Visitor-Id": VISITOR["id"]} if VISITOR["id"] else {}
+    async with websockets.connect(ws_url, max_size=None, additional_headers=extra) as ws:
         session = Session(ws)
         listener = asyncio.create_task(session.listen())
         await ws.send(json.dumps({"mode": "narrate", "keywords": ["Mira"]}))
@@ -199,6 +204,24 @@ async def main(base: str, data_dir: Path | None, beats: bool) -> int:
         else:
             print(f"{stamp()}  select {click} -> {status} {selection}")
 
+        if export:
+            _, project = rest(base, "GET", f"/projects/{pid}")
+            missing = [sh["number"] for sh in project["shots"] if not (sh.get("panel") or {}).get("image_url")]
+            keys = set()
+            for n in missing:  # every shot needs a panel before the export
+                status, ticket = rest(base, "POST", f"/projects/{pid}/shots/{n}/panel", {"quality": "draft"})
+                if status == 202:
+                    keys.add(ticket["key"])
+            t = time.perf_counter()
+            await session.wait_for(jobs_done("generate_panel", keys), 600)
+            timings[f"draft panels for the other {len(keys)} shots"] = time.perf_counter() - t
+            t = time.perf_counter()
+            status, ticket = rest(base, "POST", f"/projects/{pid}/exports/animatic", {"subtitles": True})
+            print(f"{stamp()}  export: {status} {ticket}")
+            if status == 202:
+                await session.wait_for(jobs_done("export_animatic", {ticket["key"]}), 600)
+                timings["export animatic (captions)"] = time.perf_counter() - t
+
         await asyncio.sleep(0.5)
         listener.cancel()
         await asyncio.gather(listener, return_exceptions=True)
@@ -238,6 +261,9 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", default=str(Path(__file__).resolve().parents[1] / ".data"))
     parser.add_argument("--ledger", choices=["local", "none"], default="local")
     parser.add_argument("--beats", action="store_true", help="send a beat at each paragraph start")
+    parser.add_argument("--export", action="store_true", help="draw the other shots too, then export the animatic")
+    parser.add_argument("--visitor", default="", help="browser id (X-Visitor-Id), to run several at once")
     args = parser.parse_args()
+    VISITOR["id"] = args.visitor
     data_dir = Path(args.data_dir) if args.ledger == "local" else None
-    sys.exit(asyncio.run(main(args.base.rstrip("/"), data_dir, args.beats)))
+    sys.exit(asyncio.run(main(args.base.rstrip("/"), data_dir, args.beats, args.export)))
