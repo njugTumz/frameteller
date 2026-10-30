@@ -46,3 +46,22 @@ async def revoke_lease(c: Deps, authorization: Annotated[str | None, Header()] =
     assert c.glimmer_lease is not None
     await c.glimmer_lease.revoke()
     return LeaseOut(warm_until=None)
+
+
+class JudgeWakeOut(BaseModel):
+    started: bool
+    warm_until: str | None
+
+
+@router.post("/internal/glimmer/judge-wake")
+async def judge_wake(c: Deps, authorization: Annotated[str | None, Header()] = None) -> JudgeWakeOut:
+    """The operator's check of ADR 0020: act as judge activity (same policy, caps and lease), without a judge
+    cookie. Authorised by the Glimmer endpoint token, like the lease."""
+    _authorised(c, authorization)
+    if c.judge_glimmer is None:
+        raise HTTPException(404)
+    started = await c.judge_glimmer.judge_active()
+    warm = await c.judge_glimmer.today()
+    return JudgeWakeOut(
+        started=started, warm_until=warm.warm_until.isoformat(timespec="seconds") if warm.warm_until else None
+    )

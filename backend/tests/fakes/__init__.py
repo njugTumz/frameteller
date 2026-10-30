@@ -8,7 +8,7 @@ import copy
 from collections import defaultdict
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from frameteller.application.audio import wav_bytes
@@ -480,3 +480,44 @@ class FakeSharePreview:
     async def contact_sheet(self, title: str, panels: Sequence[bytes]) -> bytes:
         self.sheets.append((title, len(panels)))
         return b"\x89PNG-sheet"
+
+
+class FakeGlimmerLease:
+    """GlimmerLeasePort in memory."""
+
+    def __init__(self, clock: FixedClock) -> None:
+        self.clock = clock
+        self.until: datetime | None = None
+        self.held: list[datetime] = []
+
+    async def warm_until(self) -> datetime | None:
+        return self.until if self.until and self.until > self.clock.now() else None
+
+    async def hold_until(self, until: datetime) -> datetime:
+        self.until = until
+        self.held.append(until)
+        return until
+
+    async def revoke(self) -> None:
+        self.until = None
+
+
+class FakeGlimmerWarmer:
+    """GlimmerWarmerPort: a wake-up takes `cold_start_s` on the clock."""
+
+    def __init__(self, clock: FixedClock, cold_start_s: float = 180, fail: bool = False) -> None:
+        self.clock, self.cold_start_s, self.fail = clock, cold_start_s, fail
+        self.wakes = 0
+        self.pings = 0
+        self.ping_fails = False
+
+    async def wake(self, timeout_s: float) -> None:
+        self.wakes += 1
+        self.clock.current += timedelta(seconds=self.cold_start_s)
+        if self.fail:
+            raise TimeoutError("not up")
+
+    async def ping(self) -> None:
+        if self.ping_fails:
+            raise RuntimeError("no answer")
+        self.pings += 1

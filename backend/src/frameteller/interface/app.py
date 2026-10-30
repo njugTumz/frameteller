@@ -17,6 +17,7 @@ from frameteller.interface.middleware import (
     PauseMiddleware,
     RateLimitMiddleware,
     RequestContextMiddleware,
+    Scope,
 )
 from frameteller.interface.routes import (
     admin,
@@ -37,6 +38,13 @@ DESCRIPTION = """Frameteller turns spoken stories into storyboards.
 REST covers projects, cast approval, panels, edits and selection. Live narration and every
 asynchronous result (shots, cast proposals, job progress) travel over the WebSocket
 `/ws/projects/{project_id}/session`, documented in `docs/api-events.md`."""
+
+
+async def _judge_active(scope: Scope) -> None:
+    """A request with a judge pass: wake Muse Glimmer for the judges if it is cold (ADR 0020)."""
+    container: Container | None = getattr(scope["app"].state, "container", None)
+    if container is not None and container.judge_glimmer is not None:
+        await container.judge_glimmer.judge_active()
 
 
 def create_app(settings: Settings | None = None, container: Container | None = None) -> FastAPI:
@@ -75,7 +83,11 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     )
     judge_token = config.judge_token if config else None
     # Sets the lane (public or judge) for everything inside it: limits, budgets, queues.
-    app.add_middleware(JudgeMiddleware, token=lambda: judge_token.get_secret_value() if judge_token else None)
+    app.add_middleware(
+        JudgeMiddleware,
+        token=lambda: judge_token.get_secret_value() if judge_token else None,
+        on_judge=_judge_active,
+    )
     if config and config.origins:
         app.add_middleware(
             CORSMiddleware,

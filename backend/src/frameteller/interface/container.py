@@ -12,6 +12,7 @@ from frameteller.application import jobs as job_kinds
 from frameteller.application.budget import LimitBudgetGuard
 from frameteller.application.capacity import Capacity, GatedImages, GatedSegmentation
 from frameteller.application.events import JobUpdated
+from frameteller.application.glimmer_wakeup import JudgeGlimmer, WakePolicy
 from frameteller.application.image_safety import SafeImages
 from frameteller.application.incidents import IncidentDesk, RecordingEvents, ReportProblem, RetryFailedJob
 from frameteller.application.judge import JudgeDesk, JudgePassesToday
@@ -22,6 +23,7 @@ from frameteller.application.ports import (
     CompositorPort,
     DirectorPort,
     GalleryRepository,
+    GlimmerWarmerPort,
     IdGenerator,
     ImageGenerationPort,
     Job,
@@ -133,6 +135,7 @@ from frameteller.infrastructure.review import (
     FileRubricLibrary,
     GlimmerLease,
     GlimmerReviewerAdapter,
+    ModalGlimmerWarmer,
     SparkReviewerAdapter,
     WarmGatedReviewer,
 )
@@ -201,6 +204,7 @@ class Container:
     report_problem: ReportProblem | None = None
     retry_job: RetryFailedJob | None = None
     judge_passes: JudgePassesToday | None = None
+    judge_glimmer: JudgeGlimmer | None = None  # judges wake Muse Glimmer (ADR 0020)
 
 
 def wire(
@@ -227,6 +231,7 @@ def wire(
     translator: TranslatorPort | None = None,
     gallery: GalleryRepository | None = None,
     incidents: IncidentDesk | None = None,
+    glimmer_warmer: GlimmerWarmerPort | None = None,
 ) -> Container:
     """Wire use cases to the given ports. Tests pass fakes; build_container() passes the real adapters."""
     ids = ids or RandomIds()
@@ -437,6 +442,21 @@ def wire(
         report_problem=ReportProblem(incidents, repo, quota, ids, clock, calendar.day),
         retry_job=RetryFailedJob(incidents, queue, budget_open),
         judge_passes=JudgePassesToday(desk, quota, ledger, clock, calendar.day),
+        judge_glimmer=JudgeGlimmer(
+            glimmer_lease,
+            glimmer_warmer,
+            storage,
+            clock,
+            calendar.day,
+            WakePolicy(
+                wakes_per_day=settings.judge_glimmer_wakes_per_day,
+                usd_per_day=settings.judge_glimmer_usd_per_day,
+                usd_per_hour=settings.glimmer_usd_per_hour,
+                idle_minutes=settings.judge_glimmer_idle_minutes,
+            ),
+        )
+        if glimmer_lease is not None and glimmer_warmer is not None and settings.judge_token is not None
+        else None,
     )
 
 
@@ -483,6 +503,15 @@ def glimmer_lease(settings: Settings, storage: MediaStoragePort) -> GlimmerLease
     if settings.reviewer in ("fallback", "screen") and settings.glimmer_only_when_warm:
         return GlimmerLease(storage, SystemClock())
     return None
+
+
+def glimmer_warmer(settings: Settings) -> GlimmerWarmerPort:
+    """Wakes our Modal endpoint for judges (ADR 0020)."""
+    assert settings.glimmer_api_key is not None  # a lease needs REVIEWER screen or fallback, which need the key
+    client = AsyncOpenAI(
+        base_url=settings.glimmer_base_url.strip(), api_key=settings.glimmer_api_key.get_secret_value(), max_retries=0
+    )
+    return ModalGlimmerWarmer(httpx2.AsyncClient(), client, settings.glimmer_base_url, settings.glimmer_model)
 
 
 def build_container(settings: Settings) -> Container:
@@ -533,4 +562,5 @@ def build_container(settings: Settings) -> Container:
         quota=quota,
         gallery=gallery,
         incidents=incidents,
+        glimmer_warmer=glimmer_warmer(settings) if lease is not None else None,
     )

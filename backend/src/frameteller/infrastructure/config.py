@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     judge_budget_days_usd: str = "2026-11-05:25,2026-11-06:25,2026-11-07:25,2026-11-08:25"
     judge_stories_per_pass_per_day: int = Field(default=15, ge=1)
     judge_pass_days: int = Field(default=21, ge=1, le=60)
+    # Judges wake Muse Glimmer (ADR 0020), when REVIEWER is screen or fallback: at most this many wake-ups a day,
+    # and this much estimated Modal spend for them (GPU time at GLIMMER_USD_PER_HOUR). Past either: Spark only.
+    judge_glimmer_wakes_per_day: int = Field(default=10, ge=0)
+    judge_glimmer_usd_per_day: float = Field(default=5.0, ge=0)
+    judge_glimmer_idle_minutes: float = Field(default=5, gt=0, le=30)  # the lease ends this long after a judge
+    glimmer_usd_per_hour: float = Field(default=3.95, ge=0)  # Modal H100
     # The gallery's admin page: /admin#<ADMIN_TOKEN>, sent as a bearer token. Unset: no admin API.
     admin_token: SecretStr | None = None
 

@@ -75,6 +75,19 @@ class JudgeReserveIn(BaseModel):
     usd: float | None = Field(ge=0, description="A lower daily reserve for all judges; null clears it.")
 
 
+class JudgeGlimmerOut(BaseModel):
+    """Judges wake Muse Glimmer (ADR 0020): today's wake-ups and their estimated Modal cost."""
+
+    day: str
+    wakes: int
+    wakes_cap: int
+    estimated_usd: float = Field(description="Estimated Modal cost of today's judge wake-ups (GPU time).")
+    usd_cap: float
+    warm: bool
+    waking: bool
+    last_cold_start_s: float | None
+
+
 class OverviewOut(BaseModel):
     paused: bool
     budgets: list[BudgetOut]
@@ -85,6 +98,9 @@ class OverviewOut(BaseModel):
     glimmer_warm_until: str | None
     judge_reserve: JudgeReserveOut
     judge_passes: list[JudgePassOut]
+    judge_glimmer: JudgeGlimmerOut | None = Field(
+        default=None, description="Null when judges do not wake Glimmer (no judge pass, or REVIEWER=spark)."
+    )
 
 
 @router.get("/overview")
@@ -117,6 +133,23 @@ async def overview(c: Admin) -> OverviewOut:
         read_it_to_me=c.read_script is not None,
         judge_pass=c.settings.judge_token is not None,
         glimmer_warm_until=warm.isoformat(timespec="seconds") if warm else None,
+        judge_glimmer=await _judge_glimmer(c),
+    )
+
+
+async def _judge_glimmer(c: Container) -> JudgeGlimmerOut | None:
+    if c.judge_glimmer is None:
+        return None
+    t = await c.judge_glimmer.today()
+    return JudgeGlimmerOut(
+        day=t.day,
+        wakes=t.wakes,
+        wakes_cap=t.wakes_cap,
+        estimated_usd=t.estimated_usd,
+        usd_cap=t.usd_cap,
+        warm=t.warm_until is not None,
+        waking=t.waking,
+        last_cold_start_s=t.last_cold_start_s,
     )
 
 

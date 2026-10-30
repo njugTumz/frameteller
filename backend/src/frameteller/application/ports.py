@@ -446,6 +446,28 @@ class Clock(Protocol):
     def now(self) -> datetime: ...
 
 
+class GlimmerWarmerPort(Protocol):
+    """Our Muse Glimmer endpoint on Modal, which scales to zero (ADR 0013)."""
+
+    async def wake(self, timeout_s: float) -> None:
+        """Start the GPU container and return once Glimmer answers a chat request; raise if it does not in time."""
+        ...
+
+    async def ping(self) -> None:
+        """One tiny request, so the container stays up; raises if Glimmer does not answer."""
+        ...
+
+
+class GlimmerLeasePort(Protocol):
+    """When Glimmer counts as warm: reviews use it (screen mode) only while the lease holds."""
+
+    async def warm_until(self) -> datetime | None: ...
+
+    async def hold_until(self, until: datetime) -> datetime: ...
+
+    async def revoke(self) -> None: ...
+
+
 class IdGenerator(Protocol):
     def new_id(self) -> str: ...
 

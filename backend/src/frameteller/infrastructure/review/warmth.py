@@ -9,9 +9,14 @@ reviews alone. A forgotten or crashed warm-up script therefore costs at most one
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timedelta
+
+import httpx2
+from openai import AsyncOpenAI
 
 from frameteller.application.ports import Clock, MediaStoragePort, ReviewerPort, ReviewRequest
 from frameteller.domain import MediaRef, Verdict
@@ -39,6 +44,13 @@ class GlimmerLease:
 
     async def grant(self, minutes: int) -> datetime:
         until = self._clock.now() + timedelta(minutes=max(1, min(minutes, MAX_LEASE_MINUTES)))
+        await self._store(until)
+        return until
+
+    async def hold_until(self, until: datetime) -> datetime:
+        """Warm until `until` (at most MAX_LEASE_MINUTES ahead): the judges' keeper renews it (ADR 0020)."""
+        latest = self._clock.now() + timedelta(minutes=MAX_LEASE_MINUTES)
+        until = min(until, latest)
         await self._store(until)
         return until
 
@@ -73,3 +85,35 @@ class WarmGatedReviewer:
         if await self._lease.warm_until() is None:
             return await self._cold.review(request)
         return await self._warm.review(request)
+
+
+class ModalGlimmerWarmer:
+    """GlimmerWarmerPort over our Modal endpoint, as deploy/modal/warm.py does it: poll /health (no token) until
+    vLLM is up, then one tiny authenticated chat request to prove it answers."""
+
+    def __init__(self, http: httpx2.AsyncClient, client: AsyncOpenAI, base_url: str, model: str) -> None:
+        self._http, self._client, self._model = http, client, model
+        self._health = base_url.strip().rstrip("/").removesuffix("/v1") + "/health"
+
+    async def wake(self, timeout_s: float) -> None:
+        deadline = time.monotonic() + timeout_s
+        while True:
+            try:
+                r = await self._http.get(self._health, timeout=60)
+                if r.status_code == 200:
+                    break
+            except httpx2.HTTPError:
+                pass  # starting: the request times out or the proxy answers 5xx
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"glimmer not up after {timeout_s:.0f} s")
+            await asyncio.sleep(10)
+        await self.ping()
+
+    async def ping(self) -> None:
+        await self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": "Reply with the single word: ready"}],
+            max_tokens=512,
+            extra_body={"chat_template_kwargs": {"reasoning_strength": "low"}},
+            timeout=120,
+        )

@@ -11,14 +11,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import secrets
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from http.cookies import CookieError, SimpleCookie
 
 from frameteller.application.judge import pass_var
 from frameteller.application.lanes import Lane, lane_var
 from frameteller.interface.middleware import ASGIApp, Receive, Scope, Send
+
+log = logging.getLogger("frameteller.judge")
 
 COOKIE = "ft_judge"
 VERSION = "v2"
@@ -77,14 +80,25 @@ def cookie_value(scope: Scope) -> str | None:
 class JudgeMiddleware:
     """Puts requests and sessions with a valid judge cookie in the judge lane; everything else is public."""
 
-    def __init__(self, app: ASGIApp, *, token: Callable[[], str | None]) -> None:
-        self.app, self._token = app, token
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        token: Callable[[], str | None],
+        on_judge: Callable[[Scope], Awaitable[None]] | None = None,
+    ) -> None:
+        self.app, self._token, self._on_judge = app, token, on_judge
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         found = pass_id(self._token(), cookie_value(scope)) if scope["type"] in ("http", "websocket") else None
         if found is None:
             await self.app(scope, receive, send)
             return
+        if self._on_judge is not None:
+            try:
+                await self._on_judge(scope)  # judge activity: wakes Muse Glimmer (ADR 0020); never blocks the request
+            except Exception:
+                log.exception("judge activity hook failed")
         reset, reset_pass = lane_var.set(Lane.JUDGE), pass_var.set(found)
         try:
             await self.app(scope, receive, send)
