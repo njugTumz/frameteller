@@ -31,6 +31,17 @@ describe('ErrorsTab', () => {
     expect(screen.getByText(/retried 1×/)).toBeTruthy()
   })
 
+  it('calls a voice session\'s p95 its session length, not latency, and gives each column its own cell', () => {
+    const voice = { model: 'muse-voice-transcribe-1.0', calls: 3, failures: 0, retries: 0, p95_ms: 137100 }
+    render(<ErrorsTab errors={{ ...errors, health: [...errors.health, voice] }} onRetry={vi.fn()} />)
+    expect(screen.getByRole('row', { name: /muse-voice-transcribe/ }).textContent).toContain('137.1s session length')
+    expect(screen.getByRole('row', { name: /muse-image-1\.0/ }).textContent).toContain('18.4s latency')
+    const [first] = screen.getAllByTestId('incident')
+    const cells = within(first as HTMLElement).getAllByRole('cell')
+    expect(cells.map((c) => c.className.includes('px-2'))).toEqual([true, true, true, true, true, true])
+    expect(cells[2]?.className).toContain('break-words') // a long message wraps in its own column
+  })
+
   it('retries a failed job by its key', () => {
     const onRetry = vi.fn()
     render(<ErrorsTab errors={errors} onRetry={onRetry} />)

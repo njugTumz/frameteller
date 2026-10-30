@@ -3,6 +3,10 @@ import type { Errors } from '../api'
 
 const heading = 'm-0 text-sm font-bold uppercase tracking-wider text-muted'
 const when = (at: string) => new Date(at).toLocaleString()
+// Padded, top-aligned cells so long messages wrap inside their column instead of running into the next one.
+const cell = 'border-b border-rule px-2 py-1.5 align-top'
+/** A streaming call lasts as long as the recording, so its p95 is a session length, not a latency. */
+const isSession = (model: string) => model.startsWith('muse-voice-transcribe')
 
 /** What went wrong lately: recent errors, counts by type, model health today, failed jobs and visitors' reports. */
 export function ErrorsTab({ errors, onRetry }: { errors: Errors; onRetry: (key: string) => void }) {
@@ -29,28 +33,32 @@ export function ErrorsTab({ errors, onRetry }: { errors: Errors; onRetry: (key: 
         {errors.health.length === 0 ? (
           <p className="m-0 text-sm">No model calls yet today.</p>
         ) : (
-          <table className="text-left text-sm">
-            <thead>
-              <tr>
-                <th scope="col">Model</th>
-                <th scope="col">Calls</th>
-                <th scope="col">Failures</th>
-                <th scope="col">Retries</th>
-                <th scope="col">p95</th>
-              </tr>
-            </thead>
-            <tbody>
-              {errors.health.map((h) => (
-                <tr key={h.model}>
-                  <th scope="row">{h.model}</th>
-                  <td>{h.calls}</td>
-                  <td>{h.failures}</td>
-                  <td>{h.retries}</td>
-                  <td>{h.p95_ms === null ? '–' : `${(h.p95_ms / 1000).toFixed(1)}s`}</td>
+          <div className="overflow-x-auto">
+            <table className="text-left text-sm">
+              <thead>
+                <tr>
+                  <th scope="col" className={cell}>Model</th>
+                  <th scope="col" className={cell}>Calls</th>
+                  <th scope="col" className={cell}>Failures</th>
+                  <th scope="col" className={cell}>Retries</th>
+                  <th scope="col" className={cell}>p95</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {errors.health.map((h) => (
+                  <tr key={h.model}>
+                    <th scope="row" className={`${cell} whitespace-nowrap font-semibold`}>{h.model}</th>
+                    <td className={cell}>{h.calls}</td>
+                    <td className={cell}>{h.failures}</td>
+                    <td className={cell}>{h.retries}</td>
+                    <td className={`${cell} whitespace-nowrap`}>
+                      {h.p95_ms === null ? '–' : `${(h.p95_ms / 1000).toFixed(1)}s ${isSession(h.model) ? 'session length' : 'latency'}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -92,28 +100,36 @@ export function ErrorsTab({ errors, onRetry }: { errors: Errors; onRetry: (key: 
       <section aria-label="Recent errors" className="flex flex-col gap-2">
         <h2 className={heading}>Recent errors ({errors.recent.length})</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[56rem] table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-44" />
+              <col className="w-28" />
+              <col />
+              <col className="w-48" />
+              <col className="w-40" />
+              <col className="w-32" />
+            </colgroup>
             <thead>
               <tr>
-                <th scope="col">Time</th>
-                <th scope="col">Component</th>
-                <th scope="col">Message</th>
-                <th scope="col">Code</th>
-                <th scope="col">Project</th>
-                <th scope="col">Visitor</th>
+                <th scope="col" className={cell}>Time</th>
+                <th scope="col" className={cell}>Component</th>
+                <th scope="col" className={cell}>Message</th>
+                <th scope="col" className={cell}>Code</th>
+                <th scope="col" className={cell}>Project</th>
+                <th scope="col" className={cell}>Visitor</th>
               </tr>
             </thead>
             <tbody>
               {errors.recent.map((e, i) => (
                 <tr key={`${e.at}-${i}`} data-testid="incident">
-                  <td className="whitespace-nowrap">{when(e.at)}</td>
-                  <td>{e.component}</td>
-                  <td>{e.message}</td>
-                  <td>
+                  <td className={`${cell} whitespace-nowrap`}>{when(e.at)}</td>
+                  <td className={`${cell} break-words`}>{e.component}</td>
+                  <td className={`${cell} break-words`}>{e.message}</td>
+                  <td className={`${cell} break-all`}>
                     <code>{e.code}</code>
                   </td>
-                  <td>{e.project_id ?? '–'}</td>
-                  <td>
+                  <td className={`${cell} break-all font-mono text-xs`}>{e.project_id ?? '–'}</td>
+                  <td className={`${cell} break-all`}>
                     <code>{e.visitor ?? '–'}</code>
                   </td>
                 </tr>
