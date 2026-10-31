@@ -10,6 +10,8 @@ import {
   initialStoryboard,
   loadProject,
   panelPhase,
+  redrawChoice,
+  REFUSED,
   REVIEW_WAIT_MS,
   reduceStoryboard,
   replaceShots,
@@ -149,7 +151,24 @@ describe('panelPhase', () => {
   })
 
   it('says an edit is a change', () => {
-    expect(panelPhase(shot(1, { panel: panel() }), { kind: 'edit_panel', status: 'running', revision: 2, message: null }, true)).toEqual({ kind: 'drawing', what: 'change' })
+    expect(panelPhase(shot(1, { panel: panel() }), { kind: 'edit_panel', status: 'running', revision: 2, message: null }, true)).toEqual({ kind: 'drawing', what: 'change', previousUrl: '/media/projects/p1/panels/s1/r1/image' })
+  })
+
+  it('keeps the drawing on screen while it is redrawn, and after the redraw fails with a suggestion', () => {
+    const drawn = shot(1, { panel: panel({ suggested_change: 'keep it calm and friendly: a fox' }) })
+    const queued = panelPhase(drawn, { kind: 'generate_panel', status: 'queued', revision: 2, message: null }, true)
+    expect(queued).toEqual({ kind: 'queued', previousUrl: '/media/projects/p1/panels/s1/r1/image' })
+    expect(panelPhase(drawn, { kind: 'generate_panel', status: 'failed', revision: 2, message: 'Refused.' }, true)).toEqual({
+      kind: 'failed',
+      message: 'Refused.',
+      previousUrl: '/media/projects/p1/panels/s1/r1/image',
+      suggestion: 'keep it calm and friendly: a fox',
+    })
+  })
+
+  it('says what to change on a refused first drawing seen after a reload', () => {
+    const refused = panelPhase(shot(1, { panel: panel({ status: 'failed', image_url: null, suggested_change: 'keep it calm' }) }), undefined, true)
+    expect(refused).toEqual({ kind: 'failed', message: REFUSED, suggestion: 'keep it calm' })
   })
 
   it('shows the failure message', () => {
@@ -262,5 +281,21 @@ describe('busy studio and failed sheets', () => {
   it('a failed cast job fetches the project again, so the card can say why', () => {
     const after = reduceStoryboard(initialStoryboard, { type: 'job.updated', kind: 'generate_cast', key: 'k', status: 'failed', shot_id: null, revision: null, message: "Amara's sheet couldn't be drawn." })
     expect(after.stale).toBe(true)
+  })
+})
+
+describe('redrawChoice', () => {
+  const versions = [{ revision: 2, image_url: '/media/r2', width: 1920, height: 1280 }]
+  const redrawn = shot(1, { panel: panel({ revision: 3, shown_revision: 3, versions }) })
+
+  it('offers the drawing a Redraw replaced once the new one is in', () => {
+    expect(redrawChoice(redrawn, 2, { kind: 'generate_panel', status: 'succeeded', revision: 3, message: null })).toEqual({ revision: 2, imageUrl: '/media/r2' })
+  })
+
+  it('offers nothing while drawing, when nothing was asked, or when the new drawing is not in yet', () => {
+    expect(redrawChoice(redrawn, 2, { kind: 'generate_panel', status: 'running', revision: 3, message: null })).toBeNull()
+    expect(redrawChoice(redrawn, undefined, undefined)).toBeNull()
+    expect(redrawChoice(shot(1, { panel: panel({ revision: 2, shown_revision: 2, versions }) }), 2, undefined)).toBeNull()
+    expect(redrawChoice(redrawn, 1, undefined)).toBeNull() // no longer kept
   })
 })

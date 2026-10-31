@@ -26,9 +26,10 @@ import { ShotCard } from '../../features/storyboard/components/ShotCard'
 import { StoryboardGrid } from '../../features/storyboard/components/StoryboardGrid'
 import { useAutoDraft } from '../../features/storyboard/hooks/useAutoDraft'
 import { usePanelRender } from '../../features/storyboard/hooks/usePanelRender'
+import { useRedrawChoice } from '../../features/storyboard/hooks/useRedrawChoice'
 import { useProjectSync } from '../../features/storyboard/hooks/useProjectSync'
 import { boardProgress } from '../../features/storyboard/progress'
-import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
+import { panelPhase, redrawChoice, useStoryboardStore } from '../../features/storyboard/store'
 import { mediaUrl } from '../../shared/api/client'
 import { shotLabel } from '../../shared/format'
 import { Notice } from '../../shared/ui/Notice'
@@ -98,6 +99,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
   const canDraw = useCallback((shot: Shot) => castReadyFor(cast, shot), [cast])
   useAutoDraft(projectId, canDraw)
   const draw = usePanelRender(projectId)
+  const choosing = useRedrawChoice(projectId)
   const editing = useEditorStore((s) => s.shotId)
   const nameOf = (id: string) => cast.characters.find((c) => c.id === id)?.name ?? nameFromId(id)
   const onProject = useCallback((p: Project) => {
@@ -201,12 +203,26 @@ export function StudioPage({ projectId }: { projectId: string }) {
                 const display = numbered[i] ?? shot
                 const phase = panelPhase(shot, board.jobs[shot.id], castReadyFor(cast, shot))
                 const review = shot.panel?.review ?? null
+                const previousUrl = phase.kind === 'queued' || phase.kind === 'drawing' || phase.kind === 'failed' ? phase.previousUrl : undefined
+                const kept = redrawChoice(shot, board.redraws[shot.id], board.jobs[shot.id])
                 return (
                   <ShotCard
                     key={shot.id}
                     shot={display}
                     phase={phase}
                     imageSrc={phase.kind === 'ready' ? mediaUrl(phase.imageUrl) : null}
+                    previousSrc={mediaUrl(previousUrl)}
+                    choice={
+                      kept
+                        ? {
+                            previousSrc: mediaUrl(kept.imageUrl),
+                            busy: choosing.busy?.shotId === shot.id,
+                            error: choosing.error?.shotId === shot.id ? choosing.error.message : null,
+                            onUseNew: () => choosing.useNew(shot),
+                            onKeepPrevious: () => void choosing.restore(shot, kept.revision),
+                          }
+                        : null
+                    }
                     names={shot.character_ids.map(nameOf)}
                     composing={board.composing[shot.id] === 'queued' || board.composing[shot.id] === 'running'}
                     badge={review ? <ReviewBadge review={review} /> : null}
@@ -217,12 +233,12 @@ export function StudioPage({ projectId }: { projectId: string }) {
                           busy={supervisor.busy !== null}
                           onApply={() => void supervisor.applyFix(shot)}
                           onAccept={() => void supervisor.accept(shot)}
-                          onRedraw={() => void draw(shot, 'draft')}
+                          onRedraw={() => void draw(shot, 'draft', { change: '', surprise: false })}
                         />
                       ) : null
                     }
                     onOpen={() => useEditorStore.getState().open(shot.id, shot.panel?.revision ?? null)}
-                    onRetry={() => void draw(shot, 'draft')}
+                    onRedraw={(redraw) => void draw(shot, 'draft', redraw)}
                     onDelete={() => edits.remove({ kind: 'shot', id: shot.id, label: `Shot ${shotLabel(display.number)}` })}
                   />
                 )

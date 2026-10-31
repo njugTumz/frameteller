@@ -32,8 +32,8 @@ describe('studio: cast approval gates the panels', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Approve cast' }))
     await waitFor(() => expect(renders().map((c) => [c.path, c.body])).toEqual([
-      ['/projects/p1/shots/1/panel', { quality: 'draft' }],
-      ['/projects/p1/shots/2/panel', { quality: 'draft' }],
+      ['/projects/p1/shots/1/panel', { quality: 'draft', redraw: false, change: '', surprise: false }],
+      ['/projects/p1/shots/2/panel', { quality: 'draft', redraw: false, change: '', surprise: false }],
     ]))
     expect(await screen.findAllByText('In the queue')).toHaveLength(2)
 
@@ -73,7 +73,7 @@ describe('studio: cast approval gates the panels', () => {
     await userEvent.type(description, 'a girl in a red raincoat')
     await userEvent.click(screen.getByRole('button', { name: 'Approve cast' }))
     await waitFor(() => expect(api.calls.find((c) => c.path.endsWith('/approve'))?.body).toEqual({ descriptions: { mira: 'a girl in a red raincoat' } }))
-    expect(await screen.findByText('Redrawing Mira…')).toBeTruthy()
+    expect(await screen.findByText('Redrawing Mira… about 20 s')).toBeTruthy()
     expect(screen.getAllByText('Waiting for the cast')).toHaveLength(2)
   })
 })

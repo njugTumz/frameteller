@@ -73,7 +73,7 @@ describe('panel editor: select → mask', () => {
     await userEvent.type(screen.getByRole('textbox', { name: /change how it looks/i }), 'make it glow green')
     await userEvent.click(screen.getByRole('button', { name: 'Make this change' }))
     await waitFor(() => expect(api.calls.at(-1)?.body).toEqual({ instruction: 'make it glow green (the lantern)' }))
-    expect(await screen.findByText('Making your change…')).toBeTruthy()
+    expect(await screen.findByText('Making your change… about 20 s')).toBeTruthy()
     expect(useEditorStore.getState().before).toEqual({ imageUrl: '/media/projects/p1/panels/s1/r1/image', revision: 1 })
   })
 })

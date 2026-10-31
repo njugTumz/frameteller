@@ -3,6 +3,7 @@ import type { Mask, Shot } from '../../../shared/api/types'
 import { framingLabel, seconds, shotLabel } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
+import { DrawingOverlay, RedrawControl, type RedrawChoice } from '../../../shared/ui/Redraw'
 import type { Snapshot } from '../store'
 
 export interface EditorView {
@@ -21,9 +22,18 @@ export interface EditorView {
   editError: string | null
   /** A saved move is being composited on a clean plate. */
   preparing?: boolean
+  /** Earlier drawings, newest first: Use this shows one again (ADR 0022). */
+  versions?: { revision: number; src: string }[]
+  /** After a Redraw: the drawing it replaced, until Use new or Keep previous. */
+  redrawnFrom?: number | null
+  /** The version being brought back, and why that failed. */
+  restoring?: number | null
+  restoreError?: string | null
+  /** After a refusal: the plainer change to start the Redraw box from. */
+  suggestion?: string | null
 }
 
-const DRAWING = { draft: 'Drawing draft…', final: 'Drawing the final panel…', change: 'Making your change…' } as const
+const DRAWING = { draft: 'Drawing… about 20 s', final: 'Drawing the final panel… about 20 s', change: 'Making your change… about 20 s' } as const
 
 /** The panel editor: a modal over the studio. Esc or Close returns to the storyboard. */
 export function PanelEditor({
@@ -35,6 +45,9 @@ export function PanelEditor({
   onResetMoves,
   onToggleBefore,
   onDrawFinal,
+  onRedraw,
+  onUseVersion,
+  onUseNew,
 }: {
   view: EditorView
   canvas: ReactNode
@@ -44,6 +57,9 @@ export function PanelEditor({
   onResetMoves: () => void
   onToggleBefore: () => void
   onDrawFinal: () => void
+  onRedraw: (choice: RedrawChoice) => void
+  onUseVersion: (revision: number) => void
+  onUseNew: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -87,10 +103,14 @@ export function PanelEditor({
               ) : (
                 canvas
               )}
-              {(view.drawing || view.selecting || view.preparing) && (
-                <p className="absolute top-3 left-3 m-0 rounded-full bg-ink px-3 py-1 text-sm font-semibold text-paper" role="status">
-                  {view.drawing ? DRAWING[view.drawing] : view.selecting ? 'Finding the object…' : 'Preparing the background…'}
-                </p>
+              {view.drawing ? (
+                <DrawingOverlay label={DRAWING[view.drawing]} />
+              ) : (
+                (view.selecting || view.preparing) && (
+                  <p className="absolute top-3 left-3 m-0 rounded-full bg-ink px-3 py-1 text-sm font-semibold text-paper" role="status">
+                    {view.selecting ? 'Finding the object…' : 'Preparing the background…'}
+                  </p>
+                )
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
@@ -142,14 +162,57 @@ export function PanelEditor({
             {view.editError && <Notice tone="error" title={view.editError} />}
             {view.failed && <Notice tone="error" title={view.failed} />}
 
+            {(view.versions?.length ?? 0) > 0 && (
+              <section aria-labelledby="versions-title" className="flex flex-col gap-2" data-testid="versions">
+                <h3 id="versions-title" className="m-0 text-sm font-bold uppercase tracking-wider text-muted">
+                  Earlier drawings
+                </h3>
+                {(view.redrawnFrom ?? null) !== null && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border-[1.5px] border-ink bg-sheet p-2 text-sm" role="group" aria-label="New drawing">
+                    <span className="font-semibold">Here’s the new drawing. Keep it?</span>
+                    <Button size="sm" variant="ink" disabled={(view.restoring ?? null) !== null} onClick={onUseNew}>
+                      Use new
+                    </Button>
+                    <Button size="sm" disabled={(view.restoring ?? null) !== null} onClick={() => onUseVersion(view.redrawnFrom as number)}>
+                      Keep previous
+                    </Button>
+                  </div>
+                )}
+                <ul className="m-0 flex list-none gap-2 overflow-x-auto p-0">
+                  {view.versions?.map((v) => (
+                    <li key={v.revision} className="flex w-28 shrink-0 flex-col gap-1">
+                      <img src={v.src} alt={`Shot ${shot.number}, revision ${v.revision}`} className="frame aspect-video w-full object-cover" />
+                      <Button size="sm" variant="quiet" className="px-1" disabled={!!view.drawing || (view.restoring ?? null) !== null} onClick={() => onUseVersion(v.revision)} aria-label={`Use revision ${v.revision} again`}>
+                        {view.restoring === v.revision ? 'Bringing back…' : 'Use this'}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                {view.restoreError && <Notice tone="error" title={view.restoreError} />}
+              </section>
+            )}
+
             <section aria-labelledby="final-title" className="mt-auto flex flex-col gap-2 border-t-[1.5px] border-rule pt-4">
               <h3 id="final-title" className="m-0 font-bold">
                 Happy with it?
               </h3>
-              <p className="m-0 text-sm text-muted">Draw final redraws this panel at high quality, with the same characters. About 20 seconds, $0.01.</p>
-              <Button variant="outline" onClick={onDrawFinal} disabled={!!view.drawing}>
-                Draw final
-              </Button>
+              <p className="m-0 text-sm text-muted">
+                Draw final redraws this panel at high quality, with the same characters. Redraw tries a new take, and you can say what should change. About 20 seconds, $0.01 each.
+              </p>
+              <div className="flex flex-wrap items-start gap-2">
+                <Button variant="outline" onClick={onDrawFinal} disabled={!!view.drawing}>
+                  Draw final
+                </Button>
+                <RedrawControl
+                  key={view.suggestion ?? 'redraw'}
+                  subject={`shot ${shot.number}`}
+                  className="min-h-11"
+                  disabled={!!view.drawing}
+                  initialChange={view.suggestion ?? ''}
+                  initiallyOpen={!!view.suggestion}
+                  onRedraw={onRedraw}
+                />
+              </div>
             </section>
           </div>
         </div>

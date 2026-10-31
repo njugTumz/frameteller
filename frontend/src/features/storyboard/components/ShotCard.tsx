@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { Shot } from '../../../shared/api/types'
 import { framingLabel, inLine, seconds, shotLabel } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
+import { DrawingOverlay, RedrawControl, type RedrawChoice } from '../../../shared/ui/Redraw'
 import type { PanelPhase } from '../store'
 import { PanelSketch } from './PanelSketch'
 
@@ -36,8 +37,10 @@ export function ShotCard({
   composing = false,
   badge,
   review,
+  previousSrc = null,
+  choice = null,
   onOpen,
-  onRetry,
+  onRedraw,
   onDelete,
 }: {
   shot: Shot
@@ -49,13 +52,22 @@ export function ShotCard({
   badge?: ReactNode
   /** Under the shot: what the supervisor wants the user to look at. */
   review?: ReactNode
+  /** The drawing being replaced while a redraw runs, or that stays after it failed. */
+  previousSrc?: string | null
+  /** After a Redraw: the drawing it replaced, to keep instead (ADR 0022). */
+  choice?: { previousSrc: string | null; busy: boolean; error?: string | null; onUseNew: () => void; onKeepPrevious: () => void } | null
   onOpen: () => void
-  onRetry: () => void
+  /** Redraw, with what should change or Surprise me: on every drawn panel, and after a failure. */
+  onRedraw: (choice: RedrawChoice) => void
   /** "Delete shot", with Undo. */
   onDelete?: () => void
 }) {
   const busy = phase.kind === 'drawing' || phase.kind === 'queued'
   const outdated = phase.kind === 'ready' && phase.outdated
+  const failed = phase.kind === 'failed' ? phase : null
+  // A drawn panel keeps its drawing on screen while it is drawn again, and after that fails.
+  const keep = (busy || failed) && previousSrc
+  const canRedraw = phase.kind === 'ready' || phase.kind === 'failed'
   return (
     <li className="arrive flex flex-col" data-testid="shot-card" data-shot={shot.number} data-phase={phase.kind} data-outdated={outdated || undefined}>
       <article aria-labelledby={`shot-${shot.id}`} className="flex flex-col gap-2">
@@ -73,6 +85,11 @@ export function ShotCard({
                 </span>
               )}
             </button>
+          ) : keep ? (
+            <div className="relative size-full">
+              <img src={previousSrc} alt={`Shot ${shot.number}: ${shot.action} (the drawing before)`} className="size-full object-cover" draggable={false} />
+              {busy && <DrawingOverlay label={phase.kind === 'queued' ? status(phase) : 'Drawing… about 20 s'} />}
+            </div>
           ) : (
             <div className="grid size-full place-items-center">
               <PanelSketch animated={busy} />
@@ -102,21 +119,46 @@ export function ShotCard({
         {phase.kind === 'waiting-cast' && (
           <p className="m-0 text-xs text-muted">Panels are drawn once you approve the cast, so every frame shows the same characters.</p>
         )}
-        {outdated && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-muted">The story changed after this was drawn.</span>
-            <Button size="sm" onClick={onRetry}>
-              Draw again
-            </Button>
+        {choice && (
+          <div className="flex flex-col gap-2 rounded-md border-[1.5px] border-ink bg-sheet p-2 text-sm" role="group" aria-label={`New drawing of shot ${shot.number}`} data-testid="redraw-choice">
+            <div className="flex items-center gap-2">
+              {choice.previousSrc && <img src={choice.previousSrc} alt="The drawing before" className="h-10 w-15 rounded-sm border border-rule object-cover" />}
+              <span className="font-semibold">Here’s the new drawing. Keep it?</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="ink" disabled={choice.busy} onClick={choice.onUseNew}>
+                Use new
+              </Button>
+              <Button size="sm" disabled={choice.busy} onClick={choice.onKeepPrevious}>
+                {choice.busy ? 'Bringing it back…' : 'Keep previous'}
+              </Button>
+            </div>
+            {choice.error && (
+              <p className="m-0 text-danger" role="alert">
+                {choice.error}
+              </p>
+            )}
           </div>
         )}
-        {phase.kind === 'failed' && (
-          <div className="flex flex-wrap items-center gap-2 text-sm" role="alert">
-            <span className="text-danger">{phase.message}</span>
-            <Button size="sm" onClick={onRetry}>
-              Draw again
-            </Button>
+        {outdated && <p className="m-0 text-sm text-muted">The story changed after this was drawn. Redraw it to match.</p>}
+        {failed && (
+          <div className="flex flex-col gap-1 text-sm" role="alert">
+            <span className="text-danger">{failed.message}</span>
+            {failed.suggestion && (
+              <span className="text-muted">
+                Suggested change: <q className="font-semibold text-ink">{failed.suggestion}</q>
+              </span>
+            )}
           </div>
+        )}
+        {canRedraw && (
+          <RedrawControl
+            key={failed?.suggestion ?? 'redraw'}
+            subject={`shot ${shot.number}`}
+            initialChange={failed?.suggestion ?? ''}
+            initiallyOpen={!!failed?.suggestion}
+            onRedraw={onRedraw}
+          />
         )}
       </article>
     </li>

@@ -1,6 +1,8 @@
 import { useCallback } from 'react'
 import { ApiError } from '../../../shared/api/client'
 import type { Mask, Shot, Ticket } from '../../../shared/api/types'
+import type { RedrawChoice } from '../../../shared/ui/Redraw'
+import type { DrawPanel } from '../../storyboard/hooks/usePanelRender'
 import { editPanel, selectObject } from '../api'
 import { cachedMaskAt, instructionFor, toPanelPoint, useEditorStore } from '../store'
 
@@ -11,6 +13,8 @@ export interface EditorActions {
   select(point: { x: number; y: number }, preview: { width: number; height: number }, cached?: { masks: Mask[]; panel: { width: number; height: number } }): Promise<void>
   sendEdit(): Promise<void>
   drawFinal(): Promise<void>
+  /** A new take, with what should change (ADR 0022). */
+  redraw(choice: RedrawChoice): Promise<void>
 }
 
 /**
@@ -21,7 +25,7 @@ export function usePanelEditor(
   projectId: string,
   shot: Shot | null,
   onQueued: (shot: Shot, ticket: Ticket) => void,
-  draw: (shot: Shot, quality: 'draft' | 'final') => Promise<void>,
+  draw: DrawPanel,
 ): EditorActions {
   const select = useCallback(
     async (point: { x: number; y: number }, preview: { width: number; height: number }, cached?: { masks: Mask[]; panel: { width: number; height: number } }) => {
@@ -72,5 +76,14 @@ export function usePanelEditor(
     await draw(shot, 'final')
   }, [shot, draw, remember])
 
-  return { select, sendEdit, drawFinal }
+  const redraw = useCallback(
+    async (choice: RedrawChoice) => {
+      if (!shot) return
+      remember()
+      await draw(shot, 'draft', choice)
+    },
+    [shot, draw, remember],
+  )
+
+  return { select, sendEdit, drawFinal, redraw }
 }

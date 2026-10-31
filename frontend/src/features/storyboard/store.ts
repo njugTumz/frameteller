@@ -68,6 +68,11 @@ export interface StoryboardState {
    * events may come after the session socket closed, so the project is polled for a while (REVIEW_WAIT_MS).
    */
   awaitingReview: Record<string, number>
+  /**
+   * Shots this page asked to Redraw, with the revision shown when it asked (ADR 0022). Once the new drawing is
+   * in, the card offers Use new / Keep previous until one is chosen.
+   */
+  redraws: Record<string, number>
   /** A job finished: the project must be fetched again for the new image and masks. */
   stale: boolean
   loaded: boolean
@@ -92,6 +97,7 @@ export const initialStoryboard: StoryboardState = {
   continuityChecks: true,
   supervisor: [],
   awaitingReview: {},
+  redraws: {},
   stale: false,
   loaded: false,
 }
@@ -154,6 +160,7 @@ export function reduceStoryboard(state: StoryboardState, event: ServerEvent, now
         shots: replaceShots(state.shots, event.removed_shot_ids, event.shots),
         jobs: omit(state.jobs, event.removed_shot_ids),
         requested: omit(state.requested, event.removed_shot_ids),
+        redraws: omit(state.redraws, event.removed_shot_ids),
       }
     case 'job.updated': {
       const done = event.status === 'succeeded' || event.status === 'failed'
@@ -301,27 +308,51 @@ export function loadProject(state: StoryboardState, project: Project, now = Date
 
 export type PanelPhase =
   | { kind: 'waiting-cast' }
-  | { kind: 'queued'; position?: number; estimateS?: number }
-  | { kind: 'drawing'; what: 'draft' | 'final' | 'change' }
+  | { kind: 'queued'; position?: number; estimateS?: number; previousUrl?: string }
+  | { kind: 'drawing'; what: 'draft' | 'final' | 'change'; previousUrl?: string }
   | { kind: 'ready'; imageUrl: string; revision: number; outdated: boolean }
-  | { kind: 'failed'; message: string }
+  | { kind: 'failed'; message: string; previousUrl?: string; suggestion?: string }
   | { kind: 'not-drawn' }
 
-/** What a shot card shows, from the shot, its latest job, and whether its cast is approved. */
+/**
+ * What a shot card shows, from the shot, its latest job, and whether its cast is approved. While a panel that
+ * was drawn before is drawn again, or after that fails, its drawing stays on screen (previousUrl).
+ */
 export function panelPhase(shot: Shot, job: PanelJob | undefined, castReady: boolean, quality: 'draft' | 'final' = 'draft'): PanelPhase {
   const panel = shot.panel
+  const previous = panel?.status === 'ready' && panel.image_url ? { previousUrl: panel.image_url } : {}
   if (job?.status === 'queued') {
-    return job.position ? { kind: 'queued', position: job.position, estimateS: job.estimateS ?? 0 } : { kind: 'queued' }
+    return job.position ? { kind: 'queued', position: job.position, estimateS: job.estimateS ?? 0, ...previous } : { kind: 'queued', ...previous }
   }
   if (job?.status === 'running' || (panel?.status === 'pending' && job?.status !== 'failed')) {
-    return { kind: 'drawing', what: job?.kind === 'edit_panel' ? 'change' : quality }
+    return { kind: 'drawing', what: job?.kind === 'edit_panel' ? 'change' : quality, ...previous }
   }
-  if (job?.status === 'failed') return { kind: 'failed', message: job.message ?? 'This panel could not be drawn.' }
+  if (job?.status === 'failed') {
+    const suggestion = panel?.suggested_change ? { suggestion: panel.suggested_change } : {}
+    return { kind: 'failed', message: job.message ?? 'This panel could not be drawn.', ...previous, ...suggestion }
+  }
   if (panel?.status === 'ready' && panel.image_url) {
     return { kind: 'ready', imageUrl: panel.image_url, revision: panel.shown_revision, outdated: panel.outdated }
   }
-  if (panel?.status === 'failed') return { kind: 'failed', message: 'This panel could not be drawn.' }
+  if (panel?.status === 'failed') {
+    return panel.suggested_change ? { kind: 'failed', message: REFUSED, suggestion: panel.suggested_change } : { kind: 'failed', message: 'This panel could not be drawn.' }
+  }
   return castReady ? { kind: 'not-drawn' } : { kind: 'waiting-cast' }
+}
+
+/** A refused panel seen after its job's message was lost (a reload): the server's words for it. */
+export const REFUSED = "Muse Image's safety filter turned this frame down twice. Redraw it and say plainly what happens, by look and action, or use the suggested change."
+
+/**
+ * After a Redraw: the drawing it replaced, while the user has not chosen between them. Null while the redraw
+ * runs, when nothing was asked, or when that drawing is no longer among the panel's versions.
+ */
+export function redrawChoice(shot: Shot, from: number | undefined, job: PanelJob | undefined): { revision: number; imageUrl: string } | null {
+  const panel = shot.panel
+  if (from === undefined || !panel || panel.status !== 'ready' || inFlight(job?.status)) return null
+  if (panel.shown_revision <= from) return null
+  const previous = (panel.versions ?? []).find((v) => v.revision === from)
+  return previous ? { revision: previous.revision, imageUrl: previous.image_url } : null
 }
 
 interface StoryboardActions {
@@ -331,6 +362,8 @@ interface StoryboardActions {
   resolve(key: string, status: ResolvedStatus, message: string | null): void
   markRequested(shotId: string, requested: boolean): void
   jobStarted(shotId: string, job: PanelJob): void
+  /** A Redraw was asked while revision `from` was shown; null: the choice is made (or the redraw failed). */
+  redrawFrom(shotId: string, from: number | null): void
   set(patch: Partial<StoryboardState>): void
   setSync(sync: SyncStatus): void
   reset(): void
@@ -345,6 +378,7 @@ export const useStoryboardStore = create<StoryboardState & StoryboardActions>()(
   markRequested: (shotId, requested) =>
     set((s) => ({ requested: requested ? { ...s.requested, [shotId]: true } : omit(s.requested, [shotId]) })),
   jobStarted: (shotId, job) => set((s) => ({ jobs: { ...s.jobs, [shotId]: job }, lastJobAt: Date.now() })),
+  redrawFrom: (shotId, from) => set((s) => ({ redraws: from === null ? omit(s.redraws, [shotId]) : { ...s.redraws, [shotId]: from } })),
   set: (patch) => set(patch),
   setSync: (sync) => set({ sync }),
   reset: () => set(initialStoryboard),

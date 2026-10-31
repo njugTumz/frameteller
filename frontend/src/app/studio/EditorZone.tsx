@@ -7,14 +7,15 @@ import { usePanelEditor } from '../../features/panel-editor/hooks/usePanelEditor
 import { movesFromLayers, usePanelLayers } from '../../features/panel-editor/hooks/usePanelLayers'
 import { NO_MOVE, moveKey, useEditorStore } from '../../features/panel-editor/store'
 import { usePanelRender } from '../../features/storyboard/hooks/usePanelRender'
-import { panelPhase, useStoryboardStore } from '../../features/storyboard/store'
+import { useRedrawChoice } from '../../features/storyboard/hooks/useRedrawChoice'
+import { panelPhase, redrawChoice, useStoryboardStore } from '../../features/storyboard/store'
 import { mediaUrl } from '../../shared/api/client'
 import type { Mask, Shot, Ticket } from '../../shared/api/types'
 
 const PANEL = { width: 1920, height: 1280 } // Muse Image's 3:2 output (ADR 0003), until the panel reports its size
 
 function queued(shot: Shot, ticket: Ticket): void {
-  useStoryboardStore.getState().jobStarted(shot.id, { kind: 'edit_panel', status: 'queued', revision: ticket.revision, message: null })
+  useStoryboardStore.getState().jobStarted(shot.id, { kind: 'edit_panel', status: 'queued', revision: ticket.revision, message: null, key: ticket.key })
 }
 
 export function EditorZone({ projectId }: { projectId: string }) {
@@ -23,6 +24,8 @@ export function EditorZone({ projectId }: { projectId: string }) {
   const job = useStoryboardStore((s) => (editor.shotId ? s.jobs[editor.shotId] : undefined))
   const draw = usePanelRender(projectId)
   const actions = usePanelEditor(projectId, shot, queued, draw)
+  const choosing = useRedrawChoice(projectId)
+  const from = useStoryboardStore((s) => (editor.shotId ? s.redraws[editor.shotId] : undefined))
   const dictation = useDictation(projectId)
   const layers = usePanelLayers(projectId, shot)
   const composing = useStoryboardStore((s) => (editor.shotId ? s.composing[editor.shotId] : undefined))
@@ -65,6 +68,11 @@ export function EditorZone({ projectId }: { projectId: string }) {
         beforeSrc: mediaUrl(editor.before?.imageUrl),
         editError: editor.editError,
         preparing: composing === 'queued' || composing === 'running',
+        versions: (panel.versions ?? []).map((v) => ({ revision: v.revision, src: mediaUrl(v.image_url) ?? '' })),
+        redrawnFrom: redrawChoice(shot, from, job)?.revision ?? null,
+        restoring: choosing.busy?.shotId === shot.id ? choosing.busy.revision : null,
+        restoreError: choosing.error?.shotId === shot.id ? choosing.error.message : null,
+        suggestion: phase.kind === 'failed' ? (phase.suggestion ?? null) : null,
       }}
       canvas={
         <PanelCanvas
@@ -96,6 +104,9 @@ export function EditorZone({ projectId }: { projectId: string }) {
       onResetMoves={() => void layers.resetAll(Object.keys(moves))}
       onToggleBefore={() => editor.set({ showBefore: !editor.showBefore })}
       onDrawFinal={() => void actions.drawFinal()}
+      onRedraw={(choice) => void actions.redraw(choice)}
+      onUseVersion={(r) => void choosing.restore(shot, r)}
+      onUseNew={() => choosing.useNew(shot)}
     />
   )
 }

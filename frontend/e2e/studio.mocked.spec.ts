@@ -3,6 +3,7 @@ import { cutoutSvg, panelSvg, sheetSvg } from './fixtures'
 
 // The whole studio against a backend faked inside the browser: no network, no credits.
 const API = 'http://localhost:8000'
+const DRAFT = { quality: 'draft', redraw: false, change: '', surprise: false } // a first drawing, not a Redraw
 
 type Json = Record<string, unknown>
 
@@ -145,7 +146,7 @@ test('narrate, cut two shots, approve the cast, see drafts, and select an object
   await expect(page.getByRole('img', { name: 'Reference sheet for Mira' })).toBeVisible()
   await page.getByRole('button', { name: 'Approve cast' }).click()
   await expect(page.getByRole('img', { name: /^Shot \d:/ })).toHaveCount(2)
-  expect(backend.posted.filter((p) => String(p.path).endsWith('/panel')).map((p) => p.body)).toEqual([{ quality: 'draft' }, { quality: 'draft' }])
+  expect(backend.posted.filter((p) => String(p.path).endsWith('/panel')).map((p) => p.body)).toEqual([DRAFT, DRAFT])
 
   await page.getByRole('button', { name: 'Edit the panel of shot 1' }).click()
   const canvas = page.getByTestId('panel-canvas')
@@ -340,7 +341,8 @@ test('manage the cast, follow a reveal, hear the silence warning, move, export a
   const second = page.locator('[data-testid="shot-card"][data-shot="2"]')
   await expect(second).toContainText('Pip, the fox kit, moves in the reeds.')
   await expect(second).toHaveAttribute('data-outdated', 'true')
-  await expect(second.getByRole('button', { name: 'Draw again' })).toBeVisible()
+  await expect(second).toContainText('Redraw it to match.')
+  await expect(second.getByRole('button', { name: 'Redraw shot 2' })).toBeVisible()
   await expect(cards).toHaveCount(2) // the guessed Ember left the cast
   await page.getByRole('button', { name: 'Stop telling' }).click()
   await expect(page.getByText('We didn’t hear anything. Check your microphone.')).toBeVisible()
