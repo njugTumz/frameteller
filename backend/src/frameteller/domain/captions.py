@@ -16,8 +16,9 @@ from frameteller.domain.animatic import Animatic
 from frameteller.domain.text import is_cjk, join, tokens, units
 
 MAX_WORDS = 10
-MAX_CHARS = 16  # Chinese, Japanese and Korean: characters a line aims at
+MAX_CHARS = 18  # Chinese, Japanese and Korean: the most characters a line holds before the text is split
 OVER_CHARS = 2  # a short line may run this much longer to take a whole Korean word
+PAUSES = "、。，．！？,.!?"  # noqa: RUF001 (full-width punctuation)
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,18 +47,24 @@ def caption_lines(text: str) -> list[str]:
 
 
 def _cjk_lines(words: list[str]) -> list[str]:
+    """The first line, cut near an even share of the text, then the rest split again."""
     total = sum(map(units, words))
-    limit = math.ceil(total / math.ceil(total / MAX_CHARS)) if total else MAX_CHARS
-    lines: list[list[str]] = [[]]
-    size = 0
-    for word in words:
+    if total <= MAX_CHARS:
+        return [join(words)] if words else []
+    limit = math.ceil(total / math.ceil(total / MAX_CHARS))
+    size, cut = 0, 0
+    for cut, word in enumerate(words):
         n = units(word)
-        if lines[-1] and size + n > limit + (OVER_CHARS if size < limit - OVER_CHARS else 0):
-            lines.append([])
-            size = 0
-        lines[-1].append(word)
+        if cut and size + n > limit + (OVER_CHARS if size < limit - OVER_CHARS else 0):
+            break
         size += n
-    return [join(line) for line in lines]
+    else:
+        cut = len(words)
+    # End the line after a comma or full stop in its second half rather than mid-phrase.
+    pause = next((i for i in range(cut - 1, 0, -1) if words[i - 1][-1] in PAUSES), None)
+    if pause is not None and sum(map(units, words[pause:cut])) <= limit // 2:
+        cut = pause
+    return [join(words[:cut]), *_cjk_lines(words[cut:])]
 
 
 def caption_cues(animatic: Animatic, captions: Sequence[str] | None = None, offset_ms: int = 0) -> list[Cue]:

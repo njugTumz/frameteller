@@ -37,17 +37,26 @@ def test_srt() -> None:
     )
 
 
-def test_chinese_japanese_and_korean_split_by_characters_about_fourteen_to_eighteen_a_line() -> None:
+def test_chinese_japanese_and_korean_split_by_characters_at_most_eighteen_a_line() -> None:
+    assert caption_lines("小さな灯台に、白い猫のミオが住んでいる。") == [
+        "小さな灯台に、白い猫のミオが住んでいる。"
+    ]  # 18
+    assert caption_lines("夜幕降临，丽娜接住了一只纸风筝。她笑了。") == ["夜幕降临，丽娜接住了一只纸风筝。她笑了。"]
     ja = caption_lines("夜の屋上で、リナは「紙の凧」を拾った。そして空を見上げた。")
-    assert ja == ["夜の屋上で、リナは「紙の凧」を", "拾った。そして空を見上げた。"]
-    assert caption_lines("夜幕降临，丽娜接住了一只纸风筝。她笑了。") == ["夜幕降临，丽娜接住了", "一只纸风筝。她笑了。"]
+    assert ja == ["夜の屋上で、リナは「紙の凧」を", "拾った。そして空を見上げた。"]  # 24 characters: 12 + 12
     long = caption_lines("一二三四五六七八九十" * 4 + "。")
-    assert [len(line) for line in long] == [14, 14, 13]
+    assert [len(line) for line in long] == [14, 13, 14]  # 40 characters: three lines of 13 or 14
     assert not any(line[0] in "、。，」" for line in ja + long)  # a line never starts with a closing mark
     ko = caption_lines("밤이 오면 리나는 지붕 위에서 종이 연을 잡고 하늘을 올려다본다.")
     assert ko == ["밤이 오면 리나는 지붕 위에서", "종이 연을 잡고 하늘을 올려다본다."]  # whole words
-    assert all(14 <= len(line) <= 18 for line in ja)
-    assert all(sum(not ch.isspace() for ch in line) <= 18 for line in ko)
+    assert all(sum(not ch.isspace() for ch in line) <= 18 for line in ko + ja + long)
+
+
+def test_a_line_ends_after_a_comma_rather_than_mid_phrase() -> None:
+    assert caption_lines("夜になると、ミオは灯台の窓から星を数える。") == [
+        "夜になると、",
+        "ミオは灯台の窓から星を数える。",
+    ]
 
 
 def test_a_japanese_shot_shares_its_time_by_characters() -> None:
