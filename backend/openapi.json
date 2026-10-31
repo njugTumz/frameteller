@@ -258,7 +258,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why the last sheet could not be drawn, in plain words; offer Try again and Edit.",
+            "description": "Why the last sheet could not be drawn, in plain words; offer Redraw and Edit.",
             "title": "Sheet Error"
           },
           "suggested_description": {
@@ -270,7 +270,7 @@
                 "type": "null"
               }
             ],
-            "description": "Muse Image refused this description twice: offer this instead (Use this description); Try again with the same description answers 409 edit_first.",
+            "description": "Muse Image refused this description twice: offer this instead (Use this description); Redraw with the same description and no change answers 409 edit_first.",
             "title": "Suggested Description"
           }
         },
@@ -973,7 +973,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why its sheet could not be drawn; offer Try again.",
+            "description": "Why its sheet could not be drawn; offer Redraw.",
             "title": "Sheet Error"
           },
           "suggested_clothes": {
@@ -985,7 +985,7 @@
                 "type": "null"
               }
             ],
-            "description": "Muse Image refused these clothes twice: offer this instead (Use this description); Try again with the same clothes answers 409 edit_first.",
+            "description": "Muse Image refused these clothes twice: offer this instead (Use this description); Redraw with the same clothes and no change answers 409 edit_first.",
             "title": "Suggested Clothes"
           }
         },
@@ -1234,6 +1234,26 @@
             "title": "Status",
             "type": "string"
           },
+          "suggested_change": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last drawing was refused: offer this plainer change for Redraw (What should change?).",
+            "title": "Suggested Change"
+          },
+          "versions": {
+            "description": "Earlier drawings, newest first: what Keep previous switches back to.",
+            "items": {
+              "$ref": "#/components/schemas/PanelVersionOut"
+            },
+            "title": "Versions",
+            "type": "array"
+          },
           "width": {
             "anyOf": [
               {
@@ -1268,6 +1288,35 @@
         ],
         "title": "PanelStyle",
         "type": "string"
+      },
+      "PanelVersionOut": {
+        "description": "An earlier drawing of the panel; POST .../panel/versions/{revision} shows it again.",
+        "properties": {
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "image_url": {
+            "title": "Image Url",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision",
+          "image_url",
+          "width",
+          "height"
+        ],
+        "title": "PanelVersionOut",
+        "type": "object"
       },
       "ProblemReportIn": {
         "properties": {
@@ -1434,6 +1483,16 @@
       },
       "RenderRequest": {
         "properties": {
+          "change": {
+            "default": "",
+            "description": "Redraw: what should change.",
+            "examples": [
+              "make it night"
+            ],
+            "maxLength": 300,
+            "title": "Change",
+            "type": "string"
+          },
           "quality": {
             "default": "draft",
             "enum": [
@@ -1442,6 +1501,18 @@
             ],
             "title": "Quality",
             "type": "string"
+          },
+          "redraw": {
+            "default": false,
+            "description": "The user's Redraw: a new take with a different composition (ADR 0022).",
+            "title": "Redraw",
+            "type": "boolean"
+          },
+          "surprise": {
+            "default": false,
+            "description": "Redraw: Surprise me, a bolder new take.",
+            "title": "Surprise",
+            "type": "boolean"
           }
         },
         "title": "RenderRequest",
@@ -1759,6 +1830,27 @@
           "image_url"
         ],
         "title": "SharedShotOut",
+        "type": "object"
+      },
+      "SheetRedrawRequest": {
+        "description": "Redraw of a reference sheet (ADR 0022): optionally what should change, or Surprise me.",
+        "properties": {
+          "change": {
+            "default": "",
+            "examples": [
+              "give her a bigger hat"
+            ],
+            "maxLength": 300,
+            "title": "Change",
+            "type": "string"
+          },
+          "surprise": {
+            "default": false,
+            "title": "Surprise",
+            "type": "boolean"
+          }
+        },
+        "title": "SheetRedrawRequest",
         "type": "object"
       },
       "ShotOut": {
@@ -3055,7 +3147,7 @@
     },
     "/projects/{project_id}/cast/{character_id}/looks/{look_id}/regenerate": {
       "post": {
-        "description": "Draw the sheet of one of a character's outfits again (its \"Try again\").",
+        "description": "Redraw the sheet of one of a character's outfits (its \"Redraw\"), optionally with what should change.",
         "operationId": "regenerate_look_projects__project_id__cast__character_id__looks__look_id__regenerate_post",
         "parameters": [
           {
@@ -3089,6 +3181,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SheetRedrawRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {
@@ -3223,6 +3332,7 @@
     },
     "/projects/{project_id}/cast/{character_id}/regenerate": {
       "post": {
+        "description": "Redraw a character's sheet, optionally with what should change. 409 edit_first: Muse Image refused this\ndescription, so say what should change or edit it first.",
         "operationId": "regenerate_reference_projects__project_id__cast__character_id__regenerate_post",
         "parameters": [
           {
@@ -3246,6 +3356,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SheetRedrawRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {
@@ -4306,7 +4433,7 @@
     },
     "/projects/{project_id}/shots/{n}/panel": {
       "post": {
-        "description": "Queue the next revision of shot n's panel. Progress arrives as job.updated events.",
+        "description": "Queue the next revision of shot n's panel. Progress arrives as job.updated events. A Redraw is a new take\n(a different composition), with what should change; the earlier drawing is kept in the panel's versions.",
         "operationId": "render_panel_projects__project_id__shots__n__panel_post",
         "parameters": [
           {
@@ -4829,6 +4956,91 @@
           }
         },
         "summary": "Select Object",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/shots/{n}/panel/versions/{revision}": {
+      "post": {
+        "description": "Keep previous: show an earlier drawing again (one of the panel's versions). Free: no model call.",
+        "operationId": "use_panel_version_projects__project_id__shots__n__panel_versions__revision__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "N",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Use Panel Version",
         "tags": [
           "projects"
         ]

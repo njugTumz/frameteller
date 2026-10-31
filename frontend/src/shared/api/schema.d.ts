@@ -272,7 +272,7 @@ export interface paths {
         put?: never;
         /**
          * Regenerate Look
-         * @description Draw the sheet of one of a character's outfits again (its "Try again").
+         * @description Redraw the sheet of one of a character's outfits (its "Redraw"), optionally with what should change.
          */
         post: operations["regenerate_look_projects__project_id__cast__character_id__looks__look_id__regenerate_post"];
         delete?: never;
@@ -310,7 +310,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Regenerate Reference */
+        /**
+         * Regenerate Reference
+         * @description Redraw a character's sheet, optionally with what should change. 409 edit_first: Muse Image refused this
+         *     description, so say what should change or edit it first.
+         */
         post: operations["regenerate_reference_projects__project_id__cast__character_id__regenerate_post"];
         delete?: never;
         options?: never;
@@ -564,7 +568,8 @@ export interface paths {
         put?: never;
         /**
          * Render Panel
-         * @description Queue the next revision of shot n's panel. Progress arrives as job.updated events.
+         * @description Queue the next revision of shot n's panel. Progress arrives as job.updated events. A Redraw is a new take
+         *     (a different composition), with what should change; the earlier drawing is kept in the panel's versions.
          */
         post: operations["render_panel_projects__project_id__shots__n__panel_post"];
         delete?: never;
@@ -667,6 +672,26 @@ export interface paths {
          * @description Select the object under a click. Pre-segmented masks answer at once (cached: true); otherwise SAM runs.
          */
         post: operations["select_object_projects__project_id__shots__n__panel_select_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/shots/{n}/panel/versions/{revision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Use Panel Version
+         * @description Keep previous: show an earlier drawing again (one of the panel's versions). Free: no model call.
+         */
+        post: operations["use_panel_version_projects__project_id__shots__n__panel_versions__revision__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1007,12 +1032,12 @@ export interface components {
             review?: components["schemas"]["ReviewOut"] | null;
             /**
              * Sheet Error
-             * @description Why the last sheet could not be drawn, in plain words; offer Try again and Edit.
+             * @description Why the last sheet could not be drawn, in plain words; offer Redraw and Edit.
              */
             sheet_error?: string | null;
             /**
              * Suggested Description
-             * @description Muse Image refused this description twice: offer this instead (Use this description); Try again with the same description answers 409 edit_first.
+             * @description Muse Image refused this description twice: offer this instead (Use this description); Redraw with the same description and no change answers 409 edit_first.
              */
             suggested_description?: string | null;
         };
@@ -1349,12 +1374,12 @@ export interface components {
             reference_url: string | null;
             /**
              * Sheet Error
-             * @description Why its sheet could not be drawn; offer Try again.
+             * @description Why its sheet could not be drawn; offer Redraw.
              */
             sheet_error?: string | null;
             /**
              * Suggested Clothes
-             * @description Muse Image refused these clothes twice: offer this instead (Use this description); Try again with the same clothes answers 409 edit_first.
+             * @description Muse Image refused these clothes twice: offer this instead (Use this description); Redraw with the same clothes and no change answers 409 edit_first.
              */
             suggested_clothes?: string | null;
         };
@@ -1456,6 +1481,16 @@ export interface components {
             shown_revision: number;
             /** Status */
             status: string;
+            /**
+             * Suggested Change
+             * @description The last drawing was refused: offer this plainer change for Redraw (What should change?).
+             */
+            suggested_change?: string | null;
+            /**
+             * Versions
+             * @description Earlier drawings, newest first: what Keep previous switches back to.
+             */
+            versions?: components["schemas"]["PanelVersionOut"][];
             /** Width */
             width: number | null;
         };
@@ -1464,6 +1499,20 @@ export interface components {
          * @enum {string}
          */
         PanelStyle: "pencil" | "paper_cutout";
+        /**
+         * PanelVersionOut
+         * @description An earlier drawing of the panel; POST .../panel/versions/{revision} shows it again.
+         */
+        PanelVersionOut: {
+            /** Height */
+            height: number;
+            /** Image Url */
+            image_url: string;
+            /** Revision */
+            revision: number;
+            /** Width */
+            width: number;
+        };
         /** ProblemReportIn */
         ProblemReportIn: {
             /**
@@ -1549,11 +1598,30 @@ export interface components {
         /** RenderRequest */
         RenderRequest: {
             /**
+             * Change
+             * @description Redraw: what should change.
+             * @default
+             * @example make it night
+             */
+            change: string;
+            /**
              * Quality
              * @default draft
              * @enum {string}
              */
             quality: "draft" | "final";
+            /**
+             * Redraw
+             * @description The user's Redraw: a new take with a different composition (ADR 0022).
+             * @default false
+             */
+            redraw: boolean;
+            /**
+             * Surprise
+             * @description Redraw: Surprise me, a bolder new take.
+             * @default false
+             */
+            surprise: boolean;
         };
         /** ReorderRequest */
         ReorderRequest: {
@@ -1697,6 +1765,23 @@ export interface components {
             image_url: string | null;
             /** Number */
             number: number;
+        };
+        /**
+         * SheetRedrawRequest
+         * @description Redraw of a reference sheet (ADR 0022): optionally what should change, or Surprise me.
+         */
+        SheetRedrawRequest: {
+            /**
+             * Change
+             * @default
+             * @example give her a bigger hat
+             */
+            change: string;
+            /**
+             * Surprise
+             * @default false
+             */
+            surprise: boolean;
         };
         /** ShotOut */
         ShotOut: {
@@ -2533,7 +2618,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SheetRedrawRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -2637,7 +2726,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SheetRedrawRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -3760,6 +3853,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    use_panel_version_projects__project_id__shots__n__panel_versions__revision__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                n: number;
+                revision: number;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
