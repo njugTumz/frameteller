@@ -104,6 +104,14 @@ async def test_a_refused_sheet_offers_a_description_and_try_again_asks_for_an_ed
     assert cast["dad"]["suggested_description"] is None
     r = await api.client.post("/projects/p1/cast/wren/regenerate")
     assert (r.status_code, r.json()["error"]["code"]) == (409, "edit_first")
+    assert "say what should change" in r.json()["error"]["message"]
+    surprise = await api.client.post("/projects/p1/cast/wren/regenerate", json={"surprise": True})
+    assert surprise.status_code == 409  # a fresh take of the same words would be refused again
+
+    changed = await api.client.post("/projects/p1/cast/wren/regenerate", json={"change": "a storybook child"})
+    assert changed.status_code == 202  # What should change? lets the Redraw through
+    await api.settle()
+    assert "Correction: a storybook child." in api.fakes.images.generated[-1].prompt
 
     r = await api.client.post(
         "/projects/p1/cast/approve", json={"descriptions": {"wren": "cheerful young storybook character"}}

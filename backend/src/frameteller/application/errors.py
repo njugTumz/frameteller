@@ -36,9 +36,11 @@ class ScriptError(ApplicationError):
 
 
 class RefusedUnchangedError(ApplicationError):
-    """Try again on a sheet Muse Image refused, with the same description: it would be refused again (ADR 0019)."""
+    """Redraw of a sheet Muse Image refused, with the same description: it would be refused again (ADR 0019)."""
 
-    user_message = "Muse Image turned this description down. Use the suggested description or edit it first."
+    user_message = (
+        "Muse Image turned this description down. Use the suggested description, edit it, or say what should change."
+    )
 
 
 class NothingToSegmentError(ApplicationError):

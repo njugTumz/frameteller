@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-from frameteller.application.image_safety import appearance_only, is_person, is_young, sanitize, suggest_description
+from frameteller.application.image_safety import (
+    appearance_only,
+    is_person,
+    is_young,
+    plainer,
+    sanitize,
+    suggest_description,
+)
 from frameteller.domain import Character, Look, PanelStyle, Shot
 
 STYLES = {
@@ -56,7 +64,7 @@ def reference_prompt(
         "identical in both views. "
         f"{ONLY_AS_DESCRIBED} Plain light grey background, no text, no scenery. "
         f"Style: {STYLES[style]}. {NOT_PHOTOREAL}"
-        + (f" Correction from the continuity review: {correction.strip().rstrip('.')}." if correction.strip() else "")
+        + (f" Correction: {correction.strip().rstrip('.')}." if correction.strip() else "")
     )
 
 
@@ -76,15 +84,58 @@ def look_reference_prompt(
         f"Show the same character twice side by side: a front view and a three-quarter view, {pose}, "
         "identical in both views. Plain light grey background, no text, no scenery. "
         f"Style: {STYLES[style]}. {NOT_PHOTOREAL}"
-        + (f" Correction from the continuity review: {correction.strip().rstrip('.')}." if correction.strip() else "")
+        + (f" Correction: {correction.strip().rstrip('.')}." if correction.strip() else "")
     )
 
 
+@dataclass(frozen=True, slots=True)
+class Redraw:
+    """The user's Redraw of a panel (ADR 0022): what should change, or a bolder new take ("Surprise me")."""
+
+    change: str = ""
+    surprise: bool = False
+
+
+# A plain Redraw must look different: each take moves the camera, chosen by revision so a retry draws the same take.
+TAKES = (
+    "the camera lower, looking slightly up",
+    "the camera higher, looking slightly down",
+    "the camera moved to one side",
+    "the camera over one character's shoulder",
+    "the camera further back, with more of the setting",
+    "the camera a little closer",
+    "the camera on the opposite side",
+)
+
+
+def redraw_direction(redraw: Redraw, revision: int, *, safer: bool = False) -> str:
+    """How this redraw differs from the drawing before it, while the shot keeps its meaning."""
+    take = TAKES[revision % len(TAKES)]
+    if redraw.surprise:
+        lines = [
+            f"This is a bold new take on the shot: an unexpected composition with {take}, more dynamic staging "
+            "and dramatic lighting."
+        ]
+    else:
+        lines = [f"This is a new take on the shot: a different composition with {take}, and fresh poses."]
+    if change := redraw.change.strip().rstrip("."):
+        lines.append(f"The director asks for this change: {plainer(change) if safer else sanitize(change)}.")
+    lines.append("Keep the same characters, clothes, setting and action.")
+    return " ".join(lines)
+
+
 def panel_prompt(
-    shot: Shot, cast: Sequence[Character], style: PanelStyle = PanelStyle.PENCIL, *, safer: bool = False
+    shot: Shot,
+    cast: Sequence[Character],
+    style: PanelStyle = PanelStyle.PENCIL,
+    *,
+    safer: bool = False,
+    redraw: Redraw | None = None,
+    revision: int = 1,
 ) -> str:
     """`cast` is the shot's characters; those with sheets are attached as references in the same order.
-    `safer`, the retry after a refusal, describes each character by look only (ADR 0019)."""
+    `safer`, the retry after a refusal, describes each character by look only (ADR 0019). `redraw` varies the
+    composition (and applies the user's change) for take `revision`."""
     describe = suggest_description if safer else sanitize
     who = "; ".join(f"{c.name}: {describe(c.canonical_description)}" for c in cast)
     lines = [
@@ -99,6 +150,8 @@ def panel_prompt(
             "in their reference sheet: same species, proportions, colours, markings, clothes and drawing style, "
             "with no added clothing, accessories or change of style."
         )
+    if redraw is not None:
+        lines.append(redraw_direction(redraw, revision, safer=safer))
     lines.append(f"Style: {STYLES[style]}. {NOT_PHOTOREAL} No text, captions or panel borders.")
     return " ".join(lines)
 

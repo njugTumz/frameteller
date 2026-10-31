@@ -27,6 +27,7 @@ from frameteller.interface.dto import (
     ReorderRequest,
     SelectionOut,
     SelectRequest,
+    SheetRedrawRequest,
     ShotOut,
     ShotsOut,
     TicketOut,
@@ -71,14 +72,27 @@ async def approve_cast(project_id: ProjectId, body: CastApproval, c: Deps) -> Ca
 
 
 @router.post("/{project_id}/cast/{character_id}/regenerate", status_code=status.HTTP_202_ACCEPTED)
-async def regenerate_reference(project_id: ProjectId, character_id: CharacterId, c: Deps) -> TicketOut:
-    return TicketOut.of(await c.request_cast.execute(project_id, [character_id], again=True))
+async def regenerate_reference(
+    project_id: ProjectId, character_id: CharacterId, c: Deps, body: SheetRedrawRequest | None = None
+) -> TicketOut:
+    """Redraw a character's sheet, optionally with what should change. 409 edit_first: Muse Image refused this
+    description, so say what should change or edit it first."""
+    body = body or SheetRedrawRequest()
+    return TicketOut.of(
+        await c.request_cast.execute(project_id, [character_id], body.change, again=True, surprise=body.surprise)
+    )
 
 
 @router.post("/{project_id}/cast/{character_id}/looks/{look_id}/regenerate", status_code=status.HTTP_202_ACCEPTED)
-async def regenerate_look(project_id: ProjectId, character_id: CharacterId, look_id: LookId, c: Deps) -> TicketOut:
-    """Draw the sheet of one of a character's outfits again (its "Try again")."""
-    return TicketOut.of(await c.request_cast.execute(project_id, [f"{character_id}/{look_id}"], again=True))
+async def regenerate_look(
+    project_id: ProjectId, character_id: CharacterId, look_id: LookId, c: Deps, body: SheetRedrawRequest | None = None
+) -> TicketOut:
+    """Redraw the sheet of one of a character's outfits (its "Redraw"), optionally with what should change."""
+    body = body or SheetRedrawRequest()
+    target = f"{character_id}/{look_id}"
+    return TicketOut.of(
+        await c.request_cast.execute(project_id, [target], body.change, again=True, surprise=body.surprise)
+    )
 
 
 @router.delete("/{project_id}/turns/{turn_id}", responses={422: {"model": ErrorOut}})
@@ -126,9 +140,20 @@ async def merge_character(
     "/{project_id}/shots/{n}/panel", status_code=status.HTTP_202_ACCEPTED, responses={402: {"model": ErrorOut}}
 )
 async def render_panel(project_id: ProjectId, n: ShotNumber, body: RenderRequest, c: Deps) -> TicketOut:
-    """Queue the next revision of shot n's panel. Progress arrives as job.updated events."""
+    """Queue the next revision of shot n's panel. Progress arrives as job.updated events. A Redraw is a new take
+    (a different composition), with what should change; the earlier drawing is kept in the panel's versions."""
     shot = await c.find_shot.execute(project_id, n)
-    return TicketOut.of(await c.request_render.execute(project_id, shot.id, body.as_quality()))
+    return TicketOut.of(await c.request_render.execute(project_id, shot.id, body.as_quality(), redraw=body.as_redraw()))
+
+
+@router.post("/{project_id}/shots/{n}/panel/versions/{revision}", responses={404: {"model": ErrorOut}})
+async def use_panel_version(
+    project_id: ProjectId, n: ShotNumber, revision: Annotated[int, Path(ge=1)], c: Deps
+) -> ProjectOut:
+    """Keep previous: show an earlier drawing again (one of the panel's versions). Free: no model call."""
+    shot = await c.find_shot.execute(project_id, n)
+    await c.use_version.execute(project_id, shot.id, revision)
+    return ProjectOut.of(await c.get_project.execute(project_id))
 
 
 @router.post("/{project_id}/shots/{n}/panel/edit", status_code=status.HTTP_202_ACCEPTED)

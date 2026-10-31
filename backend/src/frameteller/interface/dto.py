@@ -29,6 +29,7 @@ from frameteller.application.events import (
     TurnFinished,
 )
 from frameteller.application.ports import Quality, SpeechMode, SpeechOptions
+from frameteller.application.prompts import Redraw
 from frameteller.application.use_cases import (
     AnimaticOptions,
     Beat,
@@ -103,9 +104,28 @@ class CharacterMerge(BaseModel):
 
 class RenderRequest(BaseModel):
     quality: Literal["draft", "final"] = "draft"
+    redraw: bool = Field(
+        default=False, description="The user's Redraw: a new take with a different composition (ADR 0022)."
+    )
+    change: str = Field(
+        default="", max_length=300, description="Redraw: what should change.", examples=["make it night"]
+    )
+    surprise: bool = Field(default=False, description="Redraw: Surprise me, a bolder new take.")
 
     def as_quality(self) -> Quality:
         return "high" if self.quality == "final" else "low"
+
+    def as_redraw(self) -> Redraw | None:
+        if not (self.redraw or self.surprise or self.change.strip()):
+            return None
+        return Redraw(self.change.strip(), self.surprise)
+
+
+class SheetRedrawRequest(BaseModel):
+    """Redraw of a reference sheet (ADR 0022): optionally what should change, or Surprise me."""
+
+    change: str = Field(default="", max_length=300, examples=["give her a bigger hat"])
+    surprise: bool = False
 
 
 class EditRequest(BaseModel):
@@ -329,6 +349,15 @@ class SupervisorEntryOut(BaseModel):
         )
 
 
+class PanelVersionOut(BaseModel):
+    """An earlier drawing of the panel; POST .../panel/versions/{revision} shows it again."""
+
+    revision: int
+    image_url: str
+    width: int
+    height: int
+
+
 class PanelOut(BaseModel):
     revision: int = Field(description="The model render the masks and layers belong to.")
     shown_revision: int = Field(description="What image_url shows: the composite of the layers, or the render.")
@@ -341,6 +370,13 @@ class PanelOut(BaseModel):
     layers: list[LayerOut]
     outdated: bool = Field(description="The shot changed after this was drawn; draw it again.")
     review: ReviewOut | None = Field(default=None, description="The continuity check of this render, once done.")
+    versions: list[PanelVersionOut] = Field(
+        default_factory=list, description="Earlier drawings, newest first: what Keep previous switches back to."
+    )
+    suggested_change: str | None = Field(
+        default=None,
+        description="The last drawing was refused: offer this plainer change for Redraw (What should change?).",
+    )
 
     @classmethod
     def of(cls, p: Panel) -> PanelOut:
@@ -359,6 +395,13 @@ class PanelOut(BaseModel):
             review=ReviewOut.of(p.review.outcome, p.review.summary, p.review.verdict, p.review.fixes)
             if p.review and p.review.revision == p.revision
             else None,
+            versions=[
+                PanelVersionOut(
+                    revision=v.revision, image_url=media_url(v.image) or "", width=v.size.width, height=v.size.height
+                )
+                for v in p.versions
+            ],
+            suggested_change=p.suggested_change,
         )
 
 
@@ -404,11 +447,11 @@ class LookOut(BaseModel):
     clothes: str
     reference_url: str | None
     from_shots: list[int] = Field(description="The shots that show this look, in order.")
-    sheet_error: str | None = Field(default=None, description="Why its sheet could not be drawn; offer Try again.")
+    sheet_error: str | None = Field(default=None, description="Why its sheet could not be drawn; offer Redraw.")
     suggested_clothes: str | None = Field(
         default=None,
-        description="Muse Image refused these clothes twice: offer this instead (Use this description); Try again "
-        "with the same clothes answers 409 edit_first.",
+        description="Muse Image refused these clothes twice: offer this instead (Use this description); Redraw "
+        "with the same clothes and no change answers 409 edit_first.",
     )
 
 
@@ -419,15 +462,15 @@ class CharacterOut(BaseModel):
     reference_url: str | None
     review: ReviewOut | None = Field(default=None, description="The continuity check of this reference sheet.")
     sheet_error: str | None = Field(
-        default=None, description="Why the last sheet could not be drawn, in plain words; offer Try again and Edit."
+        default=None, description="Why the last sheet could not be drawn, in plain words; offer Redraw and Edit."
     )
     looks: list[LookOut] = Field(
         default_factory=list, description="Outfits besides the everyday one, each with its sheet."
     )
     suggested_description: str | None = Field(
         default=None,
-        description="Muse Image refused this description twice: offer this instead (Use this description); Try "
-        "again with the same description answers 409 edit_first.",
+        description="Muse Image refused this description twice: offer this instead (Use this description); Redraw "
+        "with the same description and no change answers 409 edit_first.",
     )
 
     @classmethod

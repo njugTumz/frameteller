@@ -25,6 +25,7 @@ from frameteller.application.use_cases.requests import (
     RequestCastReferences,
     RequestPanelEdit,
     RequestPanelRender,
+    UsePanelVersion,
 )
 from frameteller.application.use_cases.segment_object_at_point import SegmentObjectAtPoint, Selection
 from frameteller.application.use_cases.share import OpenShare, RevokeShare, SharePreview, ShareProject
@@ -102,5 +103,6 @@ __all__ = [
     "SupervisePanel",
     "TranscribeInstruction",
     "TranscriptCorrection",
+    "UsePanelVersion",
     "character_mask_id",
 ]

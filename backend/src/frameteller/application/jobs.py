@@ -30,11 +30,15 @@ def pre_segment_job(project_id: str, shot_id: str, revision: int) -> Job:
     )
 
 
-def panel_job(project_id: str, shot_id: str, revision: int, quality: Quality) -> Job:
+def panel_job(
+    project_id: str, shot_id: str, revision: int, quality: Quality, redraw: str = "", change: str = ""
+) -> Job:
+    """`redraw` is "" (a first drawing or Draw final), "new" or "surprise"; `change` is what should change."""
+    payload = {"project_id": project_id, "shot_id": shot_id, "revision": str(revision), "quality": quality}
+    if redraw:
+        payload |= {"redraw": redraw, "change": change}
     return Job(
-        kind=GENERATE_PANEL,
-        idempotency_key=panel_key(GENERATE_PANEL, project_id, shot_id, revision),
-        payload={"project_id": project_id, "shot_id": shot_id, "revision": str(revision), "quality": quality},
+        kind=GENERATE_PANEL, idempotency_key=panel_key(GENERATE_PANEL, project_id, shot_id, revision), payload=payload
     )
 
 

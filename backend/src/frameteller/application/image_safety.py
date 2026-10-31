@@ -190,6 +190,12 @@ def plainer(prompt: str) -> str:
     return _tidy(_AGE_WORD.sub("", text))
 
 
+def suggest_change(action: str) -> str:
+    """For a refused panel: a change to offer for Redraw, the shot's action said plainly (ADR 0022)."""
+    action = plainer(action).rstrip(".")
+    return f"keep it calm and friendly: {action}" if action else "keep it calm and friendly"
+
+
 class SafeImages:
     """ImageGenerationPort that cleans every prompt and retries a refused one once, more plainly.
 

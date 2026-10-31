@@ -40,6 +40,7 @@ from frameteller.application.ports import (
     VideoRendererPort,
     VisitorQuota,
 )
+from frameteller.application.prompts import Redraw
 from frameteller.application.use_cases import (
     AcceptReview,
     AnimaticOptions,
@@ -87,6 +88,7 @@ from frameteller.application.use_cases import (
     StoryDirector,
     SupervisePanel,
     TranscribeInstruction,
+    UsePanelVersion,
 )
 from frameteller.application.use_cases.gallery import (
     BrowseGallery,
@@ -163,6 +165,7 @@ class Container:
     remove_character: RemoveCharacter
     merge_characters: MergeCharacters
     request_render: RequestPanelRender
+    use_version: UsePanelVersion
     request_edit: RequestPanelEdit
     select_object: SegmentObjectAtPoint
     request_animatic: RequestAnimaticExport
@@ -308,7 +311,11 @@ def wire(
 
     handlers[job_kinds.GENERATE_PANEL] = handler(
         lambda p: generate_panel.execute(
-            p["project_id"], p["shot_id"], int(p["revision"]), "high" if p["quality"] == "high" else "low"
+            p["project_id"],
+            p["shot_id"],
+            int(p["revision"]),
+            "high" if p["quality"] == "high" else "low",
+            Redraw(p.get("change", ""), p["redraw"] == "surprise") if p.get("redraw") else None,
         )
     )
     handlers[job_kinds.PRE_SEGMENT_PANEL] = handler(
@@ -395,6 +402,7 @@ def wire(
         remove_character=RemoveCharacter(repo),
         merge_characters=MergeCharacters(repo, queue),
         request_render=RequestPanelRender(repo, queue, allowance),
+        use_version=UsePanelVersion(repo, queue),
         request_edit=RequestPanelEdit(repo, queue, allowance),
         select_object=SegmentObjectAtPoint(repo, segmentation, budget, ids),
         move_object=MovePanelObject(repo, queue),

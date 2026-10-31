@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 from frameteller.application import costs
+from frameteller.application.errors import ApplicationError, ModelContentFilteredError
+from frameteller.application.image_safety import suggest_change
 from frameteller.application.jobs import pre_segment_job, supervise_job
 from frameteller.application.ports import (
     BudgetGuard,
@@ -10,8 +14,19 @@ from frameteller.application.ports import (
     ProjectRepository,
     Quality,
 )
-from frameteller.application.prompts import panel_prompt
+from frameteller.application.prompts import Redraw, panel_prompt
 from frameteller.domain import Panel, Project
+
+log = logging.getLogger("frameteller.panels")
+
+
+class PanelRefusedError(ApplicationError):
+    """Muse Image refused the frame twice. The message says what to change; the panel keeps a suggestion."""
+
+    user_message = (
+        "Muse Image's safety filter turned this frame down twice. Redraw it and say plainly what happens, "
+        "by look and action, or use the suggested change."
+    )
 
 
 class GeneratePanel:
@@ -30,7 +45,10 @@ class GeneratePanel:
     ) -> None:
         self._repo, self._images, self._budget, self._jobs = repo, images, budget, jobs
 
-    async def execute(self, project_id: str, shot_id: str, revision: int, quality: Quality = "low") -> Panel:
+    async def execute(
+        self, project_id: str, shot_id: str, revision: int, quality: Quality = "low", redraw: Redraw | None = None
+    ) -> Panel:
+        """`redraw`: the user's Redraw, which varies the composition and applies what should change (ADR 0022)."""
         snapshot = await self._repo.get(project_id)
         snapshot.require_cast_approved()
         shot = snapshot.shot(shot_id)
@@ -44,14 +62,21 @@ class GeneratePanel:
         try:
             stored = await self._images.generate(
                 ImageRequest(
-                    panel_prompt(shot, cast, snapshot.style),
+                    panel_prompt(shot, cast, snapshot.style, redraw=redraw, revision=revision),
                     quality,
                     "panel",
                     references,
-                    fallback_prompt=panel_prompt(shot, cast, snapshot.style, safer=True),
+                    fallback_prompt=panel_prompt(
+                        shot, cast, snapshot.style, safer=True, redraw=redraw, revision=revision
+                    ),
                 ),
                 store_as=f"projects/{project_id}/panels/{shot_id}/r{revision}/image",
             )
+        except ModelContentFilteredError as e:
+            suggestion = suggest_change(shot.action)
+            await self._repo.update(project_id, lambda p: p.panel(shot_id).mark_failed(suggestion))
+            log.warning("panel refused twice by the content filter", extra={"shot_id": shot_id})
+            raise PanelRefusedError(str(e)) from e
         except Exception:
             await self._repo.update(project_id, lambda p: p.panel(shot_id).mark_failed())
             raise
