@@ -17,7 +17,8 @@ export interface StartMessage {
   /** Teleprompter and "Read it to me" (ADR 0015). */
   script?: string
   script_format?: ScriptFormat
-  /** "Read it to me": a voice and a language locale from GET /voices. */
+  /** "Read it to me": a voice and a language locale from GET /voices. Narrate and Teleprompter: the language the
+   * narrator speaks, for the transcriber (missing: auto-detect). */
   voice?: string
   language?: string
 }

@@ -929,7 +929,7 @@ export interface components {
             caption_language?: string | null;
             /**
              * Subtitles
-             * @description Burn the captions into the picture (English, French, Spanish, Portuguese). The MP4 always has them as a soft track, and an .srt is kept beside it.
+             * @description Burn the captions into the picture (all nine languages, each in its own script). The MP4 always has them as a soft track, and an .srt is kept beside it.
              * @default true
              */
             subtitles: boolean;

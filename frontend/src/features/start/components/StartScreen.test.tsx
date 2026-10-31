@@ -13,6 +13,7 @@ const FORM: StartForm = {
   format: 'text',
   voice: 'en-US-AvaMultilingualNeural',
   language: 'en-US',
+  speaking: '',
 }
 
 const VOICES: Voices = {
@@ -82,6 +83,22 @@ describe('StartScreen', () => {
 
     rerender(<StartScreen {...props({ onChange, voices: VOICES })} />)
     expect((screen.getByRole('radio', { name: /Read it to me/ }) as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('asks which language the narrator will speak, auto-detect first, each language in its own name', () => {
+    const onChange = vi.fn()
+    const { rerender } = render(<StartScreen {...props({ onChange })} />)
+    const picker = screen.getByLabelText<HTMLSelectElement>("Language you'll speak")
+    expect(picker.value).toBe('')
+    expect([...picker.options].map((o) => o.text)).toEqual([
+      'Detect automatically', 'English', 'Français', 'Español', 'Português', 'हिन्दी', 'العربية', '日本語', '한국어', '中文',
+    ])
+    fireEvent.change(picker, { target: { value: 'ja-JP' } })
+    expect(onChange).toHaveBeenCalledWith({ speaking: 'ja-JP' })
+    rerender(<StartScreen {...props({ onChange, form: { ...FORM, mode: 'teleprompter', speaking: 'zh-CN' } })} />)
+    expect(screen.getByLabelText<HTMLSelectElement>("Language you'll speak").value).toBe('zh-CN')
+    rerender(<StartScreen {...props({ onChange, voices: VOICES, form: { ...FORM, mode: 'read' } })} />)
+    expect(screen.queryByLabelText("Language you'll speak")).toBeNull() // a voice reads: its own language picker
   })
 
   it('takes a script for the teleprompter, with its length against the limit', () => {

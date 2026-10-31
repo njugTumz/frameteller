@@ -52,6 +52,20 @@ describe('Narration', () => {
     expect(events).toEqual(['session.started', 'transcript.partial'])
   })
 
+  it('sends the language the narrator chose, to narrate or read a teleprompter script', async () => {
+    const { openMic } = fakeMic()
+    const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    n.use({ onEvent: () => undefined, extraKeywords: [], language: 'ja-JP' })
+    await started(n)
+    expect(FakeSocket.latest().json[0]).toEqual({ mode: 'narrate', keywords: [], keep_audio: true, language: 'ja-JP' })
+    n.stop()
+
+    const t = new Narration('p2', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    t.use({ onEvent: () => undefined, extraKeywords: [], script: { text: '夜。', format: 'text' }, language: 'zh-CN' })
+    await started(t)
+    expect(FakeSocket.latest().json[0]).toMatchObject({ mode: 'teleprompter', language: 'zh-CN' })
+  })
+
   it('keeps audio captured while connecting and sends it first, up to 2 s', async () => {
     const { mic, openMic } = fakeMic()
     const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })

@@ -19,11 +19,20 @@ describe('the telling choice', () => {
 
   it('is kept per story and falls back to narrating', () => {
     expect(loadChoice('p1')).toEqual(DEFAULT_CHOICE)
-    const choice = { mode: 'read' as const, script: 'Lena waves.', format: 'text' as const, voice: 'en-GB-AdaMultilingualNeural', language: 'fr-FR' }
+    const choice = { mode: 'read' as const, script: 'Lena waves.', format: 'text' as const, voice: 'en-GB-AdaMultilingualNeural', language: 'fr-FR', speaking: '' }
     saveChoice('p1', choice)
     expect(loadChoice('p1')).toEqual(choice)
     window.localStorage.setItem('frameteller.telling.p2', '{"mode":"sing"}')
     expect(loadChoice('p2').mode).toBe('narrate')
+  })
+
+  it('keeps the language the narrator speaks, and auto-detect for anything we do not offer', () => {
+    saveChoice('p3', { ...DEFAULT_CHOICE, speaking: 'ja-JP' })
+    expect(loadChoice('p3').speaking).toBe('ja-JP')
+    window.localStorage.setItem('frameteller.telling.p4', '{"mode":"narrate","speaking":"de-DE"}')
+    expect(loadChoice('p4').speaking).toBe('')
+    window.localStorage.setItem('frameteller.telling.p5', '{"mode":"narrate"}')
+    expect(loadChoice('p5').speaking).toBe('')
   })
 })
 

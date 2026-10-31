@@ -76,7 +76,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
     [choice],
   )
   const reading = choice.mode === 'read' && choice.script !== ''
-  const narration = useNarration(projectId, castNames, dispatchEvent, {}, teleprompter)
+  const narration = useNarration(projectId, castNames, dispatchEvent, {}, teleprompter, choice.speaking)
   const reader = useReader(projectId, dispatchEvent)
   const voices = useVoices()
   const voice = voices.voices.find((v) => v.name === choice.voice)

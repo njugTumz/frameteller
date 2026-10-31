@@ -12,7 +12,7 @@ One live session per project at a time. Browsers must connect from an origin in 
 
 | Message | When | Shape |
 |---|---|---|
-| Start | First message, within 10 s | JSON `{"mode": "narrate" \| "co_direct" \| "teleprompter" \| "read", "keywords": ["Mira", ...], "keep_audio": true}`, plus `script`, `script_format`, `voice` and `language` for scripts. See [Scripts](#scripts). |
+| Start | First message, within 10 s | JSON `{"mode": "narrate" \| "co_direct" \| "teleprompter" \| "read", "keywords": ["Mira", ...], "keep_audio": true}`, plus `script`, `script_format`, `voice` and `language` for scripts. See [Scripts](#scripts). In the other modes, an optional `language` (`"ja-JP"`, one of the nine) is the language the narrator speaks: it is the transcriber's language bias and is kept with the recording. Without it the transcriber detects the language. |
 | Audio | Then, repeatedly | **Binary** frames of raw PCM, signed 16-bit little-endian, mono, **24 kHz**. Even length, at most 32,768 bytes (about 0.34 s). Send at real-time pace. |
 | Beat | When a new shot starts | JSON `{"type": "beat"}`. See [Beats](#beats). |
 | Correction | Any time, also after `session.ended` | JSON `{"type": "transcript.corrected", "turn_id": "55a635ca-b1", "text": "Scene one. Night. ..."}`. `text` is 1–2,000 characters. |

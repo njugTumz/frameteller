@@ -1,4 +1,5 @@
 import type { ScriptFormat } from '../../shared/events'
+import { speakingLanguage } from '../../shared/languages'
 import { DEFAULT_CHOICE, type TellingChoice } from './store'
 
 /** The longest script the public demo takes (the server says so too, with the same number). */
@@ -30,6 +31,7 @@ export function loadChoice(projectId: string): TellingChoice {
       format,
       voice: typeof v.voice === 'string' ? v.voice : DEFAULT_CHOICE.voice,
       language: typeof v.language === 'string' ? v.language : DEFAULT_CHOICE.language,
+      speaking: speakingLanguage(v.speaking),
     }
   } catch {
     return DEFAULT_CHOICE

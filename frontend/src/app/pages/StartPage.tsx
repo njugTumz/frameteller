@@ -15,7 +15,7 @@ import { WakeNotice } from '../../shared/ui/WakeNotice'
 import { navigate, studioPath } from '../router'
 
 export function StartPage() {
-  const { title, style, names, keepAudio, mode, script, format, voice, language, creating, error, setTitle, setStyle, setNames, setKeepAudio, set } =
+  const { title, style, names, keepAudio, mode, script, format, voice, language, speaking, creating, error, setTitle, setStyle, setNames, setKeepAudio, set } =
     useStartStore()
   const voices = useVoices()
   const preview = useVoicePreview()
@@ -33,7 +33,7 @@ export function StartPage() {
     : !seenTour && !tour.declined && tour.status === 'off' && voices.available && <TourOffer onTake={startTour} onDismiss={tour.decline} />
   return (
     <StartScreen
-      form={{ title, style, names, keepAudio, mode, script, format, voice, language }}
+      form={{ title, style, names, keepAudio, mode, script, format, voice, language, speaking }}
       voices={voices}
       previewing={preview.previewing}
       onPreview={preview.play}
@@ -47,8 +47,8 @@ export function StartPage() {
         if (patch.style !== undefined) setStyle(patch.style)
         if (patch.names !== undefined) setNames(patch.names)
         if (patch.keepAudio !== undefined) setKeepAudio(patch.keepAudio)
-        const { mode: m, script: t, format: f, voice: v, language: l } = patch
-        set(Object.fromEntries(Object.entries({ mode: m, script: t, format: f, voice: v, language: l }).filter(([, x]) => x !== undefined)))
+        const { mode: m, script: t, format: f, voice: v, language: l, speaking: k } = patch
+        set(Object.fromEntries(Object.entries({ mode: m, script: t, format: f, voice: v, language: l, speaking: k }).filter(([, x]) => x !== undefined)))
       }}
       onSubmit={() => void start()}
       onSample={voices.available ? () => void sample() : undefined}

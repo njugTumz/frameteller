@@ -15,13 +15,15 @@ export interface StartState {
   format: ScriptFormat
   voice: string
   language: string
+  /** Narrate and Teleprompter: the language the narrator speaks, or '' for auto-detect. */
+  speaking: string
   creating: boolean
   error: string | null
   setTitle(title: string): void
   setStyle(style: PanelStyle): void
   setNames(names: string): void
   setKeepAudio(keepAudio: boolean): void
-  set(patch: Partial<Pick<StartState, 'mode' | 'script' | 'format' | 'voice' | 'language'>>): void
+  set(patch: Partial<Pick<StartState, 'mode' | 'script' | 'format' | 'voice' | 'language' | 'speaking'>>): void
   setCreating(creating: boolean): void
   setError(error: string | null): void
 }
@@ -36,6 +38,7 @@ export const useStartStore = create<StartState>()((set) => ({
   format: 'text',
   voice: DEFAULT_CHOICE.voice,
   language: DEFAULT_CHOICE.language,
+  speaking: DEFAULT_CHOICE.speaking,
   creating: false,
   error: null,
   setTitle: (title) => set({ title }),

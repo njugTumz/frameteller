@@ -9,6 +9,7 @@ import { ScriptInput } from '../../script/components/ScriptInput'
 import { TellingChoice } from '../../script/components/TellingChoice'
 import { VoicePicker } from '../../script/components/VoicePicker'
 import type { TellingMode } from '../../script/store'
+import { LANGUAGES } from '../../../shared/languages'
 import { CutoutArt, PencilArt, StyleCard } from './StyleCard'
 
 export interface StartForm {
@@ -21,6 +22,7 @@ export interface StartForm {
   format: ScriptFormat
   voice: string
   language: string
+  speaking: string
 }
 
 const NO_VOICES: Voices = { available: false, default: '', voices: [] }
@@ -123,6 +125,31 @@ export function StartScreen({
             onChange={(voice, language) => onChange({ voice, language })}
             onPreview={onPreview}
           />
+        )}
+
+        {form.mode !== 'read' && (
+          <div className="flex flex-col gap-2">
+            <label htmlFor="speaking-language" className="font-bold">
+              Language you'll speak
+            </label>
+            <select
+              id="speaking-language"
+              value={form.speaking}
+              aria-describedby="speaking-help"
+              onChange={(e) => onChange({ speaking: e.target.value })}
+              className="w-fit rounded border-2 border-ink bg-paper px-3 py-2"
+            >
+              <option value="">Detect automatically</option>
+              {LANGUAGES.map((l) => (
+                <option key={l.locale} value={l.locale} lang={l.code}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+            <p id="speaking-help" className="m-0 text-sm text-muted">
+              Choosing it helps the transcript, and the captions come out in the same language.
+            </p>
+          </div>
         )}
 
         {form.mode !== 'read' && (

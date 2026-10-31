@@ -10,9 +10,10 @@ export function useNarration(
   onEvent: (e: ServerEvent) => void,
   overrides: Pick<NarrationDeps, 'openMic' | 'socketFactory'> = {},
   script: { text: string; format: ScriptFormat } | null = null,
+  language = '',
 ): Narration {
   const [narration] = useState(() => new Narration(projectId, { store: useRecordingStore, ...overrides }))
-  useEffect(() => narration.use({ onEvent, extraKeywords, script }))
+  useEffect(() => narration.use({ onEvent, extraKeywords, script, language }))
   useEffect(() => {
     narration.attach()
     return () => narration.dispose()

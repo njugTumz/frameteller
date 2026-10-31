@@ -135,8 +135,8 @@ class LayerRequest(BaseModel):
 class AnimaticRequest(BaseModel):
     subtitles: bool = Field(
         default=True,
-        description="Burn the captions into the picture (English, French, Spanish, Portuguese). The MP4 always has "
-        "them as a soft track, and an .srt is kept beside it.",
+        description="Burn the captions into the picture (all nine languages, each in its own script). The MP4 always "
+        "has them as a soft track, and an .srt is kept beside it.",
     )
     caption_language: str | None = Field(
         default=None,

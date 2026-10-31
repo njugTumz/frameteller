@@ -104,7 +104,9 @@ export interface TellingChoice {
   format: ScriptFormat
   voice: string
   language: string
+  /** Narrate and Teleprompter: the language the narrator speaks (a locale), or '' to let the transcriber detect it. */
+  speaking: string
 }
 
 export const DEFAULT_VOICE = 'en-US-AvaMultilingualNeural'
-export const DEFAULT_CHOICE: TellingChoice = { mode: 'narrate', script: '', format: 'text', voice: DEFAULT_VOICE, language: 'en-US' }
+export const DEFAULT_CHOICE: TellingChoice = { mode: 'narrate', script: '', format: 'text', voice: DEFAULT_VOICE, language: 'en-US', speaking: '' }

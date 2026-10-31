@@ -29,4 +29,5 @@ export const SAMPLE_CHOICE: TellingChoice = {
   format: 'text',
   voice: DEFAULT_VOICE,
   language: 'en-US',
+  speaking: '',
 }

@@ -36,6 +36,8 @@ export interface NarrationHandlers {
   extraKeywords: readonly string[]
   /** Teleprompter (ADR 0015): the script read aloud; each paragraph is cut when the reader reaches its end. */
   script?: { text: string; format: ScriptFormat } | null
+  /** The language the narrator speaks (a locale), passed to the transcriber; '' or missing: auto-detect. */
+  language?: string
 }
 
 /**
@@ -79,9 +81,10 @@ export class Narration {
 
   private async connect(onDrop: (code: number) => void): Promise<SocketSession> {
     const script = this.handlers.script
+    const language = this.handlers.language ? { language: this.handlers.language } : {}
     const start: StartMessage = script
-      ? { mode: 'teleprompter', keywords: this.keywords(), keep_audio: this.state.keepAudio, script: script.text, script_format: script.format }
-      : { mode: 'narrate', keywords: this.keywords(), keep_audio: this.state.keepAudio }
+      ? { mode: 'teleprompter', keywords: this.keywords(), keep_audio: this.state.keepAudio, script: script.text, script_format: script.format, ...language }
+      : { mode: 'narrate', keywords: this.keywords(), keep_audio: this.state.keepAudio, ...language }
     const s: SocketSession = new SessionSocket(
       sessionUrl(this.projectId),
       start,

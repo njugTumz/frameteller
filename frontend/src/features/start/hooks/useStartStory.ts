@@ -22,7 +22,7 @@ export function useStartStory(onCreated: (projectId: string) => void): () => Pro
       const project = await createProject(s.title.trim() || 'Untitled story', s.style)
       saveNames(project.id, parseNames(s.names))
       saveKeepAudio(project.id, s.keepAudio)
-      saveChoice(project.id, { mode: s.mode, script: s.mode === 'narrate' ? '' : s.script, format: s.format, voice: s.voice, language: s.language })
+      saveChoice(project.id, { mode: s.mode, script: s.mode === 'narrate' ? '' : s.script, format: s.format, voice: s.voice, language: s.language, speaking: s.speaking })
       onCreated(project.id)
     } catch (e) {
       s.setError(e instanceof ApiError ? e.message : 'Something went wrong. Try again.')
