@@ -372,5 +372,5 @@ Keep `SUBMISSION.md` updated as we build; paste from it on Nov 4.
 - **Never push to `main` while the user is running a live test**: a push redeploys staging and cuts the test off. Commit locally and push afterwards.
 - **v1.0.0 freeze (Oct 30):** after v1.0.0, only bug fixes go to `main` until submission. The parallax animatic (P1 item 2) happens only if the user explicitly asks for it.
   Exception: v1.1.0 on Oct 30-31 adds Ava default, judge-pass limits and the guided tour; new freeze Oct 31 12:00 UTC+4.
-  Final freeze after v1.1.7: bug fixes only until submission (exceptions, Oct 31: v1.1.8's end card and the complete marketing site, with gallery seed stories; v1.2.0's Japanese, Korean and Chinese, with burned-in captions in every script); after the submission deadline (Nov 5 06:00 UTC+4), no commits to main until judging ends (Nov 16).
+  Final freeze after v1.1.7: bug fixes only until submission (exceptions, Oct 31: v1.1.8's end card and the complete marketing site, with gallery seed stories; v1.2.0's Japanese, Korean and Chinese, with burned-in captions in every script; v1.2.1's Redraw everywhere, from tester feedback); after the submission deadline (Nov 5 06:00 UTC+4), no commits to main until judging ends (Nov 16).
 - **After the submission deadline, no commits to `main` until judging ends (Nov 16).** Later work goes on a branch.
