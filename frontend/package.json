@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "api:types": "openapi-typescript ../backend/openapi.json -o src/shared/api/schema.d.ts",
     "api:check": "node scripts/check-api-types.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:marketing": "playwright test -c playwright.marketing.config.ts"
   },
   "dependencies": {
     "konva": "^10.9.0",
