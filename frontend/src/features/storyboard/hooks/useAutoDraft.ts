@@ -25,7 +25,7 @@ export function useAutoDraft(projectId: string, canDraw: (s: Shot) => boolean): 
     for (const shot of shotsToDraft(shots, jobs, requested, canDraw)) {
       store.markRequested(shot.id, true)
       renderPanel(projectId, shot.number, 'draft')
-        .then((t) => store.jobStarted(shot.id, { kind: 'generate_panel', status: 'queued', revision: t.revision, message: null }))
+        .then((t) => store.jobStarted(shot.id, { kind: 'generate_panel', status: 'queued', revision: t.revision, message: null, key: t.key }))
         .catch((e: unknown) => {
           // 409: the cast went back to draft (a new character); it is requested again after approval.
           if (e instanceof ApiError && e.status === 409) return store.markRequested(shot.id, false)
