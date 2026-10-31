@@ -29,6 +29,7 @@ from frameteller.domain import (
     PanelReview,
     PanelStatus,
     PanelStyle,
+    PanelVersion,
     Project,
     Severity,
     SheetRefusal,
@@ -157,6 +158,17 @@ def project_to_dict(p: Project) -> dict[str, Any]:
                     else None
                 ),
                 "review": _panel_review(pn.review) if pn.review else None,
+                "versions": [
+                    {
+                        "revision": v.revision,
+                        "image": v.image.key,
+                        "size": [v.size.width, v.size.height],
+                        "response_id": v.response_id,
+                        "review": _panel_review(v.review) if v.review else None,
+                    }
+                    for v in pn.versions
+                ],
+                "suggested_change": pn.suggested_change,
             }
             for pn in p.panels.values()
         ],
@@ -300,6 +312,17 @@ def project_from_dict(d: dict[str, Any]) -> Project:
             },
             composite=_composite(pd.get("composite")),
             review=_unpanel_review(pd.get("review")),
+            versions=[
+                PanelVersion(
+                    v["revision"],
+                    MediaRef(v["image"]),
+                    Size(*v["size"]),
+                    v["response_id"],
+                    _unpanel_review(v["review"]),
+                )
+                for v in pd.get("versions", [])  # projects saved before versions have none
+            ],
+            suggested_change=pd.get("suggested_change"),
         )
     return Project(
         id=d["id"],

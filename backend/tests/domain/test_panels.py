@@ -7,8 +7,10 @@ from frameteller.domain import (
     MaskBitmap,
     MediaRef,
     ObjectMask,
+    Outcome,
     Panel,
     PanelNotReadyError,
+    PanelReview,
     PanelStatus,
     Point,
     RevisionOrderError,
@@ -16,6 +18,7 @@ from frameteller.domain import (
     UnknownObjectError,
 )
 from tests.builders import bitmap
+from tests.fakes import verdict
 
 SIZE = Size(1920, 1280)
 
@@ -120,3 +123,60 @@ def test_preview_click_converts_to_media_pixels() -> None:
 def test_size_must_be_positive() -> None:
     with pytest.raises(InvalidValueError):
         Size(0, 10)
+
+
+# ---- versions: what Keep previous switches back to (ADR 0022) ----
+
+
+def test_a_new_render_keeps_what_was_shown_as_a_version() -> None:
+    panel = ready_panel(1)
+    panel.record_render(2, MediaRef("panels/s1/r2"), "resp_2", SIZE)
+    [kept] = panel.versions
+    assert (kept.revision, kept.image, kept.response_id) == (1, MediaRef("panels/s1/r1"), "resp_1")
+
+
+def test_a_version_is_the_composite_that_was_shown() -> None:
+    panel = ready_panel(1)
+    panel.record_composite(1, MediaRef("panels/s1/c2"), SIZE)
+    panel.record_render(3, MediaRef("panels/s1/r3"), "resp_3", SIZE)
+    assert [(v.revision, v.image) for v in panel.versions] == [(2, MediaRef("panels/s1/c2"))]
+
+
+def test_versions_are_newest_first_and_capped() -> None:
+    panel = ready_panel(1)
+    for r in range(2, 10):
+        panel.record_render(r, MediaRef(f"panels/s1/r{r}"), f"resp_{r}", SIZE)
+    assert [v.revision for v in panel.versions] == [8, 7, 6, 5, 4, 3]
+
+
+def test_use_version_shows_it_again_as_the_next_revision_and_keeps_the_newer_one() -> None:
+    panel = ready_panel(1)
+    panel.review = PanelReview(1, Outcome.CHECKED, verdict())
+    panel.record_render(2, MediaRef("panels/s1/r2"), "resp_2", SIZE)
+    panel.transforms = [CanvasTransform("character:mira", dx=5)]
+
+    panel.use_version(1)
+
+    assert (panel.revision, panel.image, panel.response_id) == (3, MediaRef("panels/s1/r1"), "resp_1")
+    assert panel.status is PanelStatus.READY
+    assert panel.transforms == []
+    assert panel.composite is None
+    assert panel.masks == {}
+    assert panel.review is not None
+    assert panel.review.revision == 3
+    assert [(v.revision, v.image) for v in panel.versions] == [(2, MediaRef("panels/s1/r2"))]
+
+
+def test_use_version_of_an_unknown_revision_fails() -> None:
+    with pytest.raises(UnknownObjectError):
+        ready_panel(1).use_version(7)
+
+
+def test_a_failed_redraw_keeps_the_drawing_shown_with_a_suggestion() -> None:
+    panel = ready_panel(1)
+    panel.mark_failed("keep it calm and friendly: a cat on a roof")
+    assert panel.status is PanelStatus.READY
+    assert panel.image == MediaRef("panels/s1/r1")
+    assert panel.suggested_change == "keep it calm and friendly: a cat on a roof"
+    panel.record_render(2, MediaRef("panels/s1/r2"), "resp_2", SIZE)
+    assert panel.suggested_change is None

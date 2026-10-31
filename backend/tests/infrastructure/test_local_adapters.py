@@ -13,6 +13,8 @@ from frameteller.domain import (
     CleanPlate,
     MediaRef,
     ObjectMask,
+    Outcome,
+    PanelReview,
     PanelStyle,
     Project,
     SheetRefusal,
@@ -25,7 +27,7 @@ from frameteller.infrastructure.local import (
     LocalFileMediaStorage,
 )
 from tests.builders import bitmap, costume_project, project
-from tests.fakes import FixedClock
+from tests.fakes import FixedClock, verdict
 
 
 async def test_storage_round_trip(tmp_path: Path) -> None:
@@ -60,6 +62,22 @@ async def test_repository_round_trips_a_full_project(tmp_path: Path) -> None:
 
     assert loaded == p
     assert loaded.bible.is_approved
+
+
+async def test_repository_keeps_panel_versions_and_a_suggested_change(tmp_path: Path) -> None:
+    p = project(shots=1)
+    panel = p.panel("s1")
+    panel.record_render(1, MediaRef("panels/s1/r1"), "resp_1", Size(1920, 1280))
+    panel.review = PanelReview(1, Outcome.CHECKED, verdict())
+    panel.record_render(2, MediaRef("panels/s1/r2"), "resp_2", Size(1920, 1280))
+    panel.mark_failed("keep it calm and friendly: action 1")
+
+    repo = JsonFileProjectRepository(tmp_path)
+    await repo.save(p)
+    loaded = (await repo.get("p1")).panel("s1")
+
+    assert loaded == panel
+    assert loaded.versions[0].review == PanelReview(1, Outcome.CHECKED, verdict())
 
 
 async def test_repository_keeps_looks_outfits_and_voice_offsets(tmp_path: Path) -> None:

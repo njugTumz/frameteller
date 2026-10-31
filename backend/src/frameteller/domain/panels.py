@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
 from frameteller.domain.errors import (
@@ -137,6 +137,20 @@ class Composite:
     size: Size
 
 
+@dataclass(frozen=True, slots=True)
+class PanelVersion:
+    """An earlier drawing of a panel, as it was shown, kept so a redraw can be undone ("Keep previous")."""
+
+    revision: int
+    image: MediaRef
+    size: Size
+    response_id: str
+    review: PanelReview | None = None  # the supervisor's word on it, restored with it
+
+
+KEEP_VERSIONS = 6  # earlier drawings kept per panel; the oldest is forgotten first
+
+
 class PanelStatus(StrEnum):
     PENDING = "pending"
     READY = "ready"
@@ -157,6 +171,8 @@ class Panel:
     plates: dict[str, CleanPlate] = field(default_factory=dict)  # by plate_key, for the current base revision
     composite: Composite | None = None
     review: PanelReview | None = None  # the continuity supervisor's word on this base revision
+    versions: list[PanelVersion] = field(default_factory=list)  # earlier drawings, newest first
+    suggested_change: str | None = None  # after a refusal: a plainer change to offer (ADR 0022)
 
     @property
     def current_revision(self) -> int:
@@ -181,6 +197,7 @@ class Panel:
         if revision <= self.revision:
             raise RevisionOrderError(f"panel {self.shot_id}: revision {revision} is not after {self.revision}")
         revision = max(revision, self.current_revision + 1)  # a composite took the number meanwhile: the next one
+        self._keep_shown()
         self.transforms = [t for t in self.transforms if t.object_id.startswith("character:")]
         self.plates, self.composite = {}, None
         self.revision, self.image, self.response_id, self.size = revision, image, response_id, size
@@ -188,8 +205,39 @@ class Panel:
         self.masks = {}
         self.outdated = False
         self.review = None  # a new render is reviewed afresh
+        self.suggested_change = None
 
-    def mark_failed(self) -> None:
+    def _keep_shown(self) -> None:
+        """Keep what is shown now as a version, before something replaces it."""
+        image, size = self.shown_image, self.shown_size
+        if self.status is not PanelStatus.READY or image is None or size is None or self.response_id is None:
+            return
+        review = self.review if self.review and self.review.revision == self.revision else None
+        kept = PanelVersion(self.current_revision, image, size, self.response_id, review)
+        self.versions = [kept, *(v for v in self.versions if v.image != image)][:KEEP_VERSIONS]
+
+    def use_version(self, revision: int) -> None:
+        """Show an earlier drawing again, as the next revision; what was shown becomes a version itself.
+
+        The drawing is restored as it was shown, moves included, so it becomes a plain render with no layers.
+        """
+        version = next((v for v in self.versions if v.revision == revision), None)
+        if version is None:
+            raise UnknownObjectError(f"panel {self.shot_id}: no earlier version {revision}")
+        new = self.current_revision + 1
+        self._keep_shown()
+        self.versions = [v for v in self.versions if v.revision != revision]
+        self.revision, self.image, self.response_id, self.size = new, version.image, version.response_id, version.size
+        self.status, self.composite, self.plates, self.masks, self.transforms = PanelStatus.READY, None, {}, {}, []
+        self.outdated = False
+        self.review = replace(version.review, revision=new) if version.review else None
+        self.suggested_change = None
+
+    def mark_failed(self, suggested_change: str | None = None) -> None:
+        """The drawing failed. A panel that was drawn before keeps showing that drawing."""
+        self.suggested_change = suggested_change
+        if self.status is PanelStatus.READY and self.image is not None:
+            return
         self.status = PanelStatus.FAILED
 
     def require_ready(self) -> tuple[MediaRef, str]:
