@@ -14,7 +14,7 @@ const VARIANTS: Record<Variant, string> = {
 }
 
 const SIZES: Record<Size, string> = {
-  sm: 'min-h-9 px-3 text-sm',
+  sm: 'min-h-9 px-3 text-sm pointer-coarse:min-h-11 pointer-coarse:min-w-11',
   md: 'min-h-11 px-5',
   lg: 'min-h-14 px-7 text-lg',
 }

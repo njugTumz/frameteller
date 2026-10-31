@@ -66,7 +66,7 @@ export function AdminConsole({
             Watch
           </Button>
         )}
-        <a className="self-center text-sm underline" href={`/s/${e.share_token}`} target="_blank" rel="noreferrer">
+        <a className="self-center text-sm underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center" href={`/s/${e.share_token}`} target="_blank" rel="noreferrer">
           Share page
         </a>
         {e.status !== 'published' && e.has_video && (
@@ -102,7 +102,7 @@ export function AdminConsole({
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={cx('-mb-[1.5px] border-b-[3px] px-3 py-2 text-sm font-bold', tab === t ? 'border-ink' : 'border-transparent text-muted')}
+            className={cx('-mb-[1.5px] border-b-[3px] px-3 py-2 text-sm font-bold pointer-coarse:min-h-11', tab === t ? 'border-ink' : 'border-transparent text-muted')}
           >
             {t === 'overview' ? 'Overview' : `Errors${errors ? ` (${errors.recent.length})` : ''}`}
           </button>

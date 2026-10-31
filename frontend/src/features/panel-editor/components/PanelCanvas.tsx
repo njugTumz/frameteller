@@ -1,5 +1,5 @@
 import type Konva from 'konva'
-import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useRef, type CSSProperties, type KeyboardEvent } from 'react'
 import { Image as KImage, Layer, Rect, Stage, Transformer } from 'react-konva'
 import type { Mask } from '../../../shared/api/types'
 import { useElementWidth } from '../../../shared/hooks/useElementWidth'
@@ -129,8 +129,8 @@ export function PanelCanvas({ imageSrc, panelSize, moved, selected, busy, onPick
       role="application"
       aria-label="Panel canvas. Click an object to select it. With one selected, arrow keys move it, plus and minus resize it, 0 puts it back."
       onKeyDown={onKey}
-      className="frame w-full"
-      style={{ aspectRatio: `${panelSize.width} / ${panelSize.height}`, cursor: busy ? 'progress' : 'crosshair' }}
+      className="frame panel-fit w-full"
+      style={{ aspectRatio: `${panelSize.width} / ${panelSize.height}`, '--panel-ratio': panelSize.width / panelSize.height, cursor: busy ? 'progress' : 'crosshair' } as CSSProperties}
       data-testid="panel-canvas"
     >
       {width > 0 && base && (

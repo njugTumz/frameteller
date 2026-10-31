@@ -44,7 +44,7 @@ export function ExportPanel({
         <h2 id={`${id}-title`} className="m-0 text-sm font-bold uppercase tracking-wider text-muted">
           Animatic
         </h2>
-        <a href={pdfHref} className="text-sm font-semibold underline" download>
+        <a href={pdfHref} className="text-sm font-semibold underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center" download>
           Download storyboard PDF
         </a>
       </div>
@@ -98,12 +98,12 @@ export function ExportPanel({
             </span>
             <span className="flex flex-wrap gap-3">
               {captionsHref && (
-                <a href={captionsHref} className="font-semibold text-ink underline" download>
+                <a href={captionsHref} className="font-semibold text-ink underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center" download>
                   Captions (.srt)
                 </a>
               )}
               {downloadHref && (
-                <a href={downloadHref} className="font-semibold text-ink underline" download>
+                <a href={downloadHref} className="font-semibold text-ink underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center" download>
                   Download MP4
                 </a>
               )}

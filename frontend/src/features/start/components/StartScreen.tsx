@@ -183,7 +183,7 @@ export function StartScreen({
             className="mt-1 size-5 accent-[var(--ink)]"
           />
           <div>
-            <label htmlFor="keep-audio" className="font-bold">
+            <label htmlFor="keep-audio" className="choice font-bold">
               Keep my narration for the animatic
             </label>
             <p id="keep-audio-help" className="m-0 text-sm text-muted">

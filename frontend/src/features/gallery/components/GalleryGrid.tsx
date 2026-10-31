@@ -12,7 +12,7 @@ const VIEWS: { value: GalleryView; label: string }[] = [
 ]
 
 const chip = (on: boolean) =>
-  `rounded-full border-[1.5px] px-3 py-1 text-sm font-semibold ${on ? 'border-ink bg-ink text-paper' : 'border-rule bg-sheet text-ink'}`
+  `rounded-full border-[1.5px] px-3 py-1 text-sm font-semibold pointer-coarse:min-h-11 ${on ? 'border-ink bg-ink text-paper' : 'border-rule bg-sheet text-ink'}`
 
 /** The public gallery: how many countries its stories come from, filters, then the cards. */
 export function GalleryGrid({

@@ -40,7 +40,7 @@ export function GalleryCardView({
       </div>
       <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 id={`${id}-title`} className="m-0 text-base font-bold">
-          <a href={card.share_url} className="underline-offset-2 hover:underline">
+          <a href={card.share_url} className="underline-offset-2 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
             {card.title}
           </a>
         </h3>

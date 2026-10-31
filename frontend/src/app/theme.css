@@ -197,3 +197,36 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * Touch screens. Fields at 16 px or more, or iOS Safari zooms in on focus; and every field a 44 px tap.
+ * Unlayered, so it wins over the text-sm utilities on fields.
+ */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], .sr-only),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], .sr-only),
+  select {
+    min-height: 44px;
+  }
+  /* A checkbox or radio is tapped by its whole label row. */
+  label:has(input[type='checkbox'], input[type='radio']),
+  label.choice {
+    min-height: 44px;
+  }
+  label:is(:has(input[type='checkbox'], input[type='radio']), .choice):not([class*='flex'], [class*='grid'], [class*='block']) {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* A phone held sideways (a short screen): the whole panel fits on screen, so you see what you select. */
+@media (max-height: 540px) {
+  .panel-fit {
+    max-width: calc((100dvh - 5.5rem) * var(--panel-ratio, 1.5));
+    margin-inline: auto;
+  }
+}
