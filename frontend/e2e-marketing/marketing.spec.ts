@@ -12,7 +12,7 @@ const SHOTS = resolve(process.env.MARKETING_SHOTS ?? '../spikes/out/marketing') 
 
 interface Entry { id: string; title: string; share_url: string; cover_url: string; creator: { name: string; country: string } }
 
-function entry(n: number, title: string, name = 'John', country = 'US'): Entry {
+function entry(n: number, title: string, name = 'Frameteller team', country = ''): Entry {
   return { id: `e${n}`, title, share_url: `https://app.frameteller.com/s/t${n}`, cover_url: `/gallery/e${n}/cover.webp`, creator: { name, country } }
 }
 
@@ -52,6 +52,9 @@ test('before the launch, "Watch a story" and "Explore the gallery" are the prima
   expect(await background(page, '.hero .cta-gallery')).toBe(await background(page, '.hero .cta-watch')) // both primary
   await expect(page.locator('.hero .cta-gallery')).toHaveAttribute('href', 'https://app.frameteller.com/gallery')
   await expect(page.getByRole('heading', { name: 'The live demo opens soon' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Live now: tell your story' })).toBeHidden() // only one of the two
+  await expect(page.locator('#cd-after')).toHaveAttribute('hidden', '') // hidden, not just styled away
+  expect(await page.locator('#cd-before').getAttribute('hidden')).toBeNull()
   await expect(page.locator('#d')).toHaveText('1')
 })
 
@@ -70,6 +73,8 @@ test('at zero, without a reload, "Try Frameteller" becomes primary and the count
   expect(await background(page, '.hero .cta-try')).not.toBe('rgba(0, 0, 0, 0)')
   await expect(page.getByRole('heading', { name: 'Live now: tell your story' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'The live demo opens soon' })).toBeHidden()
+  await expect(page.locator('#cd-before')).toHaveAttribute('hidden', '')
+  expect(await page.locator('#cd-after').getAttribute('hidden')).toBeNull()
 })
 
 test('after the launch, the page opens live', async ({ page }) => {
@@ -96,8 +101,11 @@ test('"Watch a story" scrolls to the video and plays it with sound', async ({ pa
   await gallery(page, [])
   await page.setViewportSize({ width: 390, height: 844 })
   await open(page, BEFORE)
+  await expect(page.locator('#story')).toHaveCount(1)
+  await expect(page.locator('#story #film')).toHaveCount(1) // the anchor is the hero video's own sheet
   await page.locator('#story').evaluate(() => window.scrollTo(0, 0))
   await page.locator('.countdown').getByRole('link', { name: 'Watch a story' }).click()
+  await expect(page.locator('#story')).toBeInViewport()
   await expect(page.locator('#film')).toBeInViewport()
   expect(await page.locator('#film').evaluate((v: HTMLVideoElement) => v.muted)).toBe(false)
 })
@@ -127,13 +135,23 @@ test('the gallery shows six stories at most, featured first, each linking to its
   const cards = section.getByRole('listitem')
   await expect(cards).toHaveCount(6)
   await expect(cards.first().getByRole('heading')).toHaveText('The Night Baker')
-  await expect(cards.first()).toContainText('by John · United States')
-  await expect(cards.nth(2)).toContainText('by an anonymous storyteller · France')
-  await expect(cards.nth(4)).toContainText('by Ama')
+  await expect(cards.first().getByRole('paragraph')).toHaveText('by Frameteller team') // a name and no country
+  await expect(cards.nth(2).getByRole('paragraph')).toHaveText('by an anonymous storyteller · France')
+  await expect(cards.nth(4).getByRole('paragraph')).toHaveText('by Ama')
   await expect(cards.first().getByRole('link')).toHaveAttribute('href', 'https://app.frameteller.com/s/t1')
   await expect(cards.first().getByRole('img')).toHaveAttribute('src', `${API}/gallery/e1/cover.webp`)
   await expect(cards.first().getByRole('img')).toHaveAttribute('alt', 'The first panel of The Night Baker')
   await expect(section.getByRole('link', { name: 'See all stories' })).toHaveAttribute('href', 'https://app.frameteller.com/gallery')
+})
+
+test('the gallery strip shows the three seed stories, each "by Frameteller team"', async ({ page }) => {
+  const stories = ['The Night Baker', 'The Rooftop Garden', 'The Lighthouse Fox'].map((t, i) => entry(i + 1, t))
+  await gallery(page, [stories[0]], stories)
+  await open(page, BEFORE)
+  const cards = page.getByRole('region', { name: 'From the gallery' }).getByRole('listitem')
+  await expect(cards).toHaveCount(3)
+  await expect(cards.getByRole('heading')).toHaveText(['The Night Baker', 'The Rooftop Garden', 'The Lighthouse Fox'])
+  await expect(cards.getByRole('paragraph')).toHaveText(Array(3).fill('by Frameteller team'))
 })
 
 for (const [label, featured, newest] of [
