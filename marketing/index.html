@@ -273,6 +273,7 @@
   .cards h3 { margin: 10px 0 0; font-size: 1.15rem; font-weight: 750; }
   .cards a:hover h3 { text-decoration: underline; text-underline-offset: 3px; }
   .cards p { margin: 2px 0 0; color: var(--muted); font-size: 0.95rem; }
+  .cards .official { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--marker); color: var(--marker-ink); font-size: 0.75rem; font-weight: 800; vertical-align: middle; }
 
   /* How it works */
   .steps { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 0; counter-reset: step; }
@@ -670,7 +671,8 @@
         if (!picked.length) return;
         $("gallery-list").innerHTML = picked.map(function (e) {
           return '<li><a href="' + esc(e.share_url) + '"><img src="' + esc(absolute(e.cover_url)) + '" width="768" height="512" loading="lazy" decoding="async" alt="' +
-                 esc("The first panel of " + (e.title || "an untitled story")) + '"><h3>' + esc(e.title || "Untitled story") + "</h3><p>" + esc(byline(e.creator)) + "</p></a></li>";
+                 esc("The first panel of " + (e.title || "an untitled story")) + '"><h3>' + esc(e.title || "Untitled story") + "</h3><p>" + esc(byline(e.creator)) +
+                 (e.creator && e.creator.official === true ? ' <span class="official" title="Published by the Frameteller team">Official</span>' : "") + "</p></a></li>";
         }).join("");
         $("gallery").hidden = false;
       })

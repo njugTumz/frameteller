@@ -10,10 +10,10 @@ const AFTER = new Date('2026-11-02T18:00:00Z')
 const API = 'https://api.frameteller.com'
 const SHOTS = resolve(process.env.MARKETING_SHOTS ?? '../spikes/out/marketing') // gitignored
 
-interface Entry { id: string; title: string; share_url: string; cover_url: string; creator: { name: string; country: string } }
+interface Entry { id: string; title: string; share_url: string; cover_url: string; creator: { name: string; country: string; official: boolean } }
 
-function entry(n: number, title: string, name = 'Frameteller team', country = ''): Entry {
-  return { id: `e${n}`, title, share_url: `https://app.frameteller.com/s/t${n}`, cover_url: `/gallery/e${n}/cover.webp`, creator: { name, country } }
+function entry(n: number, title: string, name = 'Frameteller team', country = '', official = false): Entry {
+  return { id: `e${n}`, title, share_url: `https://app.frameteller.com/s/t${n}`, cover_url: `/gallery/e${n}/cover.webp`, creator: { name, country, official } }
 }
 
 const COVER = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2"><rect width="3" height="2" fill="#d9c7a3"/></svg>'
@@ -144,14 +144,25 @@ test('the gallery shows six stories at most, featured first, each linking to its
   await expect(section.getByRole('link', { name: 'See all stories' })).toHaveAttribute('href', 'https://app.frameteller.com/gallery')
 })
 
-test('the gallery strip shows the three seed stories, each "by Frameteller team"', async ({ page }) => {
-  const stories = ['The Night Baker', 'The Rooftop Garden', 'The Lighthouse Fox'].map((t, i) => entry(i + 1, t))
+test('the gallery strip shows the three seed stories, each "by Frameteller team" with the Official badge', async ({ page }) => {
+  const stories = ['The Night Baker', 'The Rooftop Garden', 'The Lighthouse Fox'].map((t, i) => entry(i + 1, t, 'Frameteller team', '', true))
   await gallery(page, [stories[0]], stories)
   await open(page, BEFORE)
   const cards = page.getByRole('region', { name: 'From the gallery' }).getByRole('listitem')
   await expect(cards).toHaveCount(3)
   await expect(cards.getByRole('heading')).toHaveText(['The Night Baker', 'The Rooftop Garden', 'The Lighthouse Fox'])
-  await expect(cards.getByRole('paragraph')).toHaveText(Array(3).fill('by Frameteller team'))
+  await expect(cards.getByRole('paragraph')).toHaveText(Array(3).fill('by Frameteller team Official'))
+  await expect(cards.locator('.official')).toHaveText(Array(3).fill('Official'))
+})
+
+test('the Official badge shows only on official entries', async ({ page }) => {
+  await gallery(page, [], [entry(1, 'Official one', 'Frameteller team', '', true), entry(2, 'Not yet', 'Frameteller team'), entry(3, 'A creator', 'Ama')])
+  await open(page, BEFORE)
+  const cards = page.getByRole('region', { name: 'From the gallery' }).getByRole('listitem')
+  await expect(cards).toHaveCount(3)
+  await expect(cards.nth(0).locator('.official')).toBeVisible()
+  await expect(cards.nth(1).locator('.official')).toHaveCount(0)
+  await expect(cards.nth(2).locator('.official')).toHaveCount(0)
 })
 
 for (const [label, featured, newest] of [
