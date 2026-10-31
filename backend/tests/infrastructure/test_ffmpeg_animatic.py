@@ -103,3 +103,69 @@ async def test_burned_captions_show_only_while_their_line_is_spoken(tmp_path: Pa
     assert caption_band(out, 3.0, tmp_path) > 200  # the last line, white on the dark band
     assert caption_band(out, 2.3, tmp_path) < 60  # the gap between lines: only the panel
     assert caption_band(out, 4.2, tmp_path) < 60  # after the last line
+
+
+def ink_rows(still: Image.Image) -> list[tuple[int, int]]:
+    """The horizontal bands of a frame that hold text (dark pixels on the paper), top to bottom."""
+    grey = still.convert("L")
+    pixels = grey.load()
+    assert pixels is not None
+    rows = [y for y in range(grey.height) if any(int(pixels[x, y]) < 150 for x in range(0, grey.width, 2))]  # type: ignore[arg-type]
+    bands: list[tuple[int, int]] = []
+    for y in rows:
+        if bands and y - bands[-1][1] <= 8:
+            bands[-1] = (bands[-1][0], y)
+        else:
+            bands.append((y, y))
+    return bands
+
+
+def last_second(video: bytes, tmp_path: Path, name: str) -> Image.Image:
+    out = tmp_path / f"{name}.mp4"
+    out.write_bytes(video)
+    still = tmp_path / f"{name}.png"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-sseof", "-0.5", "-i", str(out), "-frames:v", "1", str(still)], check=True
+    )
+    with Image.open(still) as im:
+        return im.convert("RGB")
+
+
+@pytest.mark.parametrize(
+    ("language", "burn", "invite"),
+    [
+        ("en-US", True, "Tell your story at frameteller.com"),
+        ("en-US", False, "Tell your story at frameteller.com"),
+        ("fr-FR", True, "Racontez votre histoire sur frameteller.com"),
+        ("ar-SA", False, "Tell your story at frameteller.com"),  # Arabic cannot be drawn: English, never boxes
+    ],
+)
+async def test_the_last_second_is_a_two_line_end_card_inside_the_safe_area(
+    tmp_path: Path, language: str, burn: bool, invite: str
+) -> None:
+    from frameteller.infrastructure.imaging.ffmpeg_animatic import end_lines
+
+    assert end_lines(language) == ("Made with Frameteller", invite)
+    clips = (AnimaticClip("s1", 1, MediaRef("a"), 0, 1000, Motion.STATIC, "Une lanterne."),)
+    track = CaptionTrack((Cue(1000, 2000, "Une lanterne."),), language, burn=burn)
+    video = await FfmpegVideoRenderer().render(
+        Animatic("p1", "Lantern", clips), {"s1": panel((20, 20, 20))}, {}, captions=track
+    )
+    frame = last_second(video, tmp_path, f"{language}-{burn}")
+
+    bands = ink_rows(frame)
+    assert len(bands) == 2, bands  # "Made with Frameteller", then the invitation
+    assert all(b - a >= 30 for a, b in bands)  # 64 and 52 px lines: readable at phone size
+    box = Image.eval(frame.convert("L"), lambda v: 255 if v < 150 else 0).getbbox()
+    assert box is not None
+    left, top, right, bottom = box
+    assert left >= 1536 * 0.1  # title-safe
+    assert right <= 1536 * 0.9
+    assert bottom <= 1024 * 0.9
+    assert top >= 1024 * 0.1
+
+
+async def test_a_story_without_captions_ends_on_the_english_card(tmp_path: Path) -> None:
+    clips = (AnimaticClip("s1", 1, MediaRef("a"), 0, 800, Motion.STATIC),)
+    video = await FfmpegVideoRenderer().render(Animatic("p1", "Quiet", clips), {"s1": panel((20, 20, 20))}, {})
+    assert len(ink_rows(last_second(video, tmp_path, "quiet"))) == 2

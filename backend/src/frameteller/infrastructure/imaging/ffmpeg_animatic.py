@@ -1,6 +1,7 @@
 """FfmpegVideoRenderer: the MP4 animatic, H.264 + AAC, 1536x1024 at 24 fps (ADR 0011).
 
-One segment per shot between a title card and an end card. Each segment is a still panel with a gentle
+One segment per shot between a title card and an end card ("Made with Frameteller", then "Tell your story at
+frameteller.com" in the captions' language). Each segment is a still panel with a gentle
 zoompan move, cross-faded into the next. A segment is lengthened by the fade, so every shot still starts at
 its own time and the voice (cut per shot from the kept narration) stays in sync to the frame.
 
@@ -41,6 +42,17 @@ _NICE = ("nice", "-n", "10") if shutil.which("nice") else ()
 ISO639_2 = {"en": "eng", "fr": "fra", "es": "spa", "hi": "hin", "ar": "ara", "pt": "por"}
 SAMPLE_RATE = 48_000
 PRODUCT = "Frameteller"  # the working name (CLAUDE.md): change it here for the end card
+SITE = "frameteller.com"  # the end card's second line; never translated
+# "Tell your story at", in the captions' language. Pillow's bundled font draws Latin script only, so Hindi and
+# Arabic exports keep the English line (their captions are a soft track, not burned in).
+INVITE = {
+    "en": "Tell your story at",
+    "fr": "Racontez votre histoire sur",
+    "es": "Cuenta tu historia en",
+    "pt": "Conte sua história em",
+}
+END_SIZES = (64, 52)  # px on a 1536x1024 frame, like the captions: readable on a phone
+SAFE_SIDES = 0.1  # the end card's lines stay inside the middle 80% (title-safe)
 
 
 class RenderError(RuntimeError):
@@ -140,7 +152,7 @@ def _prepare(
         _still(frames[clip.shot_id]).save(still)
         segments.append(_Segment(still, counts[i + 1], clip.motion, clip.audio))
     end = work / "end.png"
-    _end_card().save(end)
+    _end_card(captions.language if captions is not None else "en").save(end)
     segments.append(_Segment(end, counts[-1], Motion.STATIC, ()))
 
     track = None
@@ -321,9 +333,28 @@ def _title_card(title: str) -> Image.Image:
     return card
 
 
-def _end_card() -> Image.Image:
+def end_lines(language: str) -> tuple[str, str]:
+    """The end card's two lines, the second in the captions' language (English where we cannot draw it)."""
+    invite = INVITE.get(language.split("-")[0].lower(), INVITE["en"])
+    return f"Made with {PRODUCT}", f"{invite} {SITE}"
+
+
+def _end_card(language: str) -> Image.Image:
     card = Image.new("RGB", (WIDTH, HEIGHT), PAPER)
-    ImageDraw.Draw(card).text((WIDTH // 2, HEIGHT // 2), f"Made with {PRODUCT}", font=font(40), fill=MUTED, anchor="mm")
+    draw = ImageDraw.Draw(card)
+    safe = round(WIDTH * (1 - 2 * SAFE_SIDES))
+    rows = [
+        (line, size, colour)
+        for text, size, colour in zip(end_lines(language), END_SIZES, (INK, MUTED), strict=True)
+        for line in wrap(draw, text, size, safe, max_lines=2)
+    ]
+    gap = 24
+    y = HEIGHT // 2 - (sum(line_height(size) for _, size, _ in rows) + gap) // 2
+    for n, (line, size, colour) in enumerate(rows):
+        if n and rows[n - 1][1] != size:
+            y += gap
+        draw.text((WIDTH // 2, y), line, font=font(size), fill=colour, anchor="mt")
+        y += line_height(size)
     return card
 
 
