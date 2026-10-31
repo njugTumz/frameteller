@@ -1,7 +1,10 @@
 import { useId, useRef, useState, type ReactNode } from 'react'
 import type { Character } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
+import { DrawingOverlay, RedrawControl, type RedrawChoice } from '../../../shared/ui/Redraw'
 import { Suggestion } from './Suggestion'
+
+export const SHEET_EXAMPLES = 'e.g. “a bigger hat”, “darker fur”'
 
 export function CharacterCard({
   character,
@@ -31,7 +34,8 @@ export function CharacterCard({
   others?: Character[]
   busy?: boolean
   onDescribe: (text: string) => void
-  onRegenerate: () => void
+  /** Redraw, with what should change or Surprise me (ADR 0022). */
+  onRegenerate: (redraw?: RedrawChoice) => void
   /** After a failed sheet: draw it with the edited description. */
   onRedrawWith?: () => void
   /** After two refusals: draw it with the suggested description (ADR 0019). */
@@ -55,15 +59,15 @@ export function CharacterCard({
   const describe = useRef<HTMLTextAreaElement>(null)
   // The sheet could not be drawn (e.g. Muse Image's safety filter): say why, and how to go on.
   const failed = !imageSrc && !redrawing && !!character.sheet_error
-  // Refused twice: the same Try again would be refused too, so offer a plainer description instead.
+  // Refused twice: the same Redraw would be refused too, so offer a plainer description, or say what should change.
   const suggestion = failed && !changed ? character.suggested_description : null
   return (
     <li className="arrive flex w-64 shrink-0 flex-col gap-2 rounded-md border-[1.5px] border-rule bg-sheet p-3" data-testid="character-card">
       <div className="frame aspect-square">
-        {imageSrc && !redrawing ? (
+        {imageSrc ? (
           <>
             <img src={imageSrc} alt={`Reference sheet for ${character.name}`} className="size-full object-cover" />
-            {badge}
+            {redrawing ? <DrawingOverlay label={`Redrawing ${character.name}… about 20 s`} /> : badge}
           </>
         ) : failed ? (
           <div className="flex size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm" role="alert" data-testid="sheet-failed">
@@ -76,18 +80,21 @@ export function CharacterCard({
                   Use this description
                 </Button>
               ) : (
-                <Button size="sm" variant="ink" onClick={changed ? onRedrawWith : onRegenerate}>
-                  {changed ? 'Draw with this description' : 'Try again'}
-                </Button>
+                changed && (
+                  <Button size="sm" variant="ink" onClick={onRedrawWith}>
+                    Draw with this description
+                  </Button>
+                )
               )}
               <Button size="sm" onClick={() => describe.current?.focus()}>
                 Edit description
               </Button>
             </div>
+            {!changed && <RedrawControl subject={`${character.name}’s sheet`} examples={SHEET_EXAMPLES} surprise={!suggestion} requireChange={!!suggestion} className="self-center" onRedraw={onRegenerate} />}
           </div>
         ) : (
           <div className="grid size-full place-items-center p-4 text-center text-sm font-semibold text-muted" aria-live="polite">
-            {redrawing ? `Redrawing ${character.name}…` : `Drawing ${character.name}’s sheet…`}
+            {`Drawing ${character.name}’s sheet… about 20 s`}
           </div>
         )}
       </div>
@@ -134,11 +141,7 @@ export function CharacterCard({
         className="resize-y rounded border-[1.5px] border-rule bg-paper px-2 py-1.5 text-sm leading-snug read-only:border-transparent read-only:bg-transparent focus:border-ink"
       />
       {changed && !locked && !failed && <p className="m-0 text-xs text-muted">Approving redraws this sheet with your description first.</p>}
-      {!locked && !failed && (
-        <Button size="sm" onClick={onRegenerate} disabled={redrawing}>
-          Regenerate
-        </Button>
-      )}
+      {!locked && !failed && <RedrawControl subject={`${character.name}’s sheet`} examples={SHEET_EXAMPLES} disabled={redrawing || !imageSrc} onRedraw={onRegenerate} />}
       {looks}
       {mode === 'remove' && (
         <div className="flex flex-col gap-2 rounded border-[1.5px] border-danger p-2 text-sm" role="group" aria-label={`Remove ${character.name}`}>

@@ -1,6 +1,8 @@
 import { useId, useRef } from 'react'
 import type { Look } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
+import { DrawingOverlay, RedrawControl, type RedrawChoice } from '../../../shared/ui/Redraw'
+import { SHEET_EXAMPLES } from './CharacterCard'
 import { Suggestion } from './Suggestion'
 
 /** "Shots 2–6", "Shot 4", or nothing when no shot shows the look yet. */
@@ -33,7 +35,8 @@ export function LookCard({
   redrawing: boolean
   locked: boolean
   onDescribe: (text: string) => void
-  onRegenerate: () => void
+  /** Redraw, with what should change or Surprise me (ADR 0022). */
+  onRegenerate: (redraw?: RedrawChoice) => void
   onRedrawWith: () => void
   /** After two refusals: draw it with the suggested clothes (ADR 0019). */
   onUseSuggestion?: (text: string) => void
@@ -51,8 +54,11 @@ export function LookCard({
         {shots && <span className="text-xs text-muted">{shots}</span>}
       </div>
       <div className="frame aspect-square">
-        {imageSrc && !redrawing ? (
-          <img src={imageSrc} alt={`Reference sheet for ${name}, ${look.label.toLowerCase()}`} className="size-full object-cover" />
+        {imageSrc ? (
+          <>
+            <img src={imageSrc} alt={`Reference sheet for ${name}, ${look.label.toLowerCase()}`} className="size-full object-cover" />
+            {redrawing && <DrawingOverlay label="Redrawing… about 20 s" />}
+          </>
         ) : failed ? (
           <div className="flex size-full flex-col items-center justify-center gap-2 p-3 text-center text-sm" role="alert">
             <p className="m-0 font-bold text-danger">This look couldn’t be drawn.</p>
@@ -64,18 +70,21 @@ export function LookCard({
                   Use this description
                 </Button>
               ) : (
-                <Button size="sm" variant="ink" onClick={changed ? onRedrawWith : onRegenerate}>
-                  {changed ? 'Draw with this description' : 'Try again'}
-                </Button>
+                changed && (
+                  <Button size="sm" variant="ink" onClick={onRedrawWith}>
+                    Draw with this description
+                  </Button>
+                )
               )}
               <Button size="sm" onClick={() => describe.current?.focus()}>
                 Edit description
               </Button>
             </div>
+            {!changed && <RedrawControl subject={`${name}’s ${look.label.toLowerCase()}`} examples={SHEET_EXAMPLES} surprise={!suggestion} requireChange={!!suggestion} className="self-center" onRedraw={onRegenerate} />}
           </div>
         ) : (
           <div className="grid size-full place-items-center p-3 text-center text-sm font-semibold text-muted" aria-live="polite">
-            {redrawing ? `Redrawing ${name}’s ${look.label.toLowerCase()}…` : `Drawing ${name}’s ${look.label.toLowerCase()}…`}
+            {`Drawing ${name}’s ${look.label.toLowerCase()}… about 20 s`}
           </div>
         )}
       </div>
@@ -94,9 +103,7 @@ export function LookCard({
       />
       {changed && !locked && !failed && <p className="m-0 text-xs text-muted">Approving redraws this look with your description first.</p>}
       {!locked && !failed && (
-        <Button size="sm" onClick={onRegenerate} disabled={redrawing}>
-          Try again
-        </Button>
+        <RedrawControl subject={`${name}’s ${look.label.toLowerCase()}`} examples={SHEET_EXAMPLES} disabled={redrawing || !imageSrc} onRedraw={onRegenerate} />
       )}
     </div>
   )

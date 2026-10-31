@@ -36,7 +36,7 @@ export function CastZone({ projectId, onProject }: { projectId: string; onProjec
           redrawing={!!cast.redrawing[c.id]}
           locked={locked}
           onDescribe={(text) => edit(c.id, text)}
-          onRegenerate={() => void regenerate(c.id)}
+          onRegenerate={(redraw) => void regenerate(c.id, redraw)}
           onRedrawWith={() => void redrawWith(c.id)}
           onUseSuggestion={(text) => void adopt(c.id, text)}
           others={cast.characters.filter((o) => o.id !== c.id)}
@@ -57,7 +57,7 @@ export function CastZone({ projectId, onProject }: { projectId: string; onProjec
                 redrawing={!!cast.redrawing[key]}
                 locked={locked}
                 onDescribe={(text) => edit(key, text)}
-                onRegenerate={() => void regenerate(key)}
+                onRegenerate={(redraw) => void regenerate(key, redraw)}
                 onRedrawWith={() => void redrawWith(key)}
                 onUseSuggestion={(text) => void adopt(key, text)}
               />

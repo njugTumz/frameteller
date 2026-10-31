@@ -18,21 +18,29 @@ describe('LookCard', () => {
     expect(screen.getByAltText('Reference sheet for Wren, farmer costume')).toBeTruthy()
   })
 
-  it('edits the clothes and tries again', () => {
+  it('edits the clothes and redraws, with Surprise me', () => {
     const props = card()
     fireEvent.change(screen.getByLabelText('What Wren wears: Farmer costume'), { target: { value: 'green overalls' } })
     expect(props.onDescribe).toHaveBeenCalledWith('green overalls')
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(props.onRegenerate).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Redraw Wren’s farmer costume' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Surprise me' }))
+    expect(props.onRegenerate).toHaveBeenCalledWith({ change: '', surprise: true })
   })
 
-  it('a sheet that failed says why, with Try again and Edit description', () => {
+  it('keeps the sheet on screen while it redraws', () => {
+    card({ redrawing: true })
+    expect(screen.getByAltText('Reference sheet for Wren, farmer costume')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('Redrawing… about 20 s')
+  })
+
+  it('a sheet that failed says why, with Redraw and Edit description', () => {
     const props = card({ imageSrc: null, look: { ...farmer, reference_url: null, sheet_error: 'Muse Image is busy.' } })
     expect(screen.getByRole('alert').textContent).toContain('Muse Image is busy.')
     fireEvent.click(screen.getByRole('button', { name: 'Edit description' }))
     expect(document.activeElement).toBe(screen.getByLabelText('What Wren wears: Farmer costume'))
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(props.onRegenerate).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Redraw Wren’s farmer costume' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Redraw' }))
+    expect(props.onRegenerate).toHaveBeenCalledWith({ change: '', surprise: false })
   })
 
   it('an edited description of a failed sheet draws with it', () => {
@@ -41,19 +49,18 @@ describe('LookCard', () => {
     expect(props.onRedrawWith).toHaveBeenCalled()
   })
 
-  it('after two refusals offers plain clothes to use instead of Try again', () => {
+  it('after two refusals offers plain clothes to use instead of the same Redraw', () => {
     const onUseSuggestion = vi.fn()
     card({ imageSrc: null, onUseSuggestion, look: { ...farmer, reference_url: null, sheet_error: 'Turned down twice.', suggested_clothes: 'blue overalls, white shirt' } })
     expect(screen.getByTestId('sheet-suggestion').textContent).toContain('blue overalls, white shirt')
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Use this description' }))
     expect(onUseSuggestion).toHaveBeenCalledWith('blue overalls, white shirt')
   })
 
   it('says it is drawing, and locks once the cast is approved', () => {
     card({ imageSrc: null, locked: true })
-    expect(screen.getByText('Drawing Wren’s farmer costume…')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    expect(screen.getByText('Drawing Wren’s farmer costume… about 20 s')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Redraw/ })).toBeNull()
   })
 
   it('labels shot ranges', () => {

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { ApiError } from '../../../shared/api/client'
 import type { Character } from '../../../shared/api/types'
+import type { RedrawChoice } from '../../../shared/ui/Redraw'
 import { approveCast, regenerateLook, regenerateReference } from '../api'
 import { approvalBlock, useCastStore } from '../store'
 
@@ -38,12 +39,12 @@ export function useCastReview(projectId: string) {
   }, [projectId])
 
   const regenerate = useCallback(
-    async (characterId: string) => {
+    async (characterId: string, redraw?: RedrawChoice) => {
       const s = useCastStore.getState()
       s.set({ redrawing: { ...s.redrawing, [characterId]: true }, status: 'draft', error: null })
       try {
         const [id = characterId, look] = characterId.split('/')
-        await (look ? regenerateLook(projectId, id, look) : regenerateReference(projectId, characterId))
+        await (look ? regenerateLook(projectId, id, look, redraw) : regenerateReference(projectId, characterId, redraw))
       } catch (e) {
         const { redrawing } = useCastStore.getState()
         const { [characterId]: _gone, ...rest } = redrawing

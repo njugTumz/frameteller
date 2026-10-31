@@ -59,29 +59,52 @@ describe('CharacterCard cast management', () => {
   })
 })
 
+describe('CharacterCard Redraw', () => {
+  it('keeps the sheet on screen while it is redrawn, and asks what should change', async () => {
+    const props = card({ locked: false, imageSrc: '/media/ember' })
+    await userEvent.click(screen.getByRole('button', { name: /^Redraw .*sheet$/ }))
+    await userEvent.type(screen.getByRole('textbox', { name: /What should change/ }), 'darker fur')
+    await userEvent.click(screen.getByRole('button', { name: 'Redraw' }))
+    expect(props.onRegenerate).toHaveBeenCalledWith({ change: 'darker fur', surprise: false })
+  })
+
+  it('shows the old sheet with Drawing… while it redraws', () => {
+    card({ locked: false, redrawing: true, imageSrc: '/media/ember' })
+    expect(screen.getByRole('img', { name: /Reference sheet for/ })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toMatch(/Redrawing .*about 20 s/)
+  })
+})
+
 describe('CharacterCard when a sheet failed', () => {
   const failed = character('amara', { name: 'Amara', reference_url: null, sheet_error: "Muse Image's safety filter turned it down. Describe them by look and role (no ages), then try again." })
 
-  it('names the character, says why, and offers Try again and Edit description', async () => {
+  it('names the character, says why, and offers Redraw and Edit description', async () => {
     const props = card({ character: failed, locked: false, description: failed.description })
     const alert = screen.getByRole('alert')
     expect(alert.textContent).toContain('Amara’s sheet couldn’t be drawn.')
     expect(alert.textContent).toContain('safety filter')
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(props.onRegenerate).toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Redraw Amara’s sheet' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Redraw' }))
+    expect(props.onRegenerate).toHaveBeenCalledWith({ change: '', surprise: false })
     await userEvent.click(screen.getByRole('button', { name: 'Edit description' }))
     expect(document.activeElement).toBe(screen.getByLabelText('Description of Amara'))
   })
 
-  it('after two refusals offers a concrete description instead of the same Try again', async () => {
+  it('after two refusals offers a concrete description, and a Redraw only with a change', async () => {
     const onUseSuggestion = vi.fn()
     const refused = { ...failed, sheet_error: 'Muse Image’s safety filter turned it down twice.', suggested_description: 'cheerful young storybook character with curly brown hair' }
     card({ character: refused, locked: false, description: refused.description, onUseSuggestion })
     expect(screen.getByTestId('sheet-suggestion').textContent).toBe('Try: cheerful young storybook character with curly brown hair')
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'Use this description' }))
     expect(onUseSuggestion).toHaveBeenCalledWith('cheerful young storybook character with curly brown hair')
     expect(screen.getByRole('button', { name: 'Edit description' })).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Redraw Amara’s sheet' }))
+    expect(screen.queryByRole('button', { name: 'Surprise me' })).toBeNull()
+    const redraw = screen.getByRole('button', { name: 'Redraw' }) as HTMLButtonElement
+    expect(redraw.disabled).toBe(true) // the same words would be refused again
+    await userEvent.type(screen.getByRole('textbox', { name: /What should change/ }), 'a storybook child')
+    expect(redraw.disabled).toBe(false)
   })
 
   it('draws with the edited description once it changed', async () => {

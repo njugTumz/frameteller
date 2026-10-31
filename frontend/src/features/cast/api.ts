@@ -1,24 +1,30 @@
 import { api, call } from '../../shared/api/client'
 import type { CastReview, Project, Ticket } from '../../shared/api/types'
+import type { RedrawChoice } from '../../shared/ui/Redraw'
 
 /** Approve the cast. Changed descriptions redraw those sheets first: then approved is false and cast.proposed follows. */
 export function approveCast(projectId: string, descriptions: Record<string, string>): Promise<CastReview> {
   return call(() => api.POST('/projects/{project_id}/cast/approve', { params: { path: { project_id: projectId } }, body: { descriptions } }))
 }
 
-export function regenerateReference(projectId: string, characterId: string): Promise<Ticket> {
+/** Redraw a character's sheet, optionally with what should change or Surprise me (ADR 0022). */
+export function regenerateReference(projectId: string, characterId: string, redraw?: RedrawChoice): Promise<Ticket> {
   return call(() =>
-    api.POST('/projects/{project_id}/cast/{character_id}/regenerate', { params: { path: { project_id: projectId, character_id: characterId } } }),
+    api.POST('/projects/{project_id}/cast/{character_id}/regenerate', {
+      params: { path: { project_id: projectId, character_id: characterId } },
+      body: { change: redraw?.change ?? '', surprise: redraw?.surprise ?? false },
+    }),
   )
 }
 
 const characterPath = (projectId: string, characterId: string) => ({ params: { path: { project_id: projectId, character_id: characterId } } })
 
-/** "Try again" on one of a character's looks (ADR 0018): its sheet is drawn again from the everyday one. */
-export function regenerateLook(projectId: string, characterId: string, lookId: string): Promise<Ticket> {
+/** "Redraw" on one of a character's looks (ADR 0018): its sheet is drawn again from the everyday one. */
+export function regenerateLook(projectId: string, characterId: string, lookId: string, redraw?: RedrawChoice): Promise<Ticket> {
   return call(() =>
     api.POST('/projects/{project_id}/cast/{character_id}/looks/{look_id}/regenerate', {
       params: { path: { project_id: projectId, character_id: characterId, look_id: lookId } },
+      body: { change: redraw?.change ?? '', surprise: redraw?.surprise ?? false },
     }),
   )
 }
