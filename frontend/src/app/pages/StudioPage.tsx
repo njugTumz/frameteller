@@ -16,6 +16,8 @@ import { Notices, ProblemNotice } from '../../features/recording/components/Prob
 import { RecordingKept } from '../../features/recording/components/RecordingKept'
 import { SilenceNotice } from '../../features/recording/components/SilenceNotice'
 import { UpdatingNotice } from '../../features/recording/components/UpdatingNotice'
+import { PausedNotice } from '../../features/recording/components/PausedNotice'
+import { usePauseOnLock } from '../../features/recording/hooks/usePauseOnLock'
 import { useAudioInputs } from '../../features/recording/hooks/useAudioInputs'
 import { TellingControls } from '../../features/recording/components/TellingControls'
 import { TranscriptRail } from '../../features/recording/components/TranscriptRail'
@@ -84,6 +86,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
   const languageName = voice?.languages.find((l) => l.locale === choice.language)?.name ?? choice.language
   const beat = useCallback(() => void narration.beat(), [narration])
   useBeatShortcut(r.telling === 'live' && !reading, beat)
+  usePauseOnLock(() => (reading ? reader.pauseForLock() : narration.pauseForLock()))
   const lines = useMemo(() => paragraphs(script.episodes), [script.episodes])
   const spoken = useMemo(() => Object.fromEntries(script.clips.map((c) => [c.paragraph, c.text])), [script.clips])
   const hidden = useStoryEditsStore((s) => s.hidden)
@@ -126,6 +129,7 @@ export function StudioPage({ projectId }: { projectId: string }) {
     <div className="grid gap-6 p-4 lg:grid-cols-[340px_1fr] lg:p-6">
       <aside className="flex flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
         {r.updating && <UpdatingNotice />}
+        {r.pausedByLock && <PausedNotice reading={reading} onDismiss={() => r.set({ pausedByLock: false })} />}
         {r.problem && <ProblemNotice problem={r.problem} onRetry={() => void narration.start()} onDismiss={() => r.setProblem(null)} />}
         {r.silent && (
           <SilenceNotice

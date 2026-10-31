@@ -69,4 +69,23 @@ describe('Reader', () => {
     expect(useRecordingStore.getState().problem?.kind).toBe('connection')
     expect(useRecordingStore.getState().telling).toBe('idle')
   })
+
+  it('holds the reading when the phone locks, and Continue clears the notice', async () => {
+    const { p } = player()
+    const reader = new Reader('p1', { recording: useRecordingStore, script: useScriptStore, socketFactory: FakeSocket.factory, player: p })
+    reader.use((e) => useScriptStore.getState().apply(e))
+    const starting = reader.start({ script: 'Lena waves.', format: 'text', voice: 'v', language: 'en-US' })
+    await flush()
+    const socket = FakeSocket.latest()
+    socket.open()
+    socket.emit({ type: 'session.started', mode: 'read' })
+    await starting
+    reader.pauseForLock()
+    expect(socket.json.at(-1)).toEqual({ type: 'pause' })
+    expect(useRecordingStore.getState().pausedByLock).toBe(true)
+    reader.pauseForLock() // already paused: no second pause
+    expect(socket.json.filter((m) => (m as { type?: string }).type === 'pause')).toHaveLength(1)
+    reader.resume()
+    expect(useRecordingStore.getState().pausedByLock).toBe(false)
+  })
 })

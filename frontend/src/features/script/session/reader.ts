@@ -91,8 +91,16 @@ export class Reader {
     }
   }
 
+  /** The screen locked while reading: hold the voice and the reading, as Pause does. */
+  pauseForLock(): void {
+    if (this.deps.script.getState().reading !== 'reading') return
+    this.pause()
+    this.deps.recording.getState().set({ pausedByLock: true })
+  }
+
   /** Go on after a pause, or now rather than waiting for the episode's drafts. */
   resume(): void {
+    this.deps.recording.getState().set({ pausedByLock: false })
     if (this.socket?.send({ type: 'continue' })) this.queue.resume()
   }
 

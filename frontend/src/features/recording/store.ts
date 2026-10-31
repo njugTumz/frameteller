@@ -44,6 +44,8 @@ export interface RecordingState {
   updating: boolean
   /** The studio is busy and this session waits in line (queue.waiting, ADR 0016); null once it starts. */
   queue: { position: number; estimateS: number } | null
+  /** Telling stopped because the screen locked or the page was hidden (phones): what was said is kept. */
+  pausedByLock: boolean
 }
 
 export const initialRecording: RecordingState = {
@@ -64,6 +66,7 @@ export const initialRecording: RecordingState = {
   deviceId: null,
   updating: false,
   queue: null,
+  pausedByLock: false,
 }
 
 const MAX_NOTICES = 3

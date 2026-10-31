@@ -163,4 +163,50 @@ describe('Narration', () => {
     expect(FakeSocket.all).toHaveLength(1)
     expect(useRecordingStore.getState()).toMatchObject({ deviceId: 'usb-mic', silent: false })
   })
+
+  it('pauses cleanly when the phone locks: the mic stops, the session ends normally, and it says so', async () => {
+    const { mic, openMic } = fakeMic()
+    const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    n.use({ onEvent: () => undefined, extraKeywords: [] })
+    await started(n)
+    n.pauseForLock()
+    expect(mic.closed).toBe(true)
+    expect(FakeSocket.latest().json.at(-1)).toEqual({ type: 'end' }) // what was said becomes shots
+    expect(useRecordingStore.getState()).toMatchObject({ telling: 'finishing', pausedByLock: true, problem: null })
+
+    n.pauseForLock() // hidden again while finishing: nothing more to do
+    expect(FakeSocket.latest().json.filter((m) => (m as { type?: string }).type === 'end')).toHaveLength(1)
+  })
+
+  it('treats the microphone ending while the page is hidden (iOS lock) as a pause, not a broken mic', async () => {
+    const { mic, openMic } = fakeMic()
+    const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    n.use({ onEvent: () => undefined, extraKeywords: [] })
+    await started(n)
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    mic.handlers?.onLost(new MicError('lost', 'The microphone stopped.'))
+    visibility.mockRestore()
+    expect(useRecordingStore.getState()).toMatchObject({ telling: 'finishing', pausedByLock: true, problem: null })
+
+    // Telling again clears the pause.
+    useRecordingStore.getState().setTelling('ended')
+    await started(n)
+    expect(useRecordingStore.getState().pausedByLock).toBe(false)
+  })
+
+  it('a lock while the microphone is being asked for drops it once it arrives', async () => {
+    let grant: (m: Microphone) => void = () => undefined
+    const closed: string[] = []
+    const openMic = vi.fn(() => new Promise<Microphone>((r) => (grant = r)))
+    const n = new Narration('p1', { store: useRecordingStore, openMic, socketFactory: FakeSocket.factory })
+    n.use({ onEvent: () => undefined, extraKeywords: [] })
+    const starting = n.start()
+    expect(useRecordingStore.getState().telling).toBe('mic')
+    n.pauseForLock()
+    grant({ label: 'Fake mic', close: async () => void closed.push('closed') })
+    await starting
+    expect(closed).toEqual(['closed'])
+    expect(FakeSocket.all).toHaveLength(0)
+    expect(useRecordingStore.getState()).toMatchObject({ telling: 'idle', pausedByLock: true })
+  })
 })

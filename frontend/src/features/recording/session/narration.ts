@@ -1,6 +1,6 @@
 import { MAX_KEYWORDS, type ScriptFormat, type ServerEvent, type StartMessage } from '../../../shared/events'
 import { micError, openMicrophone, type MicError, type Microphone } from '../../../shared/audio/microphone'
-import type { ProblemKind, RecordingState, useRecordingStore } from '../store'
+import type { ProblemKind, RecordingState, Telling, useRecordingStore } from '../store'
 import { SessionSocket, closeMessage, sessionUrl, type SocketFactory } from './sessionSocket'
 
 const RECONNECT_DELAYS_MS = [500, 1500, 4000]
@@ -72,6 +72,11 @@ export class Narration {
 
   private get state(): RecordingState & ReturnType<typeof useRecordingStore.getState> {
     return this.deps.store.getState()
+  }
+
+  /** Read afresh: it changes while awaiting the microphone or the socket. */
+  private telling(): Telling {
+    return this.deps.store.getState().telling
   }
 
   private keywords(): string[] {
@@ -179,7 +184,7 @@ export class Narration {
     const { telling } = this.state
     if (this.disposed || telling === 'mic' || telling === 'connecting' || telling === 'live') return
     this.state.setProblem(null)
-    this.state.set({ silent: false, heardNothing: false })
+    this.state.set({ silent: false, heardNothing: false, pausedByLock: false })
     this.state.setTelling('mic')
     try {
       this.mic = await this.openMic()
@@ -189,7 +194,7 @@ export class Narration {
       this.fail(MIC_PROBLEMS[error.problem], error.message)
       return
     }
-    if (this.disposed) return this.stopMic()
+    if (this.disposed || this.telling() !== 'mic') return this.stopMic() // left, or the screen locked meanwhile
     this.state.setTelling('connecting')
     try {
       this.socket?.close() // one kept open after a previous session.ended
@@ -205,8 +210,24 @@ export class Narration {
   private micLost(error: MicError): void {
     this.stopMic()
     const ended = this.socket?.end() ?? false // keep what was said: finish the session normally
-    this.state.setProblem({ kind: MIC_PROBLEMS[error.problem], message: error.message })
+    // iOS ends the microphone when the screen locks: that is a pause, not a broken microphone.
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') this.state.set({ pausedByLock: true })
+    else this.state.setProblem({ kind: MIC_PROBLEMS[error.problem], message: error.message })
     this.state.setTelling(ended ? 'finishing' : 'idle')
+  }
+
+  /**
+   * The screen locked or the page was hidden mid-narration: stop the microphone and end the session normally,
+   * so every completed beat (and the one being spoken) becomes a shot. Start telling goes on afterwards.
+   */
+  pauseForLock(): void {
+    const { telling } = this.state
+    if (telling !== 'live' && telling !== 'connecting' && telling !== 'mic') return
+    if (telling === 'mic') {
+      // Still asking for the microphone: drop it once it arrives.
+      this.state.setTelling('idle')
+    } else this.stop()
+    this.state.set({ pausedByLock: true })
   }
 
   /**
