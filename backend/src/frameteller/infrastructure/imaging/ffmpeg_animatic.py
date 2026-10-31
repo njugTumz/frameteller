@@ -1,7 +1,8 @@
 """FfmpegVideoRenderer: the MP4 animatic, H.264 + AAC, 1536x1024 at 24 fps (ADR 0011).
 
 One segment per shot between a title card and an end card ("Made with Frameteller", then "Tell your story at
-frameteller.com" in the captions' language). Each segment is a still panel with a gentle
+frameteller.com" in the captions' language). Text in any of our nine languages is drawn with bundled fonts and
+shaped, right to left for Arabic (imaging.text). Each segment is a still panel with a gentle
 zoompan move, cross-faded into the next. A segment is lengthened by the fade, so every shot still starts at
 its own time and the voice (cut per shot from the kept narration) stays in sync to the frame.
 
@@ -29,7 +30,7 @@ from PIL import Image, ImageDraw
 
 from frameteller.application.ports import CaptionTrack, Progress
 from frameteller.domain import END_MS, TITLE_MS, Animatic, AudioCut, Motion, to_srt
-from frameteller.infrastructure.imaging.text import INK, MUTED, PAPER, font, line_height, wrap
+from frameteller.infrastructure.imaging.text import INK, MUTED, PAPER, draw_line, line_height, textlength, wrap
 
 WIDTH, HEIGHT, FPS = 1536, 1024, 24
 FADE_FRAMES = 6  # 0.25 s cross-fades
@@ -39,17 +40,24 @@ THREADS = "2"
 # Below the API process, which serves live sessions (coreutils nice; absent elsewhere, then no change).
 _NICE = ("nice", "-n", "10") if shutil.which("nice") else ()
 # ISO 639-2 tags for the soft track, by language.
-ISO639_2 = {"en": "eng", "fr": "fra", "es": "spa", "hi": "hin", "ar": "ara", "pt": "por"}
+ISO639_2 = {
+    "en": "eng", "fr": "fra", "es": "spa", "hi": "hin", "ar": "ara", "pt": "por", "ja": "jpn", "ko": "kor", "zh": "zho",
+}  # fmt: skip
 SAMPLE_RATE = 48_000
 PRODUCT = "Frameteller"  # the working name (CLAUDE.md): change it here for the end card
-SITE = "frameteller.com"  # the end card's second line; never translated
-# "Tell your story at", in the captions' language. Pillow's bundled font draws Latin script only, so Hindi and
-# Arabic exports keep the English line (their captions are a soft track, not burned in).
+SITE = "frameteller.com"  # in the end card's second line; never translated
+# "Tell your story at frameteller.com" in the captions' language: a fixed table, never a model's translation.
+# The site sits where each language puts it.
 INVITE = {
-    "en": "Tell your story at",
-    "fr": "Racontez votre histoire sur",
-    "es": "Cuenta tu historia en",
-    "pt": "Conte sua história em",
+    "en": "Tell your story at {site}",
+    "fr": "Racontez votre histoire sur {site}",
+    "es": "Cuenta tu historia en {site}",
+    "pt": "Conte sua história em {site}",
+    "hi": "{site} पर अपनी कहानी सुनाइए",
+    "ar": "احكِ قصتك على {site}",
+    "ja": "{site} であなたの物語を語ろう",
+    "ko": "{site}에서 당신의 이야기를 들려주세요",
+    "zh": "在 {site} 讲述你的故事",
 }
 END_SIZES = (64, 52)  # px on a 1536x1024 frame, like the captions: readable on a phone
 SAFE_SIDES = 0.1  # the end card's lines stay inside the middle 80% (title-safe)
@@ -178,7 +186,7 @@ def _caption_stream(captions: CaptionTrack, work: Path) -> Path:
         if start > at:
             entries.append((gap, start - at))
         image = work / f"caption{n}.png"
-        _caption(cue.text).save(image)
+        _caption(cue.text, captions.language).save(image)
         entries.append((image, end - start))
         at = end
     entries.append((gap, 1000))
@@ -327,16 +335,16 @@ def _title_card(title: str) -> Image.Image:
     lines = wrap(draw, title.strip() or "Untitled story", 84, WIDTH - 320, max_lines=3)
     y = HEIGHT // 2 - len(lines) * line_height(84) // 2 - 30
     for line in lines:
-        draw.text((WIDTH // 2, y), line, font=font(84), fill=INK, anchor="mt")
+        draw_line(draw, (WIDTH // 2, y), line, 84, INK, anchor="mt")
         y += line_height(84)
-    draw.text((WIDTH // 2, y + 30), "A storyboard animatic", font=font(36), fill=MUTED, anchor="mt")
+    draw_line(draw, (WIDTH // 2, y + 30), "A storyboard animatic", 36, MUTED, anchor="mt")
     return card
 
 
 def end_lines(language: str) -> tuple[str, str]:
-    """The end card's two lines, the second in the captions' language (English where we cannot draw it)."""
+    """The end card's two lines, the second in the captions' language (English for any other)."""
     invite = INVITE.get(language.split("-")[0].lower(), INVITE["en"])
-    return f"Made with {PRODUCT}", f"{invite} {SITE}"
+    return f"Made with {PRODUCT}", invite.format(site=SITE)
 
 
 def _end_card(language: str) -> Image.Image:
@@ -346,31 +354,31 @@ def _end_card(language: str) -> Image.Image:
     rows = [
         (line, size, colour)
         for text, size, colour in zip(end_lines(language), END_SIZES, (INK, MUTED), strict=True)
-        for line in wrap(draw, text, size, safe, max_lines=2)
+        for line in wrap(draw, text, size, safe, max_lines=2, language=language)
     ]
     gap = 24
     y = HEIGHT // 2 - (sum(line_height(size) for _, size, _ in rows) + gap) // 2
     for n, (line, size, colour) in enumerate(rows):
         if n and rows[n - 1][1] != size:
             y += gap
-        draw.text((WIDTH // 2, y), line, font=font(size), fill=colour, anchor="mt")
+        draw_line(draw, (WIDTH // 2, y), line, size, colour, language=language, anchor="mt")
         y += line_height(size)
     return card
 
 
-def _caption(text: str) -> Image.Image:
+def _caption(text: str, language: str = "") -> Image.Image:
     """One caption line (wrapped to two at most) in a soft dark band above the bottom safe area."""
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     size = CAPTION_SIZE
-    lines = wrap(draw, text, size, WIDTH - 240, max_lines=2)
+    lines = wrap(draw, text, size, WIDTH - 240, max_lines=2, language=language)
     height = len(lines) * line_height(size) + 36
     top = HEIGHT - round(HEIGHT * SAFE_BOTTOM) - height
-    widest = max(draw.textlength(line, font=font(size)) for line in lines)
+    widest = max(textlength(line, size, language) for line in lines)
     left = (WIDTH - widest) / 2 - 28
     draw.rounded_rectangle((left, top, WIDTH - left, top + height), radius=14, fill=(20, 18, 16, 170))
     y = top + 18
     for line in lines:
-        draw.text((WIDTH // 2, y), line, font=font(size), fill=(255, 255, 255, 255), anchor="mt")
+        draw_line(draw, (WIDTH // 2, y), line, size, (255, 255, 255, 255), language=language, anchor="mt")
         y += line_height(size)
     return overlay

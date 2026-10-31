@@ -27,13 +27,23 @@ from frameteller.application.ports import (
 )
 from frameteller.application.use_cases.requests import JobTicket
 from frameteller.application.use_cases.voices import DEFAULT_VOICE
-from frameteller.domain import TITLE_MS, Animatic, AnimaticExport, AudioCut, MediaRef, Project, caption_cues, to_srt
+from frameteller.domain import (
+    TITLE_MS,
+    Animatic,
+    AnimaticExport,
+    AudioCut,
+    MediaRef,
+    Project,
+    caption_cues,
+    script_language,
+    to_srt,
+)
 
 log = logging.getLogger("frameteller.export")
 
 PROGRESS_STEP = 0.05  # publish progress every 5% of the timeline
-# Pillow's bundled font draws Latin script only: other captions are a soft track and an .srt (the player's fonts).
-BURNABLE = ("en", "fr", "es", "pt")
+# The languages the renderer has fonts for (Latin, CJK, Devanagari, Arabic). Others are a soft track and an .srt.
+BURNABLE = ("en", "fr", "es", "pt", "hi", "ar", "ja", "ko", "zh")
 Audio = Literal["mine", "voice", "none"]
 GALLERY_VOICE = DEFAULT_VOICE  # "the Ava voice instead": speaks every language we offer
 
@@ -64,8 +74,10 @@ def animatic_digest(animatic: Animatic, options: AnimaticOptions) -> str:
 
 
 def spoken_language(project: Project) -> str:
-    """What the turns are in: a voice's language when one read the story, else English."""
-    return next((n.language for n in project.narrations.values() if n.language), "en-US")
+    """What the turns are in: the language a voice read or the narrator chose, else what their script shows
+    (Japanese, Korean, Chinese, Arabic, Hindi), else English."""
+    chosen = next((n.language for n in project.narrations.values() if n.language), None)
+    return chosen or script_language(" ".join(t.text for t in project.turns)) or "en-US"
 
 
 def _silent(animatic: Animatic) -> Animatic:

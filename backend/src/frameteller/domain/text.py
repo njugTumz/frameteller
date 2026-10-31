@@ -25,6 +25,20 @@ _SPACELESS_CHAR = re.compile(rf"[{_SPACELESS}{_FULL_OPEN}{_FULL_CLOSE}\u3000-\u3
 _CJK = re.compile(rf"[{_SPACELESS}\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]")
 
 
+def _chars(*ranges: tuple[int, int]) -> re.Pattern[str]:
+    return re.compile("[" + "".join(f"{chr(a)}-{chr(b)}" for a, b in ranges) + "]")
+
+
+# The script a text is written in tells its language apart, except among languages written in Latin letters.
+_BY_SCRIPT = (
+    ("ja-JP", _chars((0x3040, 0x30FF), (0x31F0, 0x31FF))),  # kana: Japanese, even with Han among it
+    ("ko-KR", _chars((0x1100, 0x11FF), (0x3130, 0x318F), (0xAC00, 0xD7AF))),
+    ("zh-CN", _chars((0x3400, 0x4DBF), (0x4E00, 0x9FFF))),
+    ("ar-SA", _chars((0x0600, 0x06FF), (0x0750, 0x077F), (0xFB50, 0xFDFF), (0xFE70, 0xFEFF))),
+    ("hi-IN", _chars((0x0900, 0x097F))),
+)
+
+
 def tokens(text: str) -> list[str]:
     """Words, or single characters in a script without spaces, with their punctuation attached."""
     return _TOKEN.findall(text)
@@ -48,6 +62,11 @@ def join(parts: Sequence[str]) -> str:
 def is_cjk(text: str) -> bool:
     """Chinese, Japanese or Korean: its captions are split by characters, not words."""
     return bool(_CJK.search(text))
+
+
+def script_language(text: str) -> str | None:
+    """The locale a text's script points to ("ja-JP" for kana), or None for Latin letters (any of several)."""
+    return next((locale for locale, pattern in _BY_SCRIPT if pattern.search(text)), None)
 
 
 def units(text: str) -> int:

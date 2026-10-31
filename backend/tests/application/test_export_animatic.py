@@ -83,7 +83,7 @@ async def test_captions_in_another_language_are_translated_and_tagged(world: Wor
     track = renderer.rendered[0][3]
     assert track is not None
     assert track.language == "hi-IN"
-    assert not track.burn  # Devanagari is a soft track and an .srt, never burned with a Latin-only font
+    assert track.burn  # Devanagari has its own font
     assert result.caption_language == "hi-IN"
     assert ("p1", 0.003, "caption translation") in world.budget.charges
 
@@ -98,3 +98,35 @@ async def test_without_audio_the_animatic_is_silent(world: World) -> None:
     result = await export(world, renderer, RecordingPublisher()).execute("p1", AnimaticOptions(audio="none"))
     assert renderer.rendered[0][2] == {}
     assert not result.voiced
+
+
+async def test_a_story_told_in_japanese_is_captioned_in_japanese_even_without_a_kept_recording(world: World) -> None:
+    from dataclasses import replace
+
+    await drawn(world)
+    p = world.project()
+    p.turns = [replace(t, text="夜の屋上で、リナは紙の凧を拾った。") for t in p.turns]
+    await world.repo.save(p)
+    renderer = FakeVideoRenderer()
+
+    await export(world, renderer, RecordingPublisher()).execute("p1", AnimaticOptions(subtitles=True))
+
+    track = renderer.rendered[0][3]
+    assert track is not None
+    assert (track.language, track.burn) == ("ja-JP", True)
+    assert track.cues[0].text.startswith("夜の")
+
+
+async def test_the_language_the_narrator_chose_tags_the_captions(world: World) -> None:
+    await drawn(world)
+    p = world.project()
+    p.keep_narration(Narration("t1", TAKE, 4000, language="ko-KR"))
+    await world.repo.save(p)
+    world.storage.files[TAKE.key] = (b"RIFF-voice", "audio/wav")
+    renderer = FakeVideoRenderer()
+
+    await export(world, renderer, RecordingPublisher()).execute("p1", AnimaticOptions(subtitles=True))
+
+    track = renderer.rendered[0][3]
+    assert track is not None
+    assert track.language == "ko-KR"

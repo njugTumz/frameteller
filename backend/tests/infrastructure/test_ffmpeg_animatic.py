@@ -1,5 +1,6 @@
 """The real ffmpeg renderer on a tiny timeline. Skipped where ffmpeg is not installed."""
 
+# ruff: noqa: RUF001  (full-width punctuation is the text under test)
 import asyncio
 import io
 import json
@@ -137,7 +138,13 @@ def last_second(video: bytes, tmp_path: Path, name: str) -> Image.Image:
         ("en-US", True, "Tell your story at frameteller.com"),
         ("en-US", False, "Tell your story at frameteller.com"),
         ("fr-FR", True, "Racontez votre histoire sur frameteller.com"),
-        ("ar-SA", False, "Tell your story at frameteller.com"),  # Arabic cannot be drawn: English, never boxes
+        ("pt-BR", True, "Conte sua história em frameteller.com"),
+        ("hi-IN", True, "frameteller.com पर अपनी कहानी सुनाइए"),
+        ("ar-SA", False, "احكِ قصتك على frameteller.com"),
+        ("ja-JP", True, "frameteller.com であなたの物語を語ろう"),
+        ("ko-KR", True, "frameteller.com에서 당신의 이야기를 들려주세요"),
+        ("zh-CN", True, "在 frameteller.com 讲述你的故事"),
+        ("de-DE", True, "Tell your story at frameteller.com"),  # not one of ours: English
     ],
 )
 async def test_the_last_second_is_a_two_line_end_card_inside_the_safe_area(
@@ -169,3 +176,41 @@ async def test_a_story_without_captions_ends_on_the_english_card(tmp_path: Path)
     clips = (AnimaticClip("s1", 1, MediaRef("a"), 0, 800, Motion.STATIC),)
     video = await FfmpegVideoRenderer().render(Animatic("p1", "Quiet", clips), {"s1": panel((20, 20, 20))}, {})
     assert len(ink_rows(last_second(video, tmp_path, "quiet"))) == 2
+
+
+@pytest.mark.parametrize(
+    ("language", "text"),
+    [
+        ("ja-JP", "夜の屋上で、リナは紙の凧を拾った。"),
+        ("ko-KR", "밤이 오면 리나는 종이 연을 잡는다."),
+        ("zh-CN", "夜幕降临，丽娜接住了一只纸风筝。"),
+        ("hi-IN", "छतों पर रात उतरती है, और लीना के हाथों में पतंग आ गिरती है।"),
+        ("ar-SA", "يحلّ الليل فوق الأسطح، وتهبط طائرة ورقية بين يدي لينا."),
+    ],
+)
+async def test_captions_in_every_script_are_burned_in_as_drawn(tmp_path: Path, language: str, text: str) -> None:
+    from frameteller.infrastructure.imaging.ffmpeg_animatic import _caption
+
+    clips = (AnimaticClip("s1", 1, MediaRef("a"), 0, 2000, Motion.STATIC),)
+    track = CaptionTrack((Cue(TITLE_MS + 200, TITLE_MS + 1800, text),), language, burn=True)
+    video = await FfmpegVideoRenderer().render(
+        Animatic("p1", "Kites", clips), {"s1": panel((20, 20, 20))}, {}, captions=track
+    )
+    out = tmp_path / "c.mp4"
+    out.write_bytes(video)
+    still = tmp_path / f"{language}.png"
+    at = (TITLE_MS + 1000) / 1000
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-ss", f"{at}", "-i", str(out), "-frames:v", "1", str(still)], check=True
+    )
+    with Image.open(still) as im:
+        frame = im.convert("L")
+    expected = Image.new("RGBA", (1536, 1024), (20, 20, 20, 255))
+    expected.alpha_composite(_caption(text, language))
+    band = (0, 760, 1536, 960)
+    want, got = expected.convert("L").crop(band), frame.crop(band)
+    _, high = got.getextrema()
+    assert isinstance(high, int)
+    assert high > 200  # white text on the band
+    diff = [abs(a - b) for a, b in zip(want.tobytes(), got.tobytes(), strict=True)]
+    assert sum(diff) / len(diff) < 4  # the frame shows the shaped line, glyph for glyph (bar compression)
