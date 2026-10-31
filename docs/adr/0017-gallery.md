@@ -62,3 +62,11 @@ The gallery is one JSON document (`gallery/index.json` in the projects container
 - Nothing reaches the public gallery without passing the rubric or a person's look. A missed case can still be reported, and three reports hide it.
 - The Ava voice is trimmed to each shot's length. Text read faster than it was spoken fits, but a long caption over a short shot is cut off. Narrated stories usually fit, because the caption is what was said in that time.
 - One document for the whole gallery keeps reads cheap and writes simple. With thousands of entries it would need an index per entry and paging.
+
+## Amendment (Oct 31, 2026): reserved names are decided by a rule, not a model
+
+The moderation review (GAL-08) judged "Frameteller team" once as fine and once as doubtful, for the same story. Brand names are now a fixed rule:
+
+- **Reserved:** "Frameteller", "Frameteller team", "Frameteller official", "Meta", "Muse" and "Cerebral Valley". Matching ignores case, spaces and punctuation (after NFKC), so "frame-teller TEAM" and full-width letters match too.
+- **From a creator:** a reserved name always goes to `pending` with the note "GAL-08: The name is reserved for official entries…", before any model is asked. The creator is told the name is reserved. Signing one again, even unchanged, is held again.
+- **From the admin console:** publishing an entry, or changing its name there (`PATCH /admin/gallery/{id}`, no new check), marks a reserved name `official`. The public gallery card and share page show an "Official" badge. Any later edit by the creator removes `official`.

@@ -43,7 +43,7 @@ def gallery_to_dict(g: Gallery) -> dict[str, Any]:
                 "published_at": e.published_at.isoformat() if e.published_at else None,
                 "hearts": sorted(e.hearts),
                 "reports": [{"visitor": r.visitor, "reason": r.reason, "at": r.at.isoformat()} for r in e.reports],
-                "creator": {"name": e.creator.name, "country": e.creator.country},
+                "creator": {"name": e.creator.name, "country": e.creator.country, "official": e.creator.official},
                 "checks": e.checks,
             }
             for e in g.entries.values()

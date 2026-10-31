@@ -25,15 +25,15 @@ async def test_a_signed_entry_shows_its_name_and_country_on_the_card_and_the_sha
     await drawn(api)
     mine = await submit(api, name="  Captain   Biscuit ", country="ke")
     assert mine["status"] == "published"
-    assert mine["creator"] == {"name": "Captain Biscuit", "country": "KE"}
+    assert mine["creator"] == {"name": "Captain Biscuit", "country": "KE", "official": False}
 
     page = (await api.client.get("/gallery")).json()
-    assert page["entries"][0]["creator"] == {"name": "Captain Biscuit", "country": "KE"}
+    assert page["entries"][0]["creator"] == {"name": "Captain Biscuit", "country": "KE", "official": False}
     assert page["countries"] == [{"code": "KE", "entries": 1}]
     assert len((await api.client.get("/gallery", params={"country": "KE"})).json()["entries"]) == 1
     assert (await api.client.get("/gallery", params={"country": "AE"})).json()["entries"] == []
     assert (await api.client.get("/gallery", params={"country": "ke"})).status_code == 422
-    assert (await share_page(api))["creator"] == {"name": "Captain Biscuit", "country": "KE"}
+    assert (await share_page(api))["creator"] == {"name": "Captain Biscuit", "country": "KE", "official": False}
 
 
 async def test_an_unsigned_entry_is_anonymous_and_a_project_outside_the_gallery_has_no_byline(
@@ -44,8 +44,16 @@ async def test_an_unsigned_entry_is_anonymous_and_a_project_outside_the_gallery_
     await api.client.post("/projects/p1/share", json={})
     assert (await share_page(api))["creator"] is None  # not in the gallery: nothing about the creator
     await submit(api)
-    assert (await api.client.get("/gallery")).json()["entries"][0]["creator"] == {"name": "", "country": ""}
-    assert (await share_page(api))["creator"] == {"name": "", "country": ""}  # "by an anonymous storyteller"
+    assert (await api.client.get("/gallery")).json()["entries"][0]["creator"] == {
+        "name": "",
+        "country": "",
+        "official": False,
+    }
+    assert (await share_page(api))["creator"] == {
+        "name": "",
+        "country": "",
+        "official": False,
+    }  # "by an anonymous storyteller"
     assert (await api.client.get("/gallery")).json()["countries"] == []
 
 
@@ -69,11 +77,15 @@ async def test_the_creator_edits_removes_and_still_withdraws(make_api: Callable[
     assert (await api.client.get("/gallery")).json()["entries"] == []
     await api.settle()
     card = (await api.client.get("/gallery")).json()["entries"][0]
-    assert card["creator"] == {"name": "Ama K.", "country": "AE"}
+    assert card["creator"] == {"name": "Ama K.", "country": "AE", "official": False}
 
     r = await api.client.patch("/projects/p1/gallery", json={"name": None, "country": ""})
     assert r.json()["status"] == "published"  # removing shows at once
-    assert (await api.client.get("/gallery")).json()["entries"][0]["creator"] == {"name": "", "country": ""}
+    assert (await api.client.get("/gallery")).json()["entries"][0]["creator"] == {
+        "name": "",
+        "country": "",
+        "official": False,
+    }
 
     assert (await api.client.patch("/projects/p1/gallery", json={"country": "ZZ"})).status_code == 422
     assert (await api.client.delete("/projects/p1/gallery")).status_code == 204
@@ -100,3 +112,30 @@ async def test_countries_lists_every_code_and_only_suggests_one_from_the_request
     for header, expected in (("en", None), ("", None), ("fr-CA, en-US", "CA"), ("zh-Hant-TW", "TW"), ("en-XX", None)):
         got = (await api.client.get("/gallery/countries", headers={"Accept-Language": header})).json()
         assert got["suggested"] == expected, header
+
+
+async def test_a_reserved_name_waits_with_a_clear_note_and_the_admin_makes_it_official(
+    make_api: Callable[..., Api],
+) -> None:
+    admin = "admin-token-for-tests-0123456789abcdef"
+    auth = {"Authorization": f"Bearer {admin}"}
+    api = make_api(admin_token=admin)
+    await drawn(api)
+    mine = await submit(api, name="Frameteller  Team")
+    assert mine["status"] == "pending"
+    assert mine["note"] == "That name is reserved for official Frameteller entries, so a person will look at it first."
+    assert not [r for r in api.fakes.reviewer.requests if "shown as the author" in r.subject]  # no moderation review
+    assert (await api.client.get("/gallery")).json()["entries"] == []
+
+    [entry] = (await api.client.get("/admin/gallery", headers=auth)).json()
+    assert entry["note"].startswith("GAL-08: The name is reserved")
+    assert (
+        await api.client.patch(f"/admin/gallery/{entry['id']}", json={"name": "Frameteller team"})
+    ).status_code == 401
+    r = await api.client.patch(f"/admin/gallery/{entry['id']}", json={"name": "Frameteller team"}, headers=auth)
+    assert r.json()["creator"] == {"name": "Frameteller team", "country": "", "official": True}
+    assert r.json()["status"] == "pending"  # signing does not publish
+    await api.client.post(f"/admin/gallery/{entry['id']}", json={"action": "publish"}, headers=auth)
+    [card] = (await api.client.get("/gallery")).json()["entries"]
+    assert card["creator"] == {"name": "Frameteller team", "country": "", "official": True}
+    assert (await share_page(api))["creator"]["official"] is True

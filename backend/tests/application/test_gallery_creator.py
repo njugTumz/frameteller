@@ -4,8 +4,8 @@ import pytest
 
 from frameteller.application.jobs import GALLERY_SUBMISSION
 from frameteller.application.use_cases import GeneratePanel
-from frameteller.application.use_cases.gallery import BrowseGallery, SignGalleryEntry
-from frameteller.domain import Creator, Decision, EntryStatus, InvalidValueError, Issue, Severity
+from frameteller.application.use_cases.gallery import BrowseGallery, ModerateGallery, SignGalleryEntry
+from frameteller.domain import RESERVED_NOTE, Creator, Decision, EntryStatus, InvalidValueError, Issue, Severity
 from tests.application.conftest import World
 from tests.application.test_gallery import Gallery
 from tests.fakes import verdict
@@ -93,3 +93,42 @@ async def test_no_edit_while_the_first_check_runs_and_none_without_an_entry(worl
     await g.submit.execute("p1", consent=True, audio="none")
     with pytest.raises(InvalidValueError, match="being checked"):
         await SignGalleryEntry(g.repo, world.jobs).execute("p1", Creator("Ama"))
+
+
+@pytest.mark.parametrize("name", ["Frameteller team", "frame teller", "META", "Cerebral Valley"])
+async def test_a_reserved_name_always_waits_for_a_person_and_no_model_is_asked(world: World, name: str) -> None:
+    g = Gallery(world)  # the scripted reviewer would publish anything
+    assert await signed(g, Creator.of(name, None)) is EntryStatus.PENDING
+    e = await g.entry()
+    assert e is not None
+    assert e.note == RESERVED_NOTE
+    assert e.video is not None  # rendered, so the admin can watch it
+    assert g.reviewer.requests == []
+
+
+async def test_the_same_reserved_name_is_held_every_time_it_is_signed(world: World) -> None:
+    g = Gallery(world)
+    await signed(g, Creator("Ama"))
+    sign = SignGalleryEntry(g.repo, world.jobs)
+    for _ in range(3):
+        e = await sign.execute("p1", Creator.of("Frameteller team", None))
+        if e.status is EntryStatus.CHECKING:
+            assert await g.process.execute("p1", e.id) is EntryStatus.PENDING
+        assert (await g.entry()).status is EntryStatus.PENDING  # type: ignore[union-attr]
+    assert len(g.reviewer.requests) == 1  # only Ama's first check asked a model
+
+
+async def test_the_admin_publishes_or_signs_a_reserved_name_as_official(world: World) -> None:
+    g = Gallery(world)
+    await signed(g, Creator.of("Frameteller team", None))
+    e = await g.entry()
+    assert e is not None
+    admin = ModerateGallery(g.repo, world.storage, g.share, g.clock)
+    published = await admin.act(e.id, "publish")
+    assert (published.status, published.creator.official) == (EntryStatus.PUBLISHED, True)
+    assert await BrowseGallery(g.repo).creator_of("p1") == Creator("Frameteller team", "", official=True)
+
+    signed_again = await admin.sign(e.id, Creator.of("Frameteller official", None))
+    assert (signed_again.status, signed_again.creator.official) == (EntryStatus.PUBLISHED, True)
+    renamed = await admin.sign(e.id, Creator.of("Ama", "KE"))
+    assert not renamed.creator.official  # the badge is only for reserved names

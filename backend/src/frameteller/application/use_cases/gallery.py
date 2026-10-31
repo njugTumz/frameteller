@@ -40,6 +40,7 @@ from frameteller.application.rubrics import RubricError, RubricSet
 from frameteller.application.use_cases.export_animatic import AnimaticOptions, ExportAnimatic
 from frameteller.application.use_cases.share import ShareProject
 from frameteller.domain import (
+    RESERVED_NOTE,
     Animatic,
     Creator,
     Decision,
@@ -211,6 +212,8 @@ class ProcessGallerySubmission:
         return await self._storage.get(panel.shown_image)
 
     async def _moderate(self, project: Project, base: str, creator: Creator) -> Moderation:
+        if creator.held:  # a reserved name: always the admin's decision, never a model's (the same answer every time)
+            return Moderation(False, RESERVED_NOTE, "")
         contact = creator.contact_details()
         if contact:  # a person decides; no review is needed to know that
             return Moderation(False, f"GAL-08: {contact}", "")
@@ -373,7 +376,7 @@ class ModerateGallery:
             if entry is None:
                 raise GalleryEntryNotFoundError(entry_id)
             if action == "publish":
-                entry.publish(now)
+                entry.publish(now, by_admin=True)  # a reserved name the admin publishes is official
             elif action == "hide":
                 entry.hide("Hidden by the admin.")
             else:
@@ -384,6 +387,18 @@ class ModerateGallery:
         if action == "publish":
             await self._share.execute(entry.project_id, public=True)
         return entry
+
+    async def sign(self, entry_id: str, creator: Creator) -> GalleryEntry:
+        """The admin changes the name or country. No check; a reserved name becomes official, status unchanged."""
+
+        def apply(g: Gallery) -> GalleryEntry:
+            entry = g.find(entry_id)
+            if entry is None:
+                raise GalleryEntryNotFoundError(entry_id)
+            entry.sign_as_admin(creator)
+            return entry
+
+        return await self._gallery.update(apply)
 
     async def remove(self, entry_id: str) -> None:
         removed = await self._gallery.update(lambda g: g.remove(entry_id))

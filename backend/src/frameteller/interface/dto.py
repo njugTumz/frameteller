@@ -41,6 +41,7 @@ from frameteller.application.use_cases import (
 )
 from frameteller.application.use_cases.correct_transcript import MAX_TURN_CHARS
 from frameteller.domain import (
+    RESERVED_NOTE,
     AnimaticExport,
     Box,
     CanvasTransform,
@@ -920,10 +921,13 @@ class CreatorOut(BaseModel):
 
     name: str = Field(description="A display name or nickname, at most 40 characters; not necessarily a real name.")
     country: str = Field(description="ISO 3166-1 alpha-2 code, or empty.")
+    official: bool = Field(
+        default=False, description='Signed or published by the admin with a reserved name: show an "Official" badge.'
+    )
 
     @classmethod
     def of(cls, c: Creator) -> CreatorOut:
-        return cls(name=c.name, country=c.country)
+        return cls(name=c.name, country=c.country, official=c.official)
 
 
 class GallerySignRequest(BaseModel):
@@ -959,6 +963,8 @@ class MyGalleryEntryOut(BaseModel):
         note = e.note if e.status in (EntryStatus.FAILED, EntryStatus.PENDING) else ""
         if e.status is EntryStatus.PENDING:
             note = "A person will look at it before it appears in the gallery."  # never the reviewer's own words
+            if e.note == RESERVED_NOTE:  # our own rule, not a review: say which part to change
+                note = "That name is reserved for official Frameteller entries, so a person will look at it first."
         return cls(
             id=e.id,
             status=e.status.value,

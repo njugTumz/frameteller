@@ -29,6 +29,8 @@ from frameteller.domain.exports import AnimaticExport
 from frameteller.domain.gallery import (
     MAX_NAME_CHARS,
     REPORTS_TO_HIDE,
+    RESERVED_NAMES,
+    RESERVED_NOTE,
     Creator,
     EntryStatus,
     Gallery,
@@ -74,6 +76,8 @@ __all__ = [
     "MAX_NAME_CHARS",
     "MIN_SHOT_MS",
     "REPORTS_TO_HIDE",
+    "RESERVED_NAMES",
+    "RESERVED_NOTE",
     "TITLE_MS",
     "Animatic",
     "AnimaticClip",

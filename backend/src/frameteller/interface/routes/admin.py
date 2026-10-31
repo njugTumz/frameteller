@@ -16,8 +16,9 @@ from pydantic import BaseModel, Field
 from frameteller.application.incidents import IncidentDesk
 from frameteller.application.lanes import Lane
 from frameteller.application.use_cases.gallery import ModerateGallery
+from frameteller.domain import Creator
 from frameteller.interface.container import Container
-from frameteller.interface.dto import AdminGalleryAction, AdminGalleryEntryOut
+from frameteller.interface.dto import AdminGalleryAction, AdminGalleryEntryOut, GallerySignRequest
 from frameteller.interface.routes.deps import PROJECT_ID, Deps
 from frameteller.interface.routes.media import serve
 
@@ -192,6 +193,13 @@ async def gallery_entries(c: Admin) -> list[AdminGalleryEntryOut]:
 async def gallery_action(entry_id: EntryId, body: AdminGalleryAction, c: Admin) -> AdminGalleryEntryOut:
     """publish, hide, feature or unfeature."""
     return AdminGalleryEntryOut.of(await _moderate(c).act(entry_id, body.action))
+
+
+@router.patch("/gallery/{entry_id}")
+async def gallery_sign(entry_id: EntryId, body: GallerySignRequest, c: Admin) -> AdminGalleryEntryOut:
+    """Change the name or country on an entry. Not checked again; a reserved name signed here is official."""
+    creator = Creator.of(body.name, body.country)
+    return AdminGalleryEntryOut.of(await _moderate(c).sign(entry_id, creator))
 
 
 @router.delete("/gallery/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)

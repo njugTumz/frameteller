@@ -6,6 +6,11 @@ enough reports hide it until the admin looks. The creator can withdraw it at any
 
 A creator may sign an entry with a display name and a country, both optional and editable later. A new name on a
 published entry is checked again before it shows; one with contact details never publishes by itself.
+
+Some names are reserved for us and our partners ("Frameteller team", "Meta", ...). Matching ignores case, spaces and
+punctuation, so "frame-teller TEAM" is reserved too. A creator who signs with one is always held for the admin,
+without asking a model, so the same name never passes once and fails once. Only the admin console can publish or
+sign an entry with a reserved name, which marks it official (an "Official" badge).
 """
 
 from __future__ import annotations
@@ -32,6 +37,17 @@ _LINK = re.compile(r"https?://|www\.|\b[\w-]+\.(com|net|org|io|co|me|tv|gg|app|d
 _HANDLE = re.compile(r"(^|\s)@\w{2,}")
 _PHONE = re.compile(r"\d[\d\s().+-]{5,}\d")
 
+RESERVED_NAMES = ("Frameteller", "Frameteller team", "Frameteller official", "Meta", "Muse", "Cerebral Valley")
+RESERVED_NOTE = "GAL-08: The name is reserved for official entries. Only the admin can publish it."
+
+
+def _bare(name: str) -> str:
+    """A name without case, spaces or punctuation: "Frame-teller  TEAM!" is "frametellerteam"."""
+    return "".join(ch for ch in unicodedata.normalize("NFKC", name).casefold() if ch.isalnum())
+
+
+_RESERVED = frozenset(_bare(n) for n in RESERVED_NAMES)
+
 
 @dataclass(frozen=True, slots=True)
 class Creator:
@@ -39,6 +55,7 @@ class Creator:
 
     name: str = ""
     country: str = ""  # ISO 3166-1 alpha-2, or empty
+    official: bool = False  # signed or published from the admin console: a reserved name may show
 
     @classmethod
     def of(cls, name: str | None, country: str | None) -> Creator:
@@ -56,6 +73,20 @@ class Creator:
     @property
     def anonymous(self) -> bool:
         return not self.name and not self.country
+
+    @property
+    def reserved(self) -> bool:
+        """The name is one of ours or a partner's (RESERVED_NAMES), however it is spelled or spaced."""
+        return bool(self.name) and _bare(self.name) in _RESERVED
+
+    @property
+    def held(self) -> bool:
+        """A reserved name the admin has not signed or published: never published without a person."""
+        return self.reserved and not self.official
+
+    def as_official(self) -> Creator:
+        """The admin signed or published it: official when the name is reserved (no badge on any other name)."""
+        return Creator(self.name, self.country, official=self.reserved)
 
     def contact_details(self) -> str | None:
         """Why the name can't publish without a person looking: it carries contact details. None when clean."""
@@ -120,8 +151,8 @@ class GalleryEntry:
             raise InvalidValueError("Your entry is being checked. You can edit it in a minute.")
         renamed = bool(creator.name) and creator.name != self.creator.name
         self.creator = creator
-        if not renamed or self.status is not EntryStatus.PUBLISHED:
-            return False
+        if not (renamed or creator.held) or self.status is not EntryStatus.PUBLISHED:
+            return False  # a reserved name signed by the creator is held by the check, even if unchanged
         self.status, self.checks = EntryStatus.CHECKING, self.checks + 1
         return True
 
@@ -132,9 +163,20 @@ class GalleryEntry:
     def ready(self, cover: MediaRef, video: MediaRef, duration_ms: int) -> None:
         self.cover, self.video, self.duration_ms = cover, video, duration_ms
 
-    def publish(self, at: datetime, reviewed_by: str = "") -> None:
+    def sign_as_admin(self, creator: Creator) -> None:
+        """The admin changes the name or country: no check, and a reserved name becomes official."""
+        if self.status is EntryStatus.CHECKING:
+            raise InvalidValueError("The entry is being checked. Edit it in a minute.")
+        self.creator = creator.as_official()
+
+    def publish(self, at: datetime, reviewed_by: str = "", *, by_admin: bool = False) -> None:
+        """Published by the check (never with a reserved name the admin has not signed) or by the admin."""
         if self.video is None or self.cover is None:
             raise InvalidValueError("an entry needs its video and cover before it is published")
+        if by_admin:
+            self.creator = self.creator.as_official()
+        elif self.creator.held:
+            raise InvalidValueError("a reserved name is published only by the admin")
         self.status, self.note = EntryStatus.PUBLISHED, ""
         self.reviewed_by = reviewed_by or self.reviewed_by
         self.published_at = self.published_at or at

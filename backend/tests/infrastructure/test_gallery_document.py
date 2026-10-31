@@ -21,3 +21,12 @@ def test_entries_from_before_names_are_anonymous() -> None:
     got = gallery_from_dict(doc).entries["g1"]
     assert got.creator.anonymous
     assert got.checks == 0
+
+
+def test_an_official_signature_survives_and_older_signatures_read_as_not_official() -> None:
+    e = entry()
+    e.creator = Creator("Frameteller team", "", official=True)
+    doc = gallery_to_dict(Gallery({e.id: e}))
+    assert gallery_from_dict(doc).entries[e.id].creator.official
+    del doc["entries"][0]["creator"]["official"]  # saved by v1.1.8
+    assert gallery_from_dict(doc).entries[e.id].creator == Creator("Frameteller team")
