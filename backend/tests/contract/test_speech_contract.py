@@ -132,8 +132,9 @@ async def test_the_recorded_voice_list_offers_the_curated_voices_and_is_fetched_
     assert {v.accent for v in curated} == {"en-US", "en-GB"}
     assert {v.gender for v in curated} == {"Male", "Female"}
     for v in curated:
-        # Every curated voice reads all six languages we offer.
-        assert [x.code for x in v.languages] == ["en", "fr", "es", "hi", "ar", "pt"], v.name
+        # Every curated voice reads all nine languages we offer (Azure lists them as secondary locales).
+        assert [x.code for x in v.languages] == ["en", "fr", "es", "pt", "hi", "ar", "ja", "ko", "zh"], v.name
+        assert [x.locale for x in v.languages][-3:] == ["ja-JP", "ko-KR", "zh-CN"]
 
 
 @recorded

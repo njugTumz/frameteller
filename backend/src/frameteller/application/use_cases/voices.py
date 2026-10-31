@@ -27,17 +27,23 @@ LANGUAGES = {
     "en": ("en-US", "English"),
     "fr": ("fr-FR", "Français"),
     "es": ("es-ES", "Español"),
+    "pt": ("pt-BR", "Português"),
     "hi": ("hi-IN", "हिन्दी"),
     "ar": ("ar-SA", "العربية"),
-    "pt": ("pt-BR", "Português"),
+    "ja": ("ja-JP", "日本語"),
+    "ko": ("ko-KR", "한국어"),
+    "zh": ("zh-CN", "中文"),
 }
 PREVIEWS = {
     "en": "Night falls over the rooftops, and a paper kite drifts down into Lena's hands.",
     "fr": "La nuit tombe sur les toits, et un cerf-volant en papier descend dans les mains de Lena.",
     "es": "La noche cae sobre los tejados, y una cometa de papel baja hasta las manos de Lena.",
+    "pt": "A noite cai sobre os telhados, e uma pipa de papel desce até as mãos de Lena.",
     "hi": "छतों पर रात उतरती है, और एक काग़ज़ की पतंग लीना के हाथों में आ गिरती है।",
     "ar": "يحلّ الليل فوق الأسطح، وتهبط طائرة ورقية بين يدي لينا.",
-    "pt": "A noite cai sobre os telhados, e uma pipa de papel desce até as mãos de Lena.",
+    "ja": "屋根の上に夜が訪れ、紙の凧がレナの手に舞い降りる。",
+    "ko": "지붕 위로 밤이 내리고, 종이 연이 레나의 손에 내려앉는다.",
+    "zh": "夜幕降临在屋顶上，一只纸风筝飘落到莉娜的手中。",  # noqa: RUF001 (Chinese punctuation)
 }
 PREVIEW_PROJECT = "voice-previews"  # budget bucket for previews: they belong to no story
 

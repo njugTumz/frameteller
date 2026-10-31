@@ -416,16 +416,17 @@ class RunVoiceSession:
         work.put_nowait(None)
         counts["shots"] = await director  # finish directing what was said before the stream ended
         if kept:
-            await self._keep(project_id, tag, bytes(kept))
+            await self._keep(project_id, tag, bytes(kept), options.language_bias)
         ended = SessionEnded(counts["turns"], counts["shots"], heard.heard_any)
         await self._events.publish(project_id, ended)
         return ended
 
-    async def _keep(self, project_id: str, tag: str, pcm: bytes) -> None:
-        """Store the session's audio as WAV; turn times are positions in it. A failure costs only the voice track."""
+    async def _keep(self, project_id: str, tag: str, pcm: bytes, language: str | None) -> None:
+        """Store the session's audio as WAV, with the language the narrator chose (None: auto); turn times are
+        positions in it. A failure costs only the voice track."""
         try:
             ref = await self._storage.put(f"projects/{project_id}/narration/{tag}.wav", wav_bytes(pcm), "audio/wav")
-            narration = Narration(tag, ref, len(pcm) // BYTES_PER_MS)
+            narration = Narration(tag, ref, len(pcm) // BYTES_PER_MS, language=language)
             await self._repo.update(project_id, lambda p: p.keep_narration(narration))
         except Exception:
             log.warning("could not keep the narration", extra={"bytes": len(pcm)})

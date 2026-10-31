@@ -40,6 +40,7 @@ from frameteller.application.use_cases import (
     TranscriptCorrection,
 )
 from frameteller.application.use_cases.correct_transcript import MAX_TURN_CHARS
+from frameteller.application.use_cases.voices import LANGUAGES
 from frameteller.domain import (
     RESERVED_NOTE,
     AnimaticExport,
@@ -152,13 +153,17 @@ class ReorderRequest(BaseModel):
 
 
 MAX_SCRIPT_BYTES = 16_000  # far above the script limit: accept_script gives the friendly message
+# The languages a narrator can say they speak, by code: the same nine as "Read it to me" (any other: auto).
+SPEAKING_LANGUAGES = {code: locale for code, (locale, _) in LANGUAGES.items()}
 
 
 class SessionStart(BaseModel):
     """First WebSocket message. Mode and keywords are fixed for the session (CLAUDE.md section 5).
 
     "teleprompter" and "read" take a `script` (ADR 0015). "read" also takes a `voice` and `language` from GET
-    /voices, and then receives no audio: the client sends pause, continue and end.
+    /voices, and then receives no audio: the client sends pause, continue and end. In the other modes `language`
+    is the language the narrator speaks (one of SPEAKING_LANGUAGES), passed to the transcriber as its language
+    bias; without it the transcriber detects the language.
     """
 
     mode: Literal["narrate", "co_direct", "teleprompter", "read"] = "narrate"
@@ -176,7 +181,8 @@ class SessionStart(BaseModel):
     def as_options(self) -> SpeechOptions:
         mode = SpeechMode.CO_DIRECTION if self.mode == "co_direct" else SpeechMode.NARRATION
         keywords = tuple(dict.fromkeys(k.strip()[:40] for k in self.keywords if k.strip()))
-        return SpeechOptions(mode=mode, keywords=keywords)
+        bias = SPEAKING_LANGUAGES.get((self.language or "").split("-")[0]) if self.mode != "read" else None
+        return SpeechOptions(mode=mode, keywords=keywords, language_bias=bias)
 
 
 class ClientEnd(BaseModel):

@@ -8,10 +8,11 @@ from tests.application.test_beats import CHUNK, Session
 from tests.fakes import LISTEN, FakeDirector, ScriptedSpeech
 
 
-async def narrate(*, keep_audio: bool) -> Session:
+async def narrate(*, keep_audio: bool, language: str | None = None) -> Session:
     speech = ScriptedSpeech([LISTEN, LISTEN])
     s = Session(speech, FakeDirector())
-    await s.run.execute("p1", speech.paced(CHUNK, CHUNK), SpeechOptions(), keep_audio=keep_audio)
+    options = SpeechOptions(language_bias=language)
+    await s.run.execute("p1", speech.paced(CHUNK, CHUNK), options, keep_audio=keep_audio)
     return s
 
 
@@ -34,6 +35,11 @@ async def test_the_recording_is_kept_only_when_the_narrator_agreed() -> None:
     assert data == wav_bytes(CHUNK * 2)
     assert s.repo.peek("p1").narrations == {"s1": Narration("s1", MediaRef(key), 160)}  # two 80 ms chunks
     assert session_of("s1-b3") == "s1"
+
+
+async def test_the_kept_recording_remembers_the_language_the_narrator_chose() -> None:
+    s = await narrate(keep_audio=True, language="ja-JP")
+    assert s.repo.peek("p1").narrations["s1"].language == "ja-JP"  # the captions' language at export
 
 
 async def test_delete_my_recording_removes_the_files_and_the_references() -> None:

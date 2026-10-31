@@ -154,7 +154,7 @@ class SpeechMode(StrEnum):
 class SpeechOptions:
     mode: SpeechMode = SpeechMode.NARRATION
     keywords: tuple[str, ...] = ()
-    language_bias: str | None = None
+    language_bias: str | None = None  # the locale the narrator chose ("ja-JP"); None: the transcriber detects it
 
 
 @dataclass(frozen=True, slots=True)
