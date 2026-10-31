@@ -1,6 +1,18 @@
 {
-  "updated_at": "2026-10-31T07:00:00Z",
+  "updated_at": "2026-10-31T09:56:00Z",
   "items": [
+    {
+      "date": "2026-10-31",
+      "status": "shipped",
+      "title": "Redraw any frame",
+      "body": "Every panel and character sheet now has a Redraw button: say what should change, and keep the previous drawing if you liked it better."
+    },
+    {
+      "date": "2026-10-31",
+      "status": "shipped",
+      "title": "Tell it in nine languages",
+      "body": "Tell your story in English, Japanese, Korean, Chinese, Hindi, Arabic, French, Spanish or Portuguese, with narrator voices and captions in all nine."
+    },
     {
       "date": "2026-10-31",
       "status": "shipped",
