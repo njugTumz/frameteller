@@ -11,7 +11,8 @@ import { useStudioStatus } from '../shared/status/store'
 import { Notice } from '../shared/ui/Notice'
 import { navigate, parseRoute, usePathname } from './router'
 import { ThemeSwitch } from './ThemeSwitch'
-import { TopBar } from './TopBar'
+import { TopBar, type HeaderAction } from './TopBar'
+import { requestReport } from '../features/feedback/store'
 import { useTheme } from './theme'
 import { JudgePage } from './pages/JudgePage'
 import { JudgeBadge } from '../shared/ui/JudgeBadge'
@@ -26,24 +27,24 @@ export function App() {
   const route = parseRoute(usePathname())
   useNoindex(route.name !== 'share' && route.name !== 'gallery') // the studio is an app; the gallery and share pages are content
   const [theme, setTheme] = useTheme()
-  const themeSwitch = <ThemeSwitch value={theme} onChange={setTheme} />
   const paused = useStudioStatus((s) => s.paused)
   const judge = useStudioStatus((s) => s.judge)
+  const actions: HeaderAction[] = [
+    ...(route.name === 'start' || route.name === 'studio' ? [{ label: 'Take the tour', onSelect: startTour }] : []),
+    ...(route.name !== 'gallery' ? [{ label: 'Gallery', href: '/gallery' }] : []),
+  ]
+  // On phones the menu also holds what the wide layout shows in the page.
+  const menuOnly: HeaderAction[] = [
+    ...(route.name === 'studio' ? [{ label: 'Report a problem', onSelect: requestReport }] : []),
+    ...(route.name !== 'privacy' ? [{ label: 'Privacy', href: '/privacy' }] : []),
+  ]
   const bar = (
-    <TopBar>
-      {judge && <JudgeBadge />}
-      {(route.name === 'start' || route.name === 'studio') && (
-        <Button size="sm" variant="quiet" onClick={startTour}>
-          Take the tour
-        </Button>
-      )}
-      {route.name !== 'gallery' && (
-        <a href="/gallery" className="text-sm font-semibold underline-offset-2 hover:underline">
-          Gallery
-        </a>
-      )}
-      {themeSwitch}
-    </TopBar>
+    <TopBar
+      badge={judge && <JudgeBadge />}
+      actions={actions}
+      menuOnly={menuOnly}
+      theme={(place) => <ThemeSwitch value={theme} onChange={setTheme} place={place} />}
+    />
   )
   useEffect(() => void checkStudioStatus(), [])
 

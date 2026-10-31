@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
 import { MAX_REPORT } from '../limits'
 import type { ReportState } from '../hooks/useReportProblem'
+import { useReportRequests } from '../store'
 
 /** A quiet "Report a problem" link that opens a short form. The project's id goes with it; nothing else. */
 export function ReportProblem({
@@ -18,6 +19,21 @@ export function ReportProblem({
 }) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
+  const field = useRef<HTMLTextAreaElement>(null)
+  // Asked for from the phone header menu: open the form, bring it into view and put the cursor in it.
+  const asked = useReportRequests((s) => s.asked)
+  const seen = useRef(asked)
+  useEffect(() => {
+    if (asked === seen.current) return
+    seen.current = asked
+    setOpen(true)
+  }, [asked])
+  // Opened (here or from the menu): the cursor goes into the box, in view above a phone's keyboard.
+  useEffect(() => {
+    if (!open || !field.current) return
+    field.current.scrollIntoView?.({ block: 'center' }) // absent in jsdom
+    field.current.focus({ preventScroll: true })
+  }, [open, asked])
   if (!open)
     return (
       <Button size="sm" variant="quiet" className="self-start" onClick={() => setOpen(true)}>
@@ -55,6 +71,7 @@ export function ReportProblem({
       </label>
       <textarea
         id="problem-text"
+        ref={field}
         value={text}
         maxLength={MAX_REPORT}
         rows={3}

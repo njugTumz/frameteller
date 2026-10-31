@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { requestReport } from '../store'
 import { ReportProblem } from './ReportProblem'
 
 describe('ReportProblem', () => {
@@ -33,5 +34,11 @@ describe('ReportProblem', () => {
     rerender(<ReportProblem state="idle" error="You've sent 5 reports today. Thank you; we'll look at them." onSend={onSend} onReset={onReset} />)
     fireEvent.click(screen.getByRole('button', { name: 'Report a problem' }))
     expect(screen.getByRole('alert').textContent).toContain("You've sent 5 reports today")
+  })
+
+  it('opens from the phone header menu, with the cursor in the box', () => {
+    render(<ReportProblem state="idle" error={null} onSend={vi.fn()} onReset={vi.fn()} />)
+    act(() => requestReport())
+    expect(document.activeElement).toBe(screen.getByLabelText(/What went wrong\?/))
   })
 })
