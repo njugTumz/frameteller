@@ -41,7 +41,7 @@ export const TOUR_STEPS: TourStep[] = [
     anchor: `[data-voice="${DEFAULT_VOICE}"]`,
     waitFor: { text: 'Loading the voices…', seconds: 5 },
     title: "This one's Ava",
-    body: 'Ava reads the sample story a paragraph at a time, with Azure Text-to-Speech. Preview any voice; each one speaks six languages.',
+    body: 'Ava reads the sample story a paragraph at a time, with Azure Text-to-Speech. Preview any voice; each one speaks nine languages.',
     action: { kind: 'start-sample', label: 'Start the sample story' },
   },
   {
@@ -83,7 +83,7 @@ export const TOUR_STEPS: TourStep[] = [
     anchor: READY_PANEL,
     waitFor: { text: 'Muse Image is drawing the first panels.', seconds: 30 },
     title: 'Muse Image draws with the approved cast',
-    body: 'Draft panels draw themselves, with the cast sheets as references, so each character looks the same in every panel.',
+    body: "Draft panels draw themselves, with the cast sheets as references, so each character looks the same in every panel. Don't like a frame? Redraw it, and say what should change.",
   },
   {
     id: 'select',
