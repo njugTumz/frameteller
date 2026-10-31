@@ -45,6 +45,7 @@
     { "@type": "Question", "name": "Which languages?", "acceptedAnswer": { "@type": "Answer", "text": "Tell your story in English, Japanese, Korean, Chinese, Hindi, Arabic, French, Spanish, Portuguese and more. Narrator voices and captions in 9 languages." } },
     { "@type": "Question", "name": "Does it work on my phone?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Frameteller runs in your phone's browser, with nothing to install." } },
     { "@type": "Question", "name": "What happens to my recording?", "acceptedAnswer": { "@type": "Answer", "text": "Your recording is kept only if you choose to keep it, is deleted after 30 days, and you can delete it any time. The privacy page at https://app.frameteller.com/privacy has the details." } },
+    { "@type": "Question", "name": "Can I use it for ads and client pitches?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Read your script, share an animatic or PDF board with your client, and make versions in 9 languages. Use your own original characters and products; don't upload other brands' logos or assets." } },
     { "@type": "Question", "name": "Can I share what I make?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Send a share link, or submit your storyboard to the public gallery." } }
   ]
 }
@@ -202,6 +203,9 @@
   }
   h3 { font-variation-settings: "wdth" 110; }
   .intro { max-width: 60ch; color: var(--muted); margin: 0; }
+  .sec-kicker { margin: 0 0 8px; font-size: 1.05rem; font-weight: 650; color: var(--muted); }
+  .ads .note { max-width: 60ch; margin: 20px 0 0; color: var(--muted); font-size: .95rem; }
+  .ads .ctas { margin-top: 24px; }
   .sec-head { display: flex; justify-content: space-between; align-items: end; gap: 8px 16px; flex-wrap: wrap; }
   .more { font-weight: 650; text-underline-offset: 3px; }
 
@@ -442,6 +446,24 @@
       </ul>
     </section>
 
+    <section class="wrap ads" id="ads" aria-labelledby="ads-title">
+      <p class="sec-kicker">For marketing and ad teams</p>
+      <h2 id="ads-title">Pitch the ad before you shoot it</h2>
+      <p class="intro">Show the client the spot before anyone books a shoot day.</p>
+      <ul class="grid">
+        <li><h3>A pitch animatic in minutes</h3><p>Read your ad script aloud, or let a narrator read it, and get a voiced animatic with captions in minutes.</p></li>
+        <li><h3>One script, 9 languages</h3><p>Make a localized version for every market, with narrator voices and captions in English, Japanese, Korean, Chinese, Hindi, Arabic, French, Spanish and Portuguese.</p></li>
+        <li><h3>Characters and mascots that stay on model</h3><p>Your original characters and mascots look the same in every frame, from the first shot to the last.</p></li>
+        <li><h3>Ready for the client</h3><p>Send a share link the client can watch anywhere, or a PDF ad storyboard for the deck.</p></li>
+        <li><h3>Change it in the meeting</h3><p>Click anything in a frame or say what should change, and it is redrawn in about 20 seconds.</p></li>
+      </ul>
+      <p class="note">Frameteller draws storyboard sketches, not finished product shots. Use your own original characters and products, not other brands' logos or assets.</p>
+      <div class="ctas">
+        <a class="btn btn-primary cta-watch" href="#story" data-watch>Watch a story</a>
+        <a class="btn btn-primary cta-try" data-config="demo" href="https://app.frameteller.com">Try Frameteller</a>
+      </div>
+    </section>
+
     <section class="wrap" id="gallery" aria-labelledby="gallery-title" hidden>
       <div class="sec-head">
         <h2 id="gallery-title">From the gallery</h2>
@@ -455,10 +477,10 @@
       <h2 id="who-title">Who it's for</h2>
       <p class="intro">Anyone who can describe a scene faster than they can draw it.</p>
       <ul class="grid">
+        <li><h3>Ad agencies and marketing teams</h3><p>Turn a script into a pitch animatic the client can watch, in every market's language.</p></li>
         <li><h3>Filmmakers and animators</h3><p>Block out a scene before the shoot, and pitch it as a timed animatic.</p></li>
         <li><h3>YouTubers and TikTok creators</h3><p>Plan a video's shots in minutes instead of an afternoon.</p></li>
         <li><h3>Writers and comic artists</h3><p>See your pages as panels before you draw a single line.</p></li>
-        <li><h3>Ad and pitch teams</h3><p>Turn a concept into a board the client can watch.</p></li>
         <li><h3>Teachers and parents</h3><p>Make a class story or a bedtime story into a little film.</p></li>
       </ul>
       <!-- Tester quotes go here, in the testers' own words and with their permission. Do not invent any.
@@ -487,6 +509,7 @@
         <details><summary>Which languages?</summary><p>Tell your story in English, Japanese, Korean, Chinese, Hindi, Arabic, French, Spanish, Portuguese and more. Narrator voices and captions in 9 languages.</p></details>
         <details><summary>Does it work on my phone?</summary><p>Yes. Frameteller runs in your phone's browser, with nothing to install.</p></details>
         <details><summary>What happens to my recording?</summary><p>Your recording is kept only if you choose to keep it, is deleted after 30 days, and you can delete it any time. The <a href="https://app.frameteller.com/privacy">privacy page</a> has the details.</p></details>
+        <details><summary>Can I use it for ads and client pitches?</summary><p>Yes. Read your script, share an animatic or PDF board with your client, and make versions in 9 languages. Use your own original characters and products; don't upload other brands' logos or assets.</p></details>
         <details><summary>Can I share what I make?</summary><p>Yes. Send a share link, or submit your storyboard to the public gallery.</p></details>
       </div>
     </section>

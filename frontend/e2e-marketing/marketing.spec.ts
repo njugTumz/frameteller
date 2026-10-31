@@ -189,17 +189,43 @@ test('the FAQ opens from the keyboard, and the page carries FAQPage data', async
   await expect(page.getByText('Tell your story in English, Japanese, Korean, Chinese, Hindi, Arabic, French, Spanish, Portuguese and more. Narrator voices and captions in 9 languages.')).toBeHidden()
   const data = await page.locator('script[type="application/ld+json"]').allTextContents()
   const faq = data.map((t) => JSON.parse(t)).find((d) => d['@type'] === 'FAQPage')
-  expect(faq.mainEntity).toHaveLength(7)
-  await expect(page.locator('details')).toHaveCount(7)
+  expect(faq.mainEntity).toHaveLength(8)
+  await expect(page.locator('details')).toHaveCount(8)
   await page.locator('summary', { hasText: 'What happens to my recording?' }).click()
   await expect(page.getByRole('link', { name: 'privacy page' })).toHaveAttribute('href', 'https://app.frameteller.com/privacy')
 })
+
+for (const [moment, at, primary, other] of [
+  ['before', BEFORE, 'Watch a story', 'Try Frameteller'],
+  ['after', AFTER, 'Try Frameteller', 'Watch a story'],
+] as const) {
+  test(`the section for marketing and ad teams, ${moment} the launch`, async ({ page }) => {
+    await gallery(page, [])
+    await open(page, at)
+    const ads = page.getByRole('region', { name: 'Pitch the ad before you shoot it' })
+    await expect(ads.getByText('For marketing and ad teams')).toBeVisible()
+    await expect(ads.getByRole('listitem')).toHaveCount(5)
+    await expect(ads).toContainText('pitch animatic')
+    await expect(ads).toContainText('ad storyboard')
+    await expect(ads).toContainText('not other brands\' logos or assets')
+    await expect(ads.getByRole('link', { name: primary })).toBeVisible()
+    await expect(ads.getByRole('link', { name: other })).toBeHidden()
+    // It follows "What you get", and ad teams come first in "Who it's for".
+    const order = await page.locator('main h2').allTextContents()
+    expect(order.indexOf('Pitch the ad before you shoot it')).toBe(order.indexOf('What you get') + 1)
+    const who = page.getByRole('region', { name: "Who it's for" }).getByRole('heading', { level: 3 })
+    await expect(who.first()).toHaveText('Ad agencies and marketing teams')
+    await page.locator('summary', { hasText: 'Can I use it for ads and client pitches?' }).click()
+    await expect(page.getByText("Yes. Read your script, share an animatic or PDF board with your client, and make versions in 9 languages. Use your own original characters and products; don't upload other brands' logos or assets.")).toBeVisible()
+  })
+}
 
 test('the build log shows the latest 3, then all of them', async ({ page }) => {
   await gallery(page, [])
   await open(page, BEFORE)
   const log = page.locator('#log > li')
-  await expect(log.nth(0)).toContainText('Stories you can watch today')
+  await expect(log.nth(0)).toContainText('Redraw any frame')
+  await expect(log.nth(1)).toContainText('Tell it in nine languages')
   await expect(log.nth(2)).toBeVisible()
   await expect(log.nth(3)).toBeHidden()
   const all = page.getByRole('button', { name: 'Show all' })
@@ -236,6 +262,7 @@ for (const width of [390, 1280]) {
         mkdirSync(SHOTS, { recursive: true })
         await page.screenshot({ path: `${SHOTS}/${moment}-${width}-${scheme}.png` })
         await page.screenshot({ path: `${SHOTS}/${moment}-${width}-${scheme}-full.png`, fullPage: true })
+        await page.locator('#ads').screenshot({ path: `${SHOTS}/${moment}-${width}-${scheme}-ads.png` })
         await context.close()
       })
     }
