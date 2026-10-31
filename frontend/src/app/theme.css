@@ -165,6 +165,18 @@
 .pressed {
   animation: press 0.18s ease-out;
 }
+/* A redraw takes about 20 s (p50 on production, Oct 31): the bar fills to 90% in that time and waits there. */
+@keyframes drawing-progress {
+  from {
+    width: 4%;
+  }
+  to {
+    width: 90%;
+  }
+}
+.drawing-progress {
+  animation: drawing-progress 20s ease-out both;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .sketching path {
@@ -175,6 +187,10 @@
   .arrive,
   .pressed {
     animation: none;
+  }
+  .drawing-progress {
+    animation: none;
+    width: 50%;
   }
   * {
     scroll-behavior: auto !important;
