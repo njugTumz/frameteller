@@ -130,7 +130,7 @@ Not used: Muse Wonder Full (Muse Code subscription only), Muse Spark 1.1/1.2 (sa
 
 **Voice Transcribe (`muse-voice-transcribe-1.0`)**
 - Realtime handshake: auth goes in the **first JSON frame** as `authorization.accessToken = "Bearer <key>"`, sent within 10 s of connecting. The HTTP `Authorization` header is ignored. Wait for the `{sessionId}` acknowledgement before sending audio.
-- Handshake also sets `keywords` (character and place names) and `languageBias`. Neither can change mid-session.
+- Handshake also sets `keywords` (character and place names) and `languageBias`. Neither can change mid-session. `languageBias` is a **list** of locales (`["ja-JP"]`); a plain string, even `"en"`, is refused as "Malformed handshake request" (checked Oct 31).
 - Audio: raw PCM, signed 16-bit little-endian, mono. Prefer `audioEncoding: PCM_24KHZ` (48,000 bytes/s); `PCM_16KHZ` also works. Send as binary frames **paced at real time** (the server rejects streams that run ahead).
 - End input with `{"type":"endStream"}` and keep reading until close code 1000. Max session 60 minutes, no resume token.
 - Narration uses mode `ENDPOINTING`:

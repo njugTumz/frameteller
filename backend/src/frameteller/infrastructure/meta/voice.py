@@ -79,7 +79,7 @@ class MetaVoiceTranscribeAdapter:
         if options.keywords:
             frame["keywords"] = list(options.keywords)
         if options.language_bias:
-            frame["languageBias"] = options.language_bias
+            frame["languageBias"] = [options.language_bias]  # a list of locales; a plain string is refused
         return frame
 
     async def stream(self, audio: AsyncIterator[bytes], options: SpeechOptions) -> AsyncIterator[SpeechEvent]:

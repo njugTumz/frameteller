@@ -81,7 +81,7 @@ async def test_narration_session_streams_typed_events(
 ) -> None:
     server = FakeAsr(SCRIPT["narration"])
 
-    events = await run(server, settings, caller, SpeechOptions(keywords=("Mira",), language_bias="en"))
+    events = await run(server, settings, caller, SpeechOptions(keywords=("Mira",), language_bias="en-US"))
 
     assert server.handshake == {
         "model": "muse-voice-transcribe-1.0",
@@ -90,7 +90,7 @@ async def test_narration_session_streams_typed_events(
         "mode": "ENDPOINTING",
         "partialMode": "CUMULATIVE",
         "keywords": ["Mira"],
-        "languageBias": "en",
+        "languageBias": ["en-US"],  # a list: the live service refuses a string as a malformed handshake
     }
     assert len(server.audio) == 5 * 4800
     assert server.ended
