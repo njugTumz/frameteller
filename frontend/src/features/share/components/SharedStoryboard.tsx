@@ -38,6 +38,12 @@ export function SharedStoryboard({
             Animatic · {seconds(project.animatic?.duration_ms ?? 0)}
             {project.narrated_by && ` · Narrated by ${project.narrated_by} (AI voice)`}
           </p>
+          <p className="m-0 text-base" data-testid="shared-invite">
+            Tell your story at{' '}
+            <a href="https://frameteller.com" className="font-bold underline underline-offset-2">
+              frameteller.com
+            </a>
+          </p>
         </section>
       )}
       <ol className="m-0 grid list-none gap-x-5 gap-y-8 p-0 sm:grid-cols-2 lg:grid-cols-3">

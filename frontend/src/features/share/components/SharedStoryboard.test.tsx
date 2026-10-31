@@ -38,4 +38,15 @@ describe('SharedStoryboard', () => {
     render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'AE' } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
     expect(screen.getByTestId('shared-byline').textContent).toBe('by Ama · United Arab Emirates')
   })
+
+  it('invites viewers to frameteller.com under the video, like the end card', () => {
+    render(<SharedStoryboard project={PROJECT} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.getByTestId('shared-invite').textContent).toBe('Tell your story at frameteller.com')
+    expect(screen.getByRole('link', { name: 'frameteller.com' }).getAttribute('href')).toBe('https://frameteller.com')
+  })
+
+  it('has no invitation without a video', () => {
+    render(<SharedStoryboard project={{ ...PROJECT, animatic: null }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.queryByTestId('shared-invite')).toBeNull()
+  })
 })
