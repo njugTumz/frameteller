@@ -1,11 +1,17 @@
 {
-  "updated_at": "2026-10-30T20:30:00Z",
+  "updated_at": "2026-10-31T06:00:00Z",
   "items": [
+    {
+      "date": "2026-10-31",
+      "status": "shipped",
+      "title": "Stories you can watch today",
+      "body": "Watch The Night Baker, The Rooftop Garden and The Lighthouse Fox, three stories we told with Frameteller, right on this page and in the gallery."
+    },
     {
       "date": "2026-10-30",
       "status": "shipped",
-      "title": "Judges meet Muse Glimmer",
-      "body": "When a judge opens the studio, Frameteller wakes Muse Glimmer, the open-weight model, in the background. A few minutes later it checks their panels, and the badge says so. Everyone else's checks stay with Muse Spark unless Glimmer is already awake."
+      "title": "Judges get an open-weight checker",
+      "body": "When a judge opens the studio, Frameteller wakes an open-weight model on its own GPU in the background. A few minutes later it checks their panels, and the badge says which model did. Everyone else's checks stay with the hosted model unless the open-weight one is already awake."
     },
     {
       "date": "2026-10-30",
