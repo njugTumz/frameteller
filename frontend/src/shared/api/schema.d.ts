@@ -1049,6 +1049,12 @@ export interface components {
              * @description A display name or nickname, at most 40 characters; not necessarily a real name.
              */
             name: string;
+            /**
+             * Official
+             * @description Signed or published by the admin with a reserved name: show an "Official" badge.
+             * @default false
+             */
+            official: boolean;
         };
         /**
          * DictationOut

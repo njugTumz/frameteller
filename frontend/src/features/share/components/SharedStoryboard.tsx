@@ -3,6 +3,7 @@ import { framingLabel, seconds, shotLabel } from '../../../shared/format'
 import { AnimaticPlayer } from '../../../shared/ui/AnimaticPlayer'
 import { Button } from '../../../shared/ui/Button'
 import { byline } from '../../../shared/creator'
+import { OfficialBadge } from '../../../shared/ui/OfficialBadge'
 
 /** What a share link shows: the animatic if there is one, then every shot. Nothing can be changed here. */
 export function SharedStoryboard({
@@ -24,6 +25,7 @@ export function SharedStoryboard({
           {project.creator && (
             <p className="m-0 mt-1 text-base" data-testid="shared-byline">
               {byline(project.creator)}
+              {project.creator.official && <OfficialBadge />}
             </p>
           )}
         </div>

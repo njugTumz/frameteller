@@ -1,12 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { AdminConsole, JudgeGlimmerLine } from './AdminConsole'
+import type { AdminEntry } from '../api'
+import { AdminConsole, EntrySignature, JudgeGlimmerLine } from './AdminConsole'
 
 const quiet = { recent: [], counts_24h: {}, health: [], failed_jobs: [], reports: [] }
 
 describe('AdminConsole', () => {
   it('opens on the overview and switches to the Errors tab', () => {
-    render(<AdminConsole overview={null} entries={[]} errors={quiet} error={null} onAct={vi.fn()} onWatch={vi.fn()} onReserve={vi.fn()} onRetry={vi.fn()} />)
+    render(<AdminConsole overview={null} entries={[]} errors={quiet} error={null} onAct={vi.fn()} onSign={vi.fn()} onWatch={vi.fn()} onReserve={vi.fn()} onRetry={vi.fn()} />)
     expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText('Needs a look (0)')).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'Errors (0)' }))
@@ -24,5 +25,50 @@ describe('JudgeGlimmerLine', () => {
   it('says when it is waking', () => {
     render(<JudgeGlimmerLine glimmer={{ day: '2026-10-31', wakes: 1, wakes_cap: 10, estimated_usd: 0.3, usd_cap: 5, warm: false, waking: true, last_cold_start_s: null }} />)
     expect(screen.getByTestId('judge-glimmer').textContent).toContain('Glimmer waking')
+  })
+})
+
+const entry = (creator: AdminEntry['creator'], status = 'pending'): AdminEntry => ({
+  id: 'e1',
+  project_id: 'p1',
+  title: 'The Night Baker',
+  style: 'ink',
+  status,
+  note: '',
+  reviewed_by: '',
+  audio: 'voice',
+  featured: false,
+  hearts: 0,
+  reports: [],
+  submitted_at: '2026-10-31T00:00:00Z',
+  published_at: null,
+  share_token: 's1',
+  has_video: true,
+  creator,
+})
+
+describe('EntrySignature', () => {
+  it('shows the byline with the Official badge only when official', () => {
+    const { rerender } = render(<EntrySignature entry={entry({ name: 'Frameteller team', country: '', official: false })} onSign={vi.fn()} />)
+    expect(screen.getByTestId('admin-byline').textContent).toContain('by Frameteller team')
+    expect(screen.queryByTestId('official-badge')).toBeNull()
+    rerender(<EntrySignature entry={entry({ name: 'Frameteller team', country: '', official: true })} onSign={vi.fn()} />)
+    expect(screen.getByTestId('official-badge')).toBeTruthy()
+  })
+
+  it('edits the name and country', () => {
+    const onSign = vi.fn()
+    render(<EntrySignature entry={entry({ name: 'Ama', country: 'KE', official: false }, 'published')} onSign={onSign} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit name' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: ' Frameteller team ' } })
+    fireEvent.change(screen.getByLabelText('Country code'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSign).toHaveBeenCalledWith('Frameteller team', '')
+    expect(screen.getByTestId('admin-byline')).toBeTruthy()
+  })
+
+  it('cannot be edited while the entry is being checked', () => {
+    render(<EntrySignature entry={entry({ name: 'Ama', country: '', official: false }, 'checking')} onSign={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Edit name' })).toBeNull()
   })
 })

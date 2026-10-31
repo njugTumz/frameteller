@@ -10,6 +10,7 @@ export function AdminPage() {
       errors={a.errors}
       error={a.error}
       onAct={(id, action) => void a.act(id, action)}
+      onSign={(id, name, country) => void a.sign(id, name, country)}
       onWatch={a.watch}
       onReserve={(usd) => void a.lowerReserve(usd)}
       onRetry={(key) => void a.retry(key)}

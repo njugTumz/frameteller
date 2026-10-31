@@ -13,6 +13,7 @@ import {
   removeEntry,
   retryJob,
   setJudgeReserve,
+  signEntry,
 } from '../api'
 
 const KEY = 'frameteller.admin'
@@ -72,6 +73,18 @@ export function useAdmin() {
     [token, refresh],
   )
 
+  const sign = useCallback(
+    async (id: string, name: string, country: string) => {
+      try {
+        await signEntry(token, id, name, country)
+        await refresh()
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'That did not work.')
+      }
+    },
+    [token, refresh],
+  )
+
   const watch = useCallback((id: string) => entryVideo(token, id), [token])
 
   const lowerReserve = useCallback(
@@ -98,5 +111,5 @@ export function useAdmin() {
     [token, refresh],
   )
 
-  return { overview, entries, errors, error, act, watch, lowerReserve, retry }
+  return { overview, entries, errors, error, act, sign, watch, lowerReserve, retry }
 }

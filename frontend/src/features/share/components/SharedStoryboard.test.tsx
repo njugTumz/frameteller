@@ -25,17 +25,24 @@ describe('SharedStoryboard', () => {
   })
 
   it('shows the gallery byline only for a storyboard in the gallery', () => {
-    const { rerender } = render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'KE' } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    const { rerender } = render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'KE', official: false } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
     expect(screen.getByTestId('shared-byline').textContent).toBe('by Ama · 🇰🇪 Kenya')
-    rerender(<SharedStoryboard project={{ ...PROJECT, creator: { name: '', country: '' } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    rerender(<SharedStoryboard project={{ ...PROJECT, creator: { name: '', country: '', official: false } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
     expect(screen.getByTestId('shared-byline').textContent).toBe('by an anonymous storyteller')
     rerender(<SharedStoryboard project={{ ...PROJECT, creator: null }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
     expect(screen.queryByTestId('shared-byline')).toBeNull()
   })
 
+  it('shows the Official badge next to an official byline', () => {
+    const { rerender } = render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'KE', official: false } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.queryByTestId('official-badge')).toBeNull()
+    rerender(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Frameteller team', country: '', official: true } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    expect(screen.getByTestId('official-badge')).toBeTruthy()
+  })
+
   it('reads "by <name> · <country>" where flags would show as letters', () => {
     emojiFlags(false)
-    render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'AE' } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
+    render(<SharedStoryboard project={{ ...PROJECT, creator: { name: 'Ama', country: 'AE', official: false } }} src={(p) => p ?? null} onMakeYourOwn={vi.fn()} />)
     expect(screen.getByTestId('shared-byline').textContent).toBe('by Ama · United Arab Emirates')
   })
 

@@ -14,7 +14,7 @@ const entry = (status: MyGalleryEntry['status'], note = ''): MyGalleryEntry => (
   hearts: 2,
   featured: false,
   submitted_at: '2026-11-02T17:00:00Z',
-  creator: { name: '', country: '' },
+  creator: { name: '', country: '', official: false },
 })
 
 describe('GallerySubmit', () => {
@@ -72,7 +72,7 @@ describe('GallerySubmit', () => {
 
   it('shows how the entry is signed, and edits or removes the name and country', async () => {
     const onSign = vi.fn().mockResolvedValue(true)
-    const signed = { ...entry('published'), creator: { name: 'Ama', country: 'KE' } }
+    const signed = { ...entry('published'), creator: { name: 'Ama', country: 'KE', official: false } }
     const { rerender } = render(<GallerySubmit {...base} entry={signed} onSubmit={vi.fn()} onSign={onSign} />)
     expect(screen.getByTestId('my-byline').textContent).toMatch('Shown by Ama · 🇰🇪 Kenya')
     await userEvent.click(screen.getByRole('button', { name: 'Edit name and country' }))

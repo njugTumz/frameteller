@@ -3,6 +3,7 @@ import type { GalleryAudio, MyGalleryEntry } from '../../../shared/api/types'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
 import { type Signature, byline } from '../../../shared/creator'
+import { OfficialBadge } from '../../../shared/ui/OfficialBadge'
 import { CreatorFields } from './CreatorFields'
 
 export const CONSENT =
@@ -101,7 +102,10 @@ export function GallerySubmit({
             </form>
           ) : (
             <p className="m-0 flex flex-wrap items-center gap-2 text-sm" data-testid="my-byline">
-              <span>Shown {byline(entry.creator)}</span>
+              <span>
+                Shown {byline(entry.creator)}
+                {entry.creator.official && <OfficialBadge />}
+              </span>
               {entry.status !== 'checking' && (
                 <Button
                   size="sm"

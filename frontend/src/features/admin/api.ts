@@ -75,6 +75,8 @@ export interface AdminEntry {
   published_at: string | null
   share_token: string
   has_video: boolean
+  /** Official: the admin signed or published it with a reserved name ("Frameteller team"). */
+  creator: { name: string; country: string; official: boolean }
 }
 
 export type AdminAction = 'publish' | 'hide' | 'feature' | 'unfeature'
@@ -147,6 +149,9 @@ export const getOverview = (token: string) => request(token, 'GET', '/admin/over
 export const getEntries = (token: string) => request(token, 'GET', '/admin/gallery').then((r) => r.json() as Promise<AdminEntry[]>)
 export const actOn = (token: string, id: string, action: AdminAction) =>
   request(token, 'POST', `/admin/gallery/${encodeURIComponent(id)}`, { action }).then((r) => r.json() as Promise<AdminEntry>)
+/** Change the name or country, unchecked; a reserved name signed here is official. Empty strings leave a field out. */
+export const signEntry = (token: string, id: string, name: string, country: string) =>
+  request(token, 'PATCH', `/admin/gallery/${encodeURIComponent(id)}`, { name, country }).then((r) => r.json() as Promise<AdminEntry>)
 export const removeEntry = (token: string, id: string) => request(token, 'DELETE', `/admin/gallery/${encodeURIComponent(id)}`).then(() => undefined)
 /** Lower the judges' daily reserve now (null: back to the calendar's). */
 export const setJudgeReserve = (token: string, usd: number | null) =>

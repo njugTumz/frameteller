@@ -75,7 +75,7 @@ export const country = (code: string) => (flagsShown() ? `${flag(code)} ${countr
 
 /** How an entry is signed: "by Ama · 🇰🇪 Kenya" ("by Ama · Kenya" without flags), "by Ama", "by a storyteller from
  * 🇰🇪 Kenya" or anonymous. */
-export function byline(creator: Creator | null | undefined): string {
+export function byline(creator: Pick<Creator, 'name' | 'country'> | null | undefined): string {
   const name = creator?.name.trim() ?? ''
   const code = creator?.country ?? ''
   if (name && code) return `by ${name} · ${country(code)}`

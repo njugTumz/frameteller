@@ -19,7 +19,7 @@ const card: GalleryCard = {
   hearted: false,
   featured: true,
   published_at: '2026-11-02T17:00:00Z',
-  creator: { name: 'Ama', country: 'KE' },
+  creator: { name: 'Ama', country: 'KE', official: false },
 }
 
 describe('GalleryCardView', () => {
@@ -47,13 +47,23 @@ describe('GalleryCardView', () => {
   })
 
   it('signs an unsigned card as an anonymous storyteller', () => {
-    render(<GalleryCardView card={{ ...card, creator: { name: '', country: '' } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
+    render(<GalleryCardView card={{ ...card, creator: { name: '', country: '', official: false } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
     expect(screen.getByTestId('gallery-byline').textContent).toBe('by an anonymous storyteller')
   })
 
   it('names the country without a flag or code where flags would show as letters', () => {
     emojiFlags(false)
-    render(<GalleryCardView card={{ ...card, creator: { name: 'Ama', country: 'AE' } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
+    render(<GalleryCardView card={{ ...card, creator: { name: 'Ama', country: 'AE', official: false } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
     expect(screen.getByTestId('gallery-byline').textContent).toBe('by Ama · United Arab Emirates')
+  })
+
+  it('shows the Official badge only on an entry the admin signed with a reserved name', () => {
+    const { rerender } = render(<GalleryCardView card={card} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />)
+    expect(screen.queryByTestId('official-badge')).toBeNull()
+    rerender(
+      <GalleryCardView card={{ ...card, creator: { name: 'Frameteller team', country: '', official: true } }} reported={false} onHeart={vi.fn()} onReport={vi.fn()} />,
+    )
+    expect(screen.getByTestId('official-badge').textContent).toBe('Official')
+    expect(screen.getByTestId('gallery-byline').textContent).toBe('by Frameteller teamOfficial')
   })
 })

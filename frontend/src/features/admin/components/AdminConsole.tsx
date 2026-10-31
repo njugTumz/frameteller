@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Button } from '../../../shared/ui/Button'
 import { Notice } from '../../../shared/ui/Notice'
+import { byline } from '../../../shared/creator'
+import { OfficialBadge } from '../../../shared/ui/OfficialBadge'
 import { cx } from '../../../shared/ui/cx'
 import type { AdminAction, AdminEntry, Errors, JudgeGlimmer, Overview } from '../api'
 import { ErrorsTab } from './ErrorsTab'
@@ -17,6 +19,7 @@ export function AdminConsole({
   errors,
   error,
   onAct,
+  onSign,
   onWatch,
   onReserve,
   onRetry,
@@ -26,6 +29,7 @@ export function AdminConsole({
   errors: Errors | null
   error: string | null
   onAct: (id: string, action: AdminAction | 'remove') => void
+  onSign: (id: string, name: string, country: string) => void
   onWatch: (id: string) => Promise<string>
   onReserve: (usd: number | null) => void
   onRetry: (key: string) => void
@@ -43,6 +47,7 @@ export function AdminConsole({
           {e.featured ? ' · featured' : ''} · {e.style} · audio {e.audio} · ♥ {e.hearts}
         </span>
       </div>
+      <EntrySignature entry={e} onSign={(name, country) => onSign(e.id, name, country)} />
       {e.note && <p className="m-0 text-sm">{e.note}</p>}
       {e.reviewed_by && <p className="m-0 text-xs text-muted">Checked by {e.reviewed_by}</p>}
       {e.reports.length > 0 && (
@@ -158,6 +163,66 @@ export function AdminConsole({
   )
 }
 
+/** How the entry is signed, and a form to change it. Signed here, a reserved name ("Frameteller team") is official. */
+export function EntrySignature({ entry, onSign }: { entry: AdminEntry; onSign: (name: string, country: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(entry.creator.name)
+  const [country, setCountry] = useState(entry.creator.country)
+  if (!editing)
+    return (
+      <p className="m-0 flex flex-wrap items-center gap-2 text-sm" data-testid="admin-byline">
+        <span>
+          {byline(entry.creator)}
+          {entry.creator.official && <OfficialBadge />}
+        </span>
+        {entry.status !== 'checking' && (
+          <Button
+            size="sm"
+            variant="quiet"
+            onClick={() => {
+              setName(entry.creator.name)
+              setCountry(entry.creator.country)
+              setEditing(true)
+            }}
+          >
+            Edit name
+          </Button>
+        )}
+      </p>
+    )
+  return (
+    <form
+      className="flex flex-wrap items-end gap-2 text-sm"
+      onSubmit={(ev) => {
+        ev.preventDefault()
+        onSign(name.trim(), country.trim().toUpperCase())
+        setEditing(false)
+      }}
+    >
+      <label className="flex flex-col gap-1">
+        Name
+        <input value={name} maxLength={40} onChange={(ev) => setName(ev.target.value)} className="rounded border-[1.5px] border-rule bg-paper px-2 py-1" />
+      </label>
+      <label className="flex flex-col gap-1">
+        Country code
+        <input
+          value={country}
+          maxLength={2}
+          pattern="[A-Za-z]{2}"
+          placeholder="none"
+          onChange={(ev) => setCountry(ev.target.value)}
+          className="w-24 rounded border-[1.5px] border-rule bg-paper px-2 py-1"
+        />
+      </label>
+      <Button size="sm" variant="ink" type="submit">
+        Save
+      </Button>
+      <Button size="sm" variant="quiet" onClick={() => setEditing(false)}>
+        Cancel
+      </Button>
+    </form>
+  )
+}
 
 /** Judges wake Glimmer (ADR 0020): today's wake-ups against the cap, its state, and the estimated Modal cost. */
 export function JudgeGlimmerLine({ glimmer: g }: { glimmer: JudgeGlimmer }) {

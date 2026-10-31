@@ -3,6 +3,7 @@ import type { GalleryCard } from '../../../shared/api/types'
 import { seconds } from '../../../shared/format'
 import { Button } from '../../../shared/ui/Button'
 import { byline } from '../../../shared/creator'
+import { OfficialBadge } from '../../../shared/ui/OfficialBadge'
 import { styleName } from '../styles'
 
 /** One storyboard (its media URLs already absolute, see useGallery): its first panel until played, its animatic, a heart, its share page, and Report. */
@@ -45,6 +46,7 @@ export function GalleryCardView({
         </h3>
         <p className="m-0 text-sm" data-testid="gallery-byline">
           {byline(card.creator)}
+          {card.creator.official && <OfficialBadge />}
         </p>
         <p className="m-0 text-sm text-muted">
           {styleName(card.style)}
