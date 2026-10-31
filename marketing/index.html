@@ -245,9 +245,6 @@
   .countdown .btn-primary:hover { background: var(--cd-fg); border-color: var(--cd-fg); color: var(--cd-bg); }
   .live .countdown .cta-gallery { background: transparent; border-color: var(--cd-fg); color: var(--cd-fg); }
   .live .countdown .cta-gallery:hover { background: var(--cd-fg); color: var(--cd-bg); }
-  .cd-after { display: none; }
-  .live .cd-before { display: none; }
-  .live .cd-after { display: block; }
 
   /* Three ways to tell it */
   .ways { display: grid; gap: 28px; grid-template-columns: 1fr; list-style: none; margin: 32px 0 0; padding: 0; }
@@ -387,7 +384,7 @@
           <div class="num" id="leader-num"></div>
         </div>
         <div>
-          <div class="cd-before">
+          <div class="cd-before" id="cd-before">
             <h2 id="cd-title">The live demo opens soon</h2>
             <p class="when">We go live with a working product on <strong id="cd-local">Mon Nov 2, 12:00 PM ET</strong>. Anyone can try it.</p>
             <p class="when" id="cd-static"><strong>Live demo: Mon Nov 2, 12:00 PM ET</strong></p>
@@ -399,7 +396,7 @@
             </ul>
             <p class="sr-only" aria-live="polite" id="cd-sr"></p>
           </div>
-          <div class="cd-after">
+          <div class="cd-after" id="cd-after" hidden>
             <h2 id="live-title">Live now: tell your story</h2>
             <p class="when">Talk it through, read a script, or let a narrator read it, and watch the storyboard draw itself.</p>
           </div>
@@ -514,15 +511,15 @@
         <li data-status="shipped"><time datetime="2026-10-29">Oct 29</time><span class="status">Shipped</span><h3>A home at frameteller.com</h3><p>Frameteller now lives at frameteller.com, and the old address and www both lead there.</p></li>
         <li data-status="shipped"><time datetime="2026-10-28">Oct 28</time><span class="status">Shipped</span><h3>Talk for a minute, get an animatic</h3><p>You can now talk through a scene for a minute and download an animatic of the storyboard, timed to your words and voiced by your own narration.</p></li>
         <li data-status="shipped"><time datetime="2026-10-28">Oct 28</time><span class="status">Shipped</span><h3>The studio is open</h3><p>You can now open the studio in your browser, tell a story out loud, tap Next shot at each new moment, approve the cast and watch the storyboard draw itself.</p></li>
+        <li data-status="shipped"><time datetime="2026-10-28">Oct 28</time><span class="status">Shipped</span><h3>Proving the hard parts first</h3><p>Testing speech-to-shot-list, and whether one character stays recognisable across six panels.</p></li>
         <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>It's on the internet</h3><p>The backend now runs on Azure, so anyone can narrate a scene to it over the internet and get shots, a cast and first panels back.</p></li>
         <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Talk to it, get shots back</h3><p>You can now narrate a scene to the backend and watch shots, character sheets and first panels come back while you are still talking.</p></li>
         <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Connected to Meta's models</h3><p>The backend now talks to all four Meta models it needs, listening, directing, drawing and selecting, and each one passed a live test against the real service.</p></li>
-        <li data-status="building"><time datetime="2026-10-27">Oct 27</time><span class="status">Building now</span><h3>Building the engine</h3><p>Started the backend: story rules, cast approval and budget guards, all tested before any UI.</p></li>
+        <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Building the engine</h3><p>Started the backend: story rules, cast approval and budget guards, all tested before any UI.</p></li>
         <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Proved the hard parts</h3><p>Our test scenes kept the same girl and cat on model across every panel, one click selected her cleanly, and voice-style edits changed her coat without disturbing the rest of the picture.</p></li>
         <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Mapped the Meta APIs</h3><p>Read the docs for live speech, image editing and segmentation, and confirmed the pipeline works end to end on paper.</p></li>
         <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Marketing page is live</h3><p>This page is now deployed on Azure Static Web Apps from our public repo. Every push to main updates this build log within a minute.</p></li>
         <li data-status="shipped"><time datetime="2026-10-27">Oct 27</time><span class="status">Shipped</span><h3>Project kicked off</h3><p>Picked the idea, wrote the build plan and put this page up. The public live demo goes up on Nov 2.</p></li>
-        <li data-status="next"><time datetime="2026-10-28">Oct 28</time><span class="status">Up next</span><h3>Proving the hard parts first</h3><p>Testing speech-to-shot-list, and whether one character stays recognisable across six panels.</p></li>
       </ol>
       <button class="btn" type="button" id="log-all" aria-controls="log" aria-expanded="false">Show all</button>
     </section>
@@ -601,7 +598,14 @@
     });
 
     // ---- Countdown, then live ----
+    // The buttons follow the "live" class (set before first paint when the page opens after the launch); the two
+    // countdown blocks use the hidden attribute, so the one not shown is also hidden from screen readers.
     var target = new Date(CONFIG.launchAt).getTime();
+    function goLive() {
+      root.classList.add("live");
+      $("cd-before").hidden = true;
+      $("cd-after").hidden = false;
+    }
     try {
       var fmt = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
       var et = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
@@ -613,7 +617,7 @@
     function tick() {
       var diff = target - Date.now();
       if (diff <= 0) {
-        root.classList.add("live");  // every button and the countdown switch at once, without a reload
+        goLive();  // every button and the countdown switch at once, without a reload
         $("leader-num").textContent = "0";
         $("sweep").style.setProperty("--p", 1);
         $("cd-sr").textContent = "";
