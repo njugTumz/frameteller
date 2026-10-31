@@ -67,6 +67,7 @@ from frameteller.domain.review import (
 from frameteller.domain.script import Episode, Script, ScriptBeat, ScriptFormat, parse_script
 from frameteller.domain.shots import Framing, OutfitChange, Shot, voice_offsets
 from frameteller.domain.style import PanelStyle
+from frameteller.domain.text import is_cjk, join, spaceless, tokens, units
 from frameteller.domain.timing import MIN_SHOT_MS, split_duration
 from frameteller.domain.transcript import TranscriptTurn
 
@@ -139,13 +140,18 @@ __all__ = [
     "Verdict",
     "caption_cues",
     "caption_lines",
+    "is_cjk",
+    "join",
     "motion_for",
     "parse_script",
     "plate_key",
     "session_of",
     "sheet_target",
+    "spaceless",
     "split_duration",
     "split_target",
     "to_srt",
+    "tokens",
+    "units",
     "voice_offsets",
 ]

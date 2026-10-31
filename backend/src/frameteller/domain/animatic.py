@@ -11,6 +11,7 @@ from frameteller.domain.media import MediaRef
 from frameteller.domain.narration import session_of
 from frameteller.domain.project import Project
 from frameteller.domain.shots import Framing, Shot, voice_offsets
+from frameteller.domain.text import join, tokens
 
 TITLE_MS = 1000  # the title card before the first shot
 END_MS = 1500  # the "Made with Frameteller" card after the last
@@ -110,7 +111,7 @@ def _share(project: Project, shots: list[Shot]) -> list[tuple[str, tuple[AudioCu
     except UnknownTurnError:
         return [("", ())] * len(shots)
     narration = project.narrations.get(session_of(turn.id))
-    words = turn.text.split()
+    words = tokens(turn.text)  # characters in Japanese and Chinese
     starts = voice_offsets(shots)
     gaps = any(s.voice_from_ms is not None for s in shots)  # a sibling was deleted: words follow the time
     total = (turn.duration_ms if gaps else sum(s.duration_ms for s in shots)) or 1
@@ -120,7 +121,7 @@ def _share(project: Project, shots: list[Shot]) -> list[tuple[str, tuple[AudioCu
         if gaps:
             taken = min(len(words), round(len(words) * offset / total))
         upto = len(words) if last else min(len(words), round(len(words) * (offset + shot.duration_ms) / total))
-        caption = " ".join(words[taken:upto])
+        caption = join(words[taken:upto])
         audio: tuple[AudioCut, ...] = ()
         if narration is not None:
             start = min(turn.start_ms + offset, narration.duration_ms)

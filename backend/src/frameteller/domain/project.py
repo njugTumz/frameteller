@@ -28,6 +28,7 @@ from frameteller.domain.panels import Panel
 from frameteller.domain.review import SUPERVISOR_LOG_SIZE, Outcome, PanelReview, SheetReview, SupervisorEntry
 from frameteller.domain.shots import OutfitChange, Shot, voice_offsets
 from frameteller.domain.style import PanelStyle
+from frameteller.domain.text import units
 from frameteller.domain.timing import split_duration
 from frameteller.domain.transcript import TranscriptTurn
 
@@ -410,7 +411,7 @@ class Project:
                 sources = tuple(dict.fromkeys(first.id if t == second.id else t for t in s.source_turn_ids))
                 self.shots[i] = replace(s, source_turn_ids=sources)
         own = [s for s in self.shots if s.source_turn_ids == (first.id,)]
-        durations = split_duration(merged.duration_ms, [len(f"{s.action} {s.dialogue}".split()) for s in own])
+        durations = split_duration(merged.duration_ms, [units(f"{s.action} {s.dialogue}") for s in own])
         retimed = {s.id: d for s, d in zip(own, durations, strict=True)}
         self.shots = [
             replace(s, duration_ms=retimed[s.id], voice_from_ms=None) if s.id in retimed else s for s in self.shots

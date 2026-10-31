@@ -1,5 +1,6 @@
 """The teleprompter finds where a paragraph's reading ends, tolerating what the transcriber gets wrong."""
 
+# ruff: noqa: RUF001  (full-width punctuation and curly quotes are the text under test)
 from frameteller.application.teleprompter import normalise, paragraph_end
 
 KITE = "A paper kite drifts down and tangles in the old antenna."
@@ -61,3 +62,23 @@ def test_tail_words_that_turn_up_by_chance_in_another_reading_do_not_count() -> 
         "shoulder the rain stops close up on the cat it looks back at the alley"
     )
     assert paragraph_end(paragraph, words) is None
+
+
+def test_japanese_and_chinese_match_by_characters() -> None:
+    assert normalise("リナは「紙の凧」を拾った。") == ["リ", "ナ", "は", "紙", "の", "凧", "を", "拾", "っ", "た"]
+    assert normalise("Lenaは3匹") == ["lena", "は", "three", "匹"]
+    paragraph = "夜の屋上で、リナは紙の凧を拾った。"
+    heard = normalise("夜の屋上でリナは紙の凧を拾った次の段落")
+    assert paragraph_end(paragraph, heard) == heard.index("た")
+    assert paragraph_end(paragraph, normalise("夜の屋上でリナは紙の")) is None  # not at the end yet
+    misheard = normalise("夜の屋上でリナは紙の旅を広った")  # two characters misheard
+    assert paragraph_end(paragraph, misheard) == len(misheard) - 1
+    zh = "夜幕降临，丽娜接住了一只纸风筝。"
+    assert paragraph_end(zh, normalise("夜幕降临丽娜接住了一只纸风筝")) == 13
+
+
+def test_korean_hindi_and_arabic_keep_their_words() -> None:
+    assert normalise("밤이 오면, 리나는.") == ["밤이", "오면", "리나는"]
+    assert normalise("अपनी कहानी सुनाएँ।") == ["अपनी", "कहानी", "सुनाएँ"]  # vowel signs stay
+    assert normalise("احكِ قصتك!") == ["احكِ", "قصتك"]
+    assert paragraph_end("밤이 오면 리나는 연을 잡는다.", normalise("밤이 오면 리나는 연을 잡는다")) == 4

@@ -80,6 +80,30 @@ async def test_reading_straight_on_cuts_at_the_end_of_the_paragraph_and_keeps_th
     ]
 
 
+async def test_a_japanese_reader_is_followed_by_characters_and_cut_inside_a_turn() -> None:
+    script = parse_script("リナは屋上で鳩に餌をやる。\n\n紙の凧が彼女の手に舞い降りる。")
+    speech = ScriptedSpeech(
+        [
+            TurnStarted("0", 0),
+            AudioProgress(2500),
+            PartialTranscript("リナは屋上で鳩に餌をやる紙の凧が"),  # read straight on, no spaces
+            LISTEN,
+            AudioProgress(4000),
+            PartialTranscript("リナは屋上で鳩に餌をやる紙の凧が彼女の手に舞い降りる"),
+            TurnEnded("0", 4200),
+            TurnCompleted(TranscriptTurn("0", "x", 0, 4200)),
+        ]
+    )
+    s = Session(speech, FakeDirector({"b1": one_shot(), "b2": one_shot()}))
+
+    await s.run.execute("p1", speech.paced(CHUNK), SpeechOptions(), script=script)
+
+    assert [(t[1], t[2], t[3]) for t in turns(s)] == [
+        ("リナは屋上で鳩に餌をやる。", 0, 2500),
+        ("紙の凧が彼女の手に舞い降りる。", 2500, 4200),
+    ]
+
+
 async def test_space_cuts_by_hand_but_space_right_after_an_automatic_cut_only_confirms_it() -> None:
     speech = ScriptedSpeech(
         [

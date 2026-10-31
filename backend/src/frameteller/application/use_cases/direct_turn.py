@@ -21,6 +21,7 @@ from frameteller.domain import (
     TranscriptTurn,
     sheet_target,
     split_duration,
+    units,
 )
 
 REVEAL_WINDOW = 3  # a reveal may revise at most this many of the latest shots
@@ -40,7 +41,7 @@ class DirectedShots:
 
 def shots_for_turn(drafts: Sequence[ShotDraft], turn: TranscriptTurn, ids: IdGenerator, first: int) -> list[Shot]:
     """Number the director's drafts from `first` and share the turn's time between them by word count (ADR 0008)."""
-    words = [len(f"{d.action} {d.dialogue}".split()) for d in drafts]
+    words = [units(f"{d.action} {d.dialogue}") for d in drafts]
     durations = split_duration(turn.duration_ms, words)
     return [
         Shot(

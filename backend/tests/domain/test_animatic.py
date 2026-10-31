@@ -91,6 +91,20 @@ def test_each_shot_gets_its_own_part_of_the_kept_voice_and_words() -> None:
     assert clips["s3"].caption == "Something orange moves."
 
 
+def test_a_japanese_turn_is_shared_between_its_shots_by_characters() -> None:
+    p = project(shots=0)
+    p.add_turn(TranscriptTurn("t1-b1", "灯台に夕暮れ。エイダが階段を上る。", 0, 4000))  # no spaces anywhere
+    p.append_shots(
+        [
+            shot(1, "mira", turn_ids=("t1-b1",), duration_ms=1500),
+            shot(2, "mira", turn_ids=("t1-b1",), duration_ms=2500),
+        ]
+    )
+    clips = Animatic.from_project(rendered(p)).clips
+
+    assert [c.caption for c in clips] == ["灯台に夕暮れ。", "エイダが階段を上る。"]
+
+
 def test_a_shot_from_several_turns_gets_all_of_them_and_other_sessions_are_silent() -> None:
     p = project(shots=0)
     p.add_turn(TranscriptTurn("t1-b1", "Night.", 0, 1000))

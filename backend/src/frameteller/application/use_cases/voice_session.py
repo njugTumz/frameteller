@@ -39,7 +39,7 @@ from frameteller.application.use_cases.correct_transcript import CorrectTranscri
 from frameteller.application.use_cases.direct_turn import DirectTurn
 from frameteller.application.use_cases.requests import RequestCastReferences
 from frameteller.application.use_cases.story_director import StoryDirector, TranscriptCorrection
-from frameteller.domain import Narration, Script, TranscriptTurn
+from frameteller.domain import Narration, Script, TranscriptTurn, join, tokens
 
 log = logging.getLogger("frameteller.session")
 
@@ -139,11 +139,11 @@ class _Heard:
         return bool(self.done or self.partial)
 
     def hear_partial(self, text: str) -> None:
-        self.partial = text.split()
+        self.partial = tokens(text)  # characters in Japanese and Chinese
         self._note_first_words()
 
     def finish_turn(self, text: str) -> None:
-        final = text.split()
+        final = tokens(text)
         # The final text normally matches the last partial; keep whichever has more words so positions hold.
         self.done += final if len(final) >= len(self.partial) else self.partial
         self.partial = []
@@ -155,7 +155,7 @@ class _Heard:
 
     def pending(self) -> str:
         """The words heard since the last boundary: the live line the narrator sees."""
-        return " ".join(self.pending_words())
+        return join(self.pending_words())
 
     def pending_words(self) -> list[str]:
         return (self.done + self.partial)[self.cursor :]
@@ -168,7 +168,7 @@ class _Heard:
         """
         words = self.done + self.partial
         end = len(words) if upto is None else min(len(words), self.cursor + upto)
-        text = " ".join(words[self.cursor : end])
+        text = join(words[self.cursor : end])
         self.cursor = max(self.cursor, end)
         start = self.cut_ms if self.first_speech_ms is None else self.first_speech_ms
         self.cut_ms = max(self.cut_ms, at_ms)

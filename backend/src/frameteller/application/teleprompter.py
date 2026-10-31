@@ -4,6 +4,9 @@ The transcriber's words are matched against the end of the current paragraph. Ma
 words ("Lena" heard as "Lina", a dropped "the") still line up: a paragraph counts as read when most of its last
 words were heard, in order, including one of its last two, and at least half of all its words were. The session
 then cuts the beat there once the reader pauses, or at once if they have already read on into the next paragraph.
+
+Japanese and Chinese have no spaces between words, so there every character is a unit to match, and the tail is
+the paragraph's last TAIL_CHARACTERS characters. Other scripts (Korean, Hindi, Arabic) match by words, as written.
 """
 
 from __future__ import annotations
@@ -13,7 +16,10 @@ import unicodedata
 from collections.abc import Sequence
 from difflib import SequenceMatcher
 
+from frameteller.domain import spaceless
+
 TAIL_WORDS = 5  # the paragraph's last words that must be heard
+TAIL_CHARACTERS = 8  # or, in Japanese and Chinese, its last characters
 MIN_TAIL_SHARE = 0.6  # of them, at least this share, in order
 MIN_PARAGRAPH_SHARE = 0.5  # and the reader has said at least half as many words as the paragraph has
 MIN_COVERAGE = 0.5  # and at least half the paragraph's words were heard, in order: it was this paragraph
@@ -24,11 +30,40 @@ NUMBERS = {
 }  # fmt: skip
 
 
-def normalise(text: str) -> list[str]:
-    """Lowercase words without accents or punctuation; digits spelled out as the transcriber may write them."""
+def _latin(text: str) -> list[str]:
     plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
     words = re.findall(r"[a-z0-9]+(?:'[a-z]+)?", plain)
     return [NUMBERS.get(w, w) for w in words]
+
+
+def normalise(text: str) -> list[str]:
+    """Lowercase words without accents or punctuation; digits spelled out as the transcriber may write them.
+    Kana and Han are one unit per character; other scripts keep their letters and marks (Hindi's vowel signs)."""
+    units: list[str] = []
+    latin, other = "", ""
+    for ch in unicodedata.normalize("NFKC", text):
+        if unicodedata.normalize("NFKD", ch)[0].isascii():  # "é" too: _latin drops its accent
+            if other:
+                units.append(other.casefold())
+                other = ""
+            latin += ch
+            continue
+        units += _latin(latin)
+        latin = ""
+        if spaceless(ch):
+            if other:
+                units.append(other.casefold())
+                other = ""
+            if ch.isalnum():
+                units.append(ch)
+        elif unicodedata.category(ch)[0] in "LMN":
+            other += ch
+        elif other:
+            units.append(other.casefold())
+            other = ""
+    if other:
+        units.append(other.casefold())
+    return units + _latin(latin)
 
 
 def similar(a: str, b: str) -> bool:
@@ -63,7 +98,7 @@ def paragraph_end(paragraph: str, heard: Sequence[str]) -> int | None:
         return None
     if len(heard) < max(1, MIN_PARAGRAPH_SHARE * len(words)):
         return None
-    tail = words[-TAIL_WORDS:]
+    tail = words[-(TAIL_CHARACTERS if spaceless(words[-1][0]) else TAIL_WORDS) :]
     count, last, last_tail, late = _align(tail, heard)
     needed = max(min(2, len(tail)), round(MIN_TAIL_SHARE * len(tail)))
     if count < needed or not late:
