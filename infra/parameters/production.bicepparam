@@ -3,7 +3,8 @@ using '../main.bicep'
 // Production: the public studio at https://app.frameteller.com, the API at https://api.frameteller.com.
 param environmentName = 'production'
 param location = 'eastus2'
-param allowedOrigins = 'https://app.frameteller.com'
+// The marketing page at frameteller.com reads the public gallery (its newest and featured stories).
+param allowedOrigins = 'https://app.frameteller.com,https://frameteller.com'
 param publicAppUrl = 'https://app.frameteller.com'
 param staticWebAppName = 'swa-frameteller-app-prod'
 param mediaRetentionDays = 30 // the privacy page promises deletion after 30 days
