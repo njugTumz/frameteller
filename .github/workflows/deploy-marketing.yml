@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "marketing/**"
+      - "frontend/e2e-marketing/**"
       - ".github/workflows/deploy-marketing.yml"
   workflow_dispatch:
 
@@ -16,8 +17,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    name: Test the page in Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright (marketing page, gallery API faked)
+        run: npm run e2e:marketing
+
   deploy:
     name: Deploy to Azure Static Web Apps
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
