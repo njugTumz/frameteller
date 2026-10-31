@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-31T06:00:00Z",
+  "updated_at": "2026-10-31T07:00:00Z",
   "items": [
     {
       "date": "2026-10-31",
@@ -86,6 +86,12 @@
       "body": "You can now open the studio in your browser, tell a story out loud, tap Next shot at each new moment, approve the cast and watch the storyboard draw itself."
     },
     {
+      "date": "2026-10-28",
+      "status": "shipped",
+      "title": "Proving the hard parts first",
+      "body": "Testing speech-to-shot-list, and whether one character stays recognisable across six panels."
+    },
+    {
       "date": "2026-10-27",
       "status": "shipped",
       "title": "It's on the internet",
@@ -105,7 +111,7 @@
     },
     {
       "date": "2026-10-27",
-      "status": "building",
+      "status": "shipped",
       "title": "Building the engine",
       "body": "Started the backend: story rules, cast approval and budget guards, all tested before any UI."
     },
@@ -132,12 +138,6 @@
       "status": "shipped",
       "title": "Project kicked off",
       "body": "Picked the idea, wrote the build plan and put this page up. The public live demo goes up on Nov 2."
-    },
-    {
-      "date": "2026-10-28",
-      "status": "next",
-      "title": "Proving the hard parts first",
-      "body": "Testing speech-to-shot-list, and whether one character stays recognisable across six panels."
     }
   ]
 }
