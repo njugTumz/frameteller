@@ -152,8 +152,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      # Chromium for the desktop and Pixel 7 projects, WebKit (iOS Safari's engine) for the iPhone 14 ones.
+      - name: Install Chromium and WebKit
+        run: npx playwright install --with-deps chromium webkit
 
       # Without a sound server, Chromium's fake microphone runs many times faster than real time.
       - name: Start a PulseAudio server
@@ -162,7 +163,8 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
 
       # The live suite (E2E_LIVE=1) spends Meta credits and needs the narration recording: never in CI.
-      - name: Playwright (mocked)
+      # Projects: desktop, and phones (iPhone 14 in WebKit, Pixel 7 in Chromium, portrait and landscape).
+      - name: Playwright (mocked, desktop and phones)
         run: npx playwright test
 
       - name: Keep the report when it fails

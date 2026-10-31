@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { defineConfig } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test'
 
 /**
  * Two suites:
@@ -14,6 +14,26 @@ export const sourceWav = resolve(process.env.E2E_WAV ?? '../spikes/fixtures/narr
 export const outDir = resolve('../spikes/out') // gitignored: videos, timelines, the padded narration
 export const liveWav = `${outDir}/e2e/narration-padded.wav`
 
+/** Chromium's fake microphone, and an audio clock that runs on machines without a sound card. */
+const chromiumAudio = {
+  channel: 'chromium', // the full build: the headless shell's fake microphone is silent
+  permissions: ['microphone'],
+  launchOptions: {
+    args: [
+      '--use-fake-ui-for-media-stream',
+      '--use-fake-device-for-media-stream',
+      // %noloop: play the narration once, then silence.
+      ...(live ? [`--use-file-for-fake-audio-capture=${liveWav}%noloop`] : []),
+      '--autoplay-policy=no-user-gesture-required',
+      // Machines without a sound card (CI, servers) stall Chromium's audio clock: no worklet would run.
+      // They also need a sound server (CI starts PulseAudio), or the fake microphone runs faster than real time.
+      '--disable-features=AudioServiceSandbox,AudioServiceOutOfProcess',
+      '--alsa-output-device=null',
+    ],
+  },
+}
+const desktop = { ...chromiumAudio, viewport: { width: 1280, height: 800 } }
+
 export default defineConfig({
   testDir: 'e2e',
   testMatch: live ? /live\.spec\.ts/ : /mocked\.spec\.ts/,
@@ -24,24 +44,19 @@ export default defineConfig({
   reporter: [['list']],
   use: {
     baseURL: appUrl ?? 'http://localhost:4173',
-    viewport: { width: 1280, height: 800 },
-    channel: 'chromium', // the full build: the headless shell's fake microphone is silent
-    permissions: ['microphone'],
     video: live ? { mode: 'on', size: { width: 1280, height: 800 } } : 'off',
-    launchOptions: {
-      args: [
-        '--use-fake-ui-for-media-stream',
-        '--use-fake-device-for-media-stream',
-        // %noloop: play the narration once, then silence.
-        ...(live ? [`--use-file-for-fake-audio-capture=${liveWav}%noloop`] : []),
-        '--autoplay-policy=no-user-gesture-required',
-        // Machines without a sound card (CI, servers) stall Chromium's audio clock: no worklet would run.
-        // They also need a sound server (CI starts PulseAudio), or the fake microphone runs faster than real time.
-        '--disable-features=AudioServiceSandbox,AudioServiceOutOfProcess',
-        '--alsa-output-device=null',
-      ],
-    },
   },
+  projects: live
+    ? [{ name: 'desktop', use: desktop }]
+    : [
+        { name: 'desktop', testIgnore: /mobile\.mocked\.spec\.ts/, use: desktop },
+        // The phone audit (e2e/mobile.mocked.spec.ts): most launch visitors arrive on phones from X.
+        { name: 'phone-iphone14', testMatch: /mobile\.mocked\.spec\.ts/, use: { ...devices['iPhone 14'], permissions: ['microphone'] } },
+        { name: 'phone-iphone14-landscape', testMatch: /mobile\.mocked\.spec\.ts/, use: { ...devices['iPhone 14 landscape'], permissions: ['microphone'] } },
+        { name: 'phone-pixel7', testMatch: /mobile\.mocked\.spec\.ts/, use: { ...devices['Pixel 7'], ...chromiumAudio } },
+        { name: 'phone-pixel7-landscape', testMatch: /mobile\.mocked\.spec\.ts/, use: { ...devices['Pixel 7 landscape'], ...chromiumAudio } },
+      ],
+
   webServer: appUrl
     ? undefined
     : {
